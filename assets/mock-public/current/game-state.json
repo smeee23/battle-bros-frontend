@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "chainId": "1",
+  "battleManagerAddress": "0x1111111111111111111111111111111111111111",
+  "snapshot": {
+    "id": "1-0x1111111111111111111111111111111111111111-8-0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "blockNumber": "23847192",
+    "blockHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "timestamp": "1785971100"
+  },
+  "latestFinalizedRound": "8",
+  "activeRound": {
+    "roundId": "9",
+    "status": "REGISTRATION",
+    "battleType": "DAILY",
+    "registrationCloseTimestamp": "1786003200"
+  },
+  "supply": {
+    "maxSupply": "1000",
+    "maxMintedTokenId": "20",
+    "totalBurned": "16",
+    "activeTokenCount": "4",
+    "battleBroIds": ["3", "12", "19", "20"]
+  },
+  "contracts": {
+    "battleBroManager": "0x2222222222222222222222222222222222222222",
+    "yieldVault": "0x3333333333333333333333333333333333333333",
+    "randomnessManager": "0x4444444444444444444444444444444444444444",
+    "stETH": "0x5555555555555555555555555555555555555555"
+  },
+  "configuration": {
+    "matchmaker": "0x6666666666666666666666666666666666666666",
+    "feeBps": "100",
+    "needSelectionAttemptsPerRound": "3",
+    "feeRecipient": "0x7777777777777777777777777777777777777777"
+  },
+  "vaultAccounting": {
+    "totalFreeShares": "8012500000000000000",
+    "totalReservedShares": "0",
+    "totalFeeShares": "12500000000000",
+    "accountedShares": "8012512500000000000"
+  }
+}

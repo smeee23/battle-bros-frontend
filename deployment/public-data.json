@@ -1,0 +1,7 @@
+{
+  "bucket": "justcausepools",
+  "region": "us-east-1",
+  "prefix": "battle-bros",
+  "deploymentManifest": "../../battle-bros-backend/deployments/localhost.local.json",
+  "defaultTokenId": null
+}

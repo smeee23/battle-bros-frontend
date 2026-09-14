@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "game-state.schema.json",
+  "title": "BattleBros confirmed mutable current game state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "chainId", "battleManagerAddress", "snapshot", "latestFinalizedRound", "activeRound", "supply", "contracts", "configuration", "vaultAccounting"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "chainId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+    "battleManagerAddress": { "$ref": "definitions.schema.json#/definitions/address" },
+    "snapshot": { "description": "The confirmed canonical block represented by this mutable current-state document; independent of the latest finalized historical snapshot.", "$ref": "definitions.schema.json#/definitions/snapshot" },
+    "latestFinalizedRound": { "$ref": "definitions.schema.json#/definitions/uintString" },
+    "activeRound": {
+      "type": "object", "additionalProperties": false,
+      "required": ["roundId", "status", "battleType", "registrationCloseTimestamp"],
+      "properties": {
+        "roundId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "status": { "type": "string", "enum": ["REGISTRATION", "MATCHMAKING", "RESOLUTION_REQUESTED", "RESOLVABLE", "CANCELLING", "COMPLETE"] },
+        "battleType": { "$ref": "definitions.schema.json#/definitions/battleType" },
+        "registrationCloseTimestamp": { "$ref": "definitions.schema.json#/definitions/uintString" }
+      }
+    },
+    "supply": {
+      "type": "object", "additionalProperties": false,
+      "required": ["maxSupply", "maxMintedTokenId", "totalBurned", "activeTokenCount", "battleBroIds"],
+      "properties": {
+        "maxSupply": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "maxMintedTokenId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "totalBurned": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "activeTokenCount": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "battleBroIds": { "type": "array", "uniqueItems": true, "items": { "$ref": "definitions.schema.json#/definitions/uintString" } }
+      }
+    },
+    "contracts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["battleBroManager", "yieldVault", "randomnessManager", "stETH"],
+      "properties": {
+        "battleBroManager": { "$ref": "definitions.schema.json#/definitions/address" },
+        "yieldVault": { "$ref": "definitions.schema.json#/definitions/address" },
+        "randomnessManager": { "$ref": "definitions.schema.json#/definitions/address" },
+        "stETH": { "$ref": "definitions.schema.json#/definitions/address" }
+      }
+    },
+    "configuration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["matchmaker", "feeBps", "needSelectionAttemptsPerRound", "feeRecipient"],
+      "properties": {
+        "matchmaker": { "$ref": "definitions.schema.json#/definitions/address" },
+        "feeBps": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "needSelectionAttemptsPerRound": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "feeRecipient": { "$ref": "definitions.schema.json#/definitions/nullableAddress" }
+      }
+    },
+    "vaultAccounting": {
+      "type": "object", "additionalProperties": false,
+      "required": ["totalFreeShares", "totalReservedShares", "totalFeeShares", "accountedShares"],
+      "properties": {
+        "totalFreeShares": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "totalReservedShares": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "totalFeeShares": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "accountedShares": { "$ref": "definitions.schema.json#/definitions/uintString" }
+      }
+    }
+  }
+}

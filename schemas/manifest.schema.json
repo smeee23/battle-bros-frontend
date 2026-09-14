@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "manifest.schema.json",
+  "title": "BattleBros snapshot manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "chainId", "battleManagerAddress", "latestFinalizedRound", "finalizedRounds", "snapshot", "publishedAt", "paths"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "chainId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+    "battleManagerAddress": { "$ref": "definitions.schema.json#/definitions/address" },
+    "latestFinalizedRound": { "$ref": "definitions.schema.json#/definitions/uintString" },
+    "finalizedRounds": {
+      "description": "Immutable published snapshot identities ordered by roundId ascending.",
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["roundId", "snapshot", "publishedAt"],
+        "properties": {
+          "roundId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+          "snapshot": { "$ref": "definitions.schema.json#/definitions/snapshot" },
+          "publishedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "snapshot": { "$ref": "definitions.schema.json#/definitions/snapshot" },
+    "publishedAt": { "type": "string", "format": "date-time" },
+    "paths": {
+      "type": "object", "additionalProperties": false,
+      "required": ["currentGameState", "rounds", "battleBros"],
+      "properties": {
+        "currentGameState": { "description": "Stable path to the independently updated confirmed-current document; it is not inside an immutable historical snapshot.", "type": "string", "minLength": 1 },
+        "rounds": { "type": "string", "pattern": "\\{roundId\\}" },
+        "battleBros": { "type": "string", "pattern": "\\{tokenId\\}" }
+      }
+    }
+  }
+}

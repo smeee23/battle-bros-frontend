@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "battle-bro.schema.json",
+  "title": "BattleBro snapshot and indexed history",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "chainId", "battleManagerAddress", "snapshot", "tokenId", "active", "owner", "mint", "hatch", "progression", "training", "need", "vault", "combatLockRound", "revealNonce", "roundHistory"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "chainId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+    "battleManagerAddress": { "$ref": "definitions.schema.json#/definitions/address" },
+    "snapshot": { "$ref": "definitions.schema.json#/definitions/snapshot" },
+    "tokenId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+    "active": { "type": "boolean" },
+    "owner": { "$ref": "definitions.schema.json#/definitions/nullableAddress" },
+    "mint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["roundId", "payer", "paidWithETH", "inputAmount", "sharesReceived", "event"],
+      "properties": {
+        "roundId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "payer": { "$ref": "definitions.schema.json#/definitions/address" },
+        "paidWithETH": { "type": "boolean" },
+        "inputAmount": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "sharesReceived": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "event": { "$ref": "definitions.schema.json#/definitions/eventReference" }
+      }
+    },
+    "hatch": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["roundId", "battleBroType", "event"],
+          "properties": {
+            "roundId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+            "battleBroType": { "$ref": "definitions.schema.json#/definitions/battleBroType" },
+            "event": { "$ref": "definitions.schema.json#/definitions/eventReference" }
+          }
+        }
+      ]
+    },
+    "progression": {
+      "type": "object", "additionalProperties": false,
+      "required": ["xp", "level", "capacity", "reserves"],
+      "properties": {
+        "xp": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "level": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "capacity": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "reserves": { "$ref": "definitions.schema.json#/definitions/reserves" }
+      }
+    },
+    "training": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lastSettledRound", "weightsBps", "recoveryCarry", "allocationCarry", "remainderCursor"],
+      "properties": {
+        "lastSettledRound": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "weightsBps": { "$ref": "definitions.schema.json#/definitions/reserves" },
+        "recoveryCarry": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "allocationCarry": { "$ref": "definitions.schema.json#/definitions/reserves" },
+        "remainderCursor": { "$ref": "definitions.schema.json#/definitions/uintString" }
+      }
+    },
+    "need": {
+      "type": "object", "additionalProperties": false,
+      "required": ["active", "sinceRound"],
+      "properties": {
+        "active": { "type": "boolean" },
+        "sinceRound": { "$ref": "definitions.schema.json#/definitions/nullableUintString" }
+      }
+    },
+    "vault": {
+      "type": "object", "additionalProperties": false,
+      "required": ["freeShares", "reservedShares", "totalShares", "currentValue", "protectedPrincipal", "riskableShares", "yieldRatioBps", "withdrawnStETH"],
+      "properties": {
+        "freeShares": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "reservedShares": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "totalShares": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "currentValue": {
+          "description": "stETH value of totalShares at the snapshot block, derived with the latest canonical Lido TokenRebased rate checkpoint.",
+          "$ref": "definitions.schema.json#/definitions/uintString"
+        },
+        "protectedPrincipal": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "riskableShares": {
+          "description": "Combat-riskable free shares at the snapshot block, using protectedPrincipal and the latest canonical Lido TokenRebased rate checkpoint with vault-compatible rounding.",
+          "$ref": "definitions.schema.json#/definitions/uintString"
+        },
+        "yieldRatioBps": {
+          "description": "Yield above protectedPrincipal in basis points at the snapshot block, derived from currentValue.",
+          "$ref": "definitions.schema.json#/definitions/uintString"
+        },
+        "withdrawnStETH": { "$ref": "definitions.schema.json#/definitions/uintString" }
+      }
+    },
+    "combatLockRound": { "$ref": "definitions.schema.json#/definitions/nullableUintString" },
+    "revealNonce": { "$ref": "definitions.schema.json#/definitions/uintString" },
+    "roundHistory": {
+      "description": "Ascending event-derived ledger. Arrays within a round are ordered by block number and log index.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/roundHistoryEntry" }
+    }
+  },
+  "definitions": {
+    "trainingSettlement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fromRound", "throughRound", "added", "reservesAfter", "recoveryCarryAfter", "allocationCarryAfter", "remainderCursorAfter", "event"],
+      "properties": {
+        "fromRound": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "throughRound": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "added": { "$ref": "definitions.schema.json#/definitions/reserves" },
+        "reservesAfter": { "$ref": "definitions.schema.json#/definitions/reserves" },
+        "recoveryCarryAfter": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "allocationCarryAfter": { "$ref": "definitions.schema.json#/definitions/reserves" },
+        "remainderCursorAfter": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "event": { "$ref": "definitions.schema.json#/definitions/eventReference" }
+      }
+    },
+    "xpAward": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "amount", "xpAfter", "levelAfter", "event"],
+      "properties": {
+        "source": { "type": "string", "enum": ["BATTLE", "CARE"] },
+        "amount": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "xpAfter": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "levelAfter": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "event": { "$ref": "definitions.schema.json#/definitions/eventReference" }
+      }
+    },
+    "reserveChange": {
+      "type": "object", "additionalProperties": false,
+      "required": ["reason", "combatType", "amount", "delta", "reservesAfter", "event"],
+      "properties": {
+        "reason": { "type": "string", "enum": ["COMBAT", "INACTIVITY_PENALTY"] },
+        "combatType": { "anyOf": [{ "$ref": "definitions.schema.json#/definitions/combatType" }, { "type": "null" }] },
+        "amount": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "delta": {
+          "type": "object", "additionalProperties": false,
+          "required": ["attack", "defend", "counter"],
+          "properties": {
+            "attack": { "$ref": "definitions.schema.json#/definitions/intString" },
+            "defend": { "$ref": "definitions.schema.json#/definitions/intString" },
+            "counter": { "$ref": "definitions.schema.json#/definitions/intString" }
+          }
+        },
+        "reservesAfter": { "$ref": "definitions.schema.json#/definitions/reserves" },
+        "event": { "$ref": "definitions.schema.json#/definitions/eventReference" }
+      }
+    },
+    "needChange": {
+      "type": "object", "additionalProperties": false,
+      "required": ["action", "effectiveRound", "event"],
+      "properties": {
+        "action": { "type": "string", "enum": ["ASSIGNED", "CARED"] },
+        "effectiveRound": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "event": { "$ref": "definitions.schema.json#/definitions/eventReference" }
+      }
+    },
+    "roundHistoryEntry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["roundId", "registered", "bye", "battleId", "pairIndex", "outcome", "trainingSettlements", "xpAwards", "reserveChanges", "needChanges"],
+      "properties": {
+        "roundId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "registered": { "type": "boolean" },
+        "bye": { "type": "boolean" },
+        "battleId": { "$ref": "definitions.schema.json#/definitions/nullableBytes32" },
+        "pairIndex": { "$ref": "definitions.schema.json#/definitions/nullableUintString" },
+        "outcome": { "type": ["string", "null"], "enum": [null, "WIN", "LOSS", "VOID", "CANCELLED", "BYE"] },
+        "trainingSettlements": { "type": "array", "items": { "$ref": "#/definitions/trainingSettlement" } },
+        "xpAwards": { "type": "array", "items": { "$ref": "#/definitions/xpAward" } },
+        "reserveChanges": { "type": "array", "items": { "$ref": "#/definitions/reserveChange" } },
+        "needChanges": { "type": "array", "items": { "$ref": "#/definitions/needChange" } }
+      }
+    }
+  }
+}

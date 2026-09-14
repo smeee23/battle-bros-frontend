@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "chainId": "1",
+  "battleManagerAddress": "0x1111111111111111111111111111111111111111",
+  "latestFinalizedRound": "8",
+  "finalizedRounds": [
+    {
+      "roundId": "8",
+      "snapshot": {
+        "id": "1-0x1111111111111111111111111111111111111111-8-0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "blockNumber": "23847192",
+        "blockHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": "1785971100"
+      },
+      "publishedAt": "2026-08-05T17:20:00Z"
+    }
+  ],
+  "snapshot": {
+    "id": "1-0x1111111111111111111111111111111111111111-8-0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "blockNumber": "23847192",
+    "blockHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "timestamp": "1785971100"
+  },
+  "publishedAt": "2026-08-05T17:20:00Z",
+  "paths": {
+    "currentGameState": "./current/game-state.json",
+    "rounds": "./rounds/{roundId}.json",
+    "battleBros": "./current/battle-bros/{tokenId}.json"
+  }
+}

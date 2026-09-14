@@ -1,0 +1,12 @@
+dist/
+.env
+.env.*
+node_modules/
+runtime-config.js
+*.key
+build/
+*.log
+.DS_Store
+.vscode/
+.idea/
+coverage/

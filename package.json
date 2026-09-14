@@ -1,0 +1,20 @@
+{
+  "name": "battle-bros-frontend",
+  "version": "0.1.0",
+  "description": "BattleBros frontend bootstrapped from the Ether Wars Three.js world.",
+  "private": true,
+  "scripts": {
+    "config:generate": "node scripts/generate-runtime-config.mjs --output runtime-config.js",
+    "predev": "npm run config:generate",
+    "dev": "node tools/dev-server.js",
+    "check": "node tools/check.js",
+    "smoke": "node tools/smoke-static.js",
+    "schemas:sync": "node scripts/sync-schemas.mjs --sync",
+    "schemas:check": "node scripts/sync-schemas.mjs --check",
+    "test": "npm run config:generate && npm run schemas:check && npm run check && npm run smoke && node tools/terrain-caps.test.js && node tools/terrain-paint.test.js && node tools/world-environments.test.js && node tools/preview-environment.test.js && node tools/read-model.test.js && node tools/runtime-config.test.js && node tools/rock-battlebro.test.js && node tools/terrain-endurance.test.js && node tools/training-center.test.js && node tools/fp-camera.test.js && node tools/terrain-traversal.test.js && node tools/telekinetic-rock.test.js && node tools/battle-calendar.test.js && node tools/battle-arena.test.js && node tools/terrain-consume.test.js && node tools/character-variants.test.js && node tools/restored-characters.test.js && node tools/battle-actions.test.js && node tools/astronaut-activity.test.js && node tools/excavation.test.js && node tools/fence-line.test.js && node tools/home-world-lod.test.js",
+    "build": "sh publish.sh"
+  },
+  "license": "AGPL-3.0-only",
+  "dependencies": {},
+  "devDependencies": {}
+}

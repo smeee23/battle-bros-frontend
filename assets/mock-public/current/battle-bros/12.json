@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "chainId": "1",
+  "battleManagerAddress": "0x1111111111111111111111111111111111111111",
+  "snapshot": {
+    "id": "1-0x1111111111111111111111111111111111111111-8-0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "blockNumber": "23847192",
+    "blockHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "timestamp": "1785971100"
+  },
+  "tokenId": "12",
+  "active": true,
+  "owner": "0x8888888888888888888888888888888888888888",
+  "mint": {
+    "roundId": "1",
+    "payer": "0x8888888888888888888888888888888888888888",
+    "paidWithETH": true,
+    "inputAmount": "100000000000000000",
+    "sharesReceived": "100000000000000000",
+    "event": {
+      "blockNumber": "23700001",
+      "transactionHash": "0x1010101010101010101010101010101010101010101010101010101010101010",
+      "logIndex": "2"
+    }
+  },
+  "hatch": {
+    "roundId": "1",
+    "battleBroType": "TYPE_2",
+    "event": {
+      "blockNumber": "23700010",
+      "transactionHash": "0x2020202020202020202020202020202020202020202020202020202020202020",
+      "logIndex": "1"
+    }
+  },
+  "progression": {
+    "xp": "540",
+    "level": "3",
+    "capacity": "110",
+    "reserves": { "attack": "64", "defend": "32", "counter": "14" }
+  },
+  "training": {
+    "lastSettledRound": "8",
+    "weightsBps": { "attack": "6000", "defend": "3000", "counter": "1000" },
+    "recoveryCarry": "400",
+    "allocationCarry": { "attack": "2000", "defend": "7000", "counter": "1000" },
+    "remainderCursor": "1"
+  },
+  "need": { "active": true, "sinceRound": "9" },
+  "vault": {
+    "freeShares": "104495000000000000",
+    "reservedShares": "0",
+    "totalShares": "104495000000000000",
+    "currentValue": "105020000000000000",
+    "protectedPrincipal": "102000000000000000",
+    "riskableShares": "3000000000000000",
+    "yieldRatioBps": "296",
+    "withdrawnStETH": "0"
+  },
+  "combatLockRound": null,
+  "revealNonce": "2",
+  "roundHistory": [
+    {
+      "roundId": "8",
+      "registered": true,
+      "bye": false,
+      "battleId": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "pairIndex": "0",
+      "outcome": "WIN",
+      "trainingSettlements": [
+        {
+          "fromRound": "7",
+          "throughRound": "8",
+          "added": { "attack": "6", "defend": "3", "counter": "1" },
+          "reservesAfter": { "attack": "69", "defend": "32", "counter": "14" },
+          "recoveryCarryAfter": "400",
+          "allocationCarryAfter": { "attack": "2000", "defend": "7000", "counter": "1000" },
+          "remainderCursorAfter": "1",
+          "event": {
+            "blockNumber": "23844001",
+            "transactionHash": "0x3030303030303030303030303030303030303030303030303030303030303030",
+            "logIndex": "2"
+          }
+        }
+      ],
+      "xpAwards": [
+        {
+          "source": "BATTLE",
+          "amount": "20",
+          "xpAfter": "540",
+          "levelAfter": "3",
+          "event": {
+            "blockNumber": "23847020",
+            "transactionHash": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "logIndex": "7"
+          }
+        }
+      ],
+      "reserveChanges": [
+        {
+          "reason": "COMBAT",
+          "combatType": "ATTACK",
+          "amount": "5",
+          "delta": { "attack": "-5", "defend": "0", "counter": "0" },
+          "reservesAfter": { "attack": "64", "defend": "32", "counter": "14" },
+          "event": {
+            "blockNumber": "23847020",
+            "transactionHash": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "logIndex": "4"
+          }
+        }
+      ],
+      "needChanges": [
+        {
+          "action": "ASSIGNED",
+          "effectiveRound": "9",
+          "event": {
+            "blockNumber": "23847100",
+            "transactionHash": "0x9999999999999999999999999999999999999999999999999999999999999999",
+            "logIndex": "3"
+          }
+        }
+      ]
+    }
+  ]
+}

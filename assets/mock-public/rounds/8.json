@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "chainId": "1",
+  "battleManagerAddress": "0x1111111111111111111111111111111111111111",
+  "snapshot": {
+    "id": "1-0x1111111111111111111111111111111111111111-8-0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "blockNumber": "23847192",
+    "blockHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "timestamp": "1785971100"
+  },
+  "roundId": "8",
+  "status": "FINALIZED",
+  "battleType": "DAILY",
+  "battles": [
+    {
+      "pairIndex": "0",
+      "battleId": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "tokenA": "12",
+      "tokenB": "19",
+      "status": "RESOLVED",
+      "resolutionKind": "COMBAT",
+      "winnerTokenId": "12",
+      "loserTokenId": "19",
+      "decisions": [
+        { "tokenId": "12", "committed": true, "revealed": true, "combatType": "ATTACK", "power": "5", "relayed": false },
+        { "tokenId": "19", "committed": true, "revealed": true, "combatType": "DEFEND", "power": "4", "relayed": true }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),Module=require('node:module'),path=require('node:path');
+const makeArena=require('../assets/battle-arena.js');
+const filename=path.resolve('tools/rock-battlebro.test.js'),fixture=new Module(filename,module);fixture.filename=filename;fixture.paths=Module._nodeModulePaths(path.dirname(filename));
+fixture._compile(fs.readFileSync(filename,'utf8').split('const api = context.api;')[0]+'module.exports={api:context.api,THREE};',filename);
+const {api,THREE}=fixture.exports;
+const previousMovers=api.lavaMonsterMovers.size;
+let ticks=0;
+const arena=makeArena(THREE,()=>api.createRockBattleBro({variant:'lava',form:6}),(actor,time,dt)=>{ticks++;api.tickUpperArmMotion(actor.root,time,dt,actor.mover);api.tickLooseRockAttachments(actor.root,time,dt);});
+assert.equal(arena.actors.length,2);
+assert.equal(api.lavaMonsterMovers.size,previousMovers,'Arena characters never join training locomotion or attack registries');
+const a=arena.actors[0].root,b=arena.actors[1].root;
+assert.equal(a.position.x,-b.position.x);assert.equal(a.position.z,b.position.z);
+const direction=new THREE.Vector3(0,0,1).applyQuaternion(a.quaternion);
+assert(direction.dot(b.position.clone().sub(a.position).normalize())>.999,'Opponents face each other');
+for(const {root} of arena.actors){const lower=root.userData.locomotionRig;const bottom=Math.min(new THREE.Box3().setFromObject(lower.leftArm.hand).min.y,new THREE.Box3().setFromObject(lower.rightArm.hand).min.y);assert(Math.abs(bottom-3.665)<1e-6,'Feet sit on court');}
+for(const name of ['greenBattleCourt','centerCircle','lowerBowl','middleTier','upperBowl','outerStadiumWall','structuralCrown','amberEntrance','azureEntrance','arenaDisplay','rearSkylight'])assert(arena.scene.getObjectByName(name),name);
+assert(arena.scene.getObjectByName('spectatorSeats').isInstancedMesh);
+assert(arena.scene.getObjectByName('voxelSpectators').count>25000,'Stadium accommodates tens of thousands');
+const seats=arena.scene.getObjectByName('spectatorSeats');
+assert.equal(seats.geometry.parameters.width,.48,'Seat dimensions retained');
+const seatMatrix=new THREE.Matrix4(),bins=new Array(36).fill(0);let minRadius=Infinity,maxRadius=0,maxHeight=0;
+for(let i=0;i<seats.count;i++){seats.getMatrixAt(i,seatMatrix);const x=seatMatrix.elements[12],y=seatMatrix.elements[13],z=seatMatrix.elements[14];const radius=Math.hypot(x,z);minRadius=Math.min(minRadius,radius);maxRadius=Math.max(maxRadius,radius);maxHeight=Math.max(maxHeight,y);bins[Math.min(35,Math.floor((Math.atan2(x,z)+Math.PI)/(2*Math.PI)*36))]++;}
+assert(bins.every(count=>count>500),'Dense seating covers every direction, including the old front cutaway');
+assert(minRadius>37&&maxRadius>94&&maxHeight>40,'Deep, tall bowl around an expanded clear perimeter');
+const floor=arena.scene.getObjectByName('greenBattleCourt');assert.equal(floor.geometry.parameters.width,23);assert.equal(floor.geometry.parameters.depth,14);
+assert.equal(arena.scene.getObjectByName('entranceLintel').geometry.parameters.height,.6,'Entrance details not uniformly scaled');
+assert.equal(arena.scene.getObjectByName('outerStadiumWall').geometry.parameters.thetaLength,Math.PI*2,'Seamless full outer wall');
+console.log('stadium seating capacity:',seats.count);
+
+const before=arena.camera.position.clone();arena.orbit(.3,.1);arena.tick(1,.016);assert(arena.camera.position.distanceTo(before)>1);arena.reset();arena.tick(1,0);assert(arena.camera.position.distanceTo(before)<1e-7);
+arena.orbit(Math.PI,0);arena.tick(1,0);assert(arena.camera.position.z<0,'Camera can see the formerly missing front stands');arena.orbit(Math.PI,0);arena.tick(1,0);assert(arena.camera.position.distanceTo(before)<1e-7,'Full camera rotation returns to the same view');
+arena.zoom(1000);arena.tick(1,0);assert(arena.camera.position.length()>140,'Zoom reaches a stadium overview');arena.reset();arena.tick(1,0);
+arena.resize(.45);arena.tick(2,.016);assert.equal(arena.camera.aspect,.45);assert(arena.camera.position.length()<arena.camera.far);
+assert(ticks>=8);assert.equal(api.lavaMonsterMovers.size,previousMovers);
+const source=fs.readFileSync('index.html','utf8');
+const branch=source.slice(source.indexOf('    if (battleArenaView.active) {'),source.indexOf('    // tile/object drop-in animations (load + placement)'));
+assert(branch.includes('renderer.render(arena.scene,arena.camera)')&&branch.includes('return;'),'Arena uses existing frame loop and pauses home simulation');
+const arenaCode=fs.readFileSync('assets/battle-arena.js','utf8');
+assert(!/requestAnimationFrame|setInterval|telekineticRockThrow|setCell\(/.test(arenaCode),'No second loop, combat or terrain mutations');
+console.log('battle arena: scene landmarks, instanced stands, two grounded opposing characters, camera/reset/portrait framing and training-system isolation OK');

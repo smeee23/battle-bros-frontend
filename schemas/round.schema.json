@@ -1,0 +1,204 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "round.schema.json",
+  "title": "BattleBros finalized round snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "chainId", "battleManagerAddress", "snapshot", "roundId", "status", "cancellationReason", "battleType", "timing", "lifecycleBlocks", "configuration", "entrants", "byeTokenId", "battles", "randomness", "needs", "totals", "completion"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "chainId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+    "battleManagerAddress": { "$ref": "definitions.schema.json#/definitions/address" },
+    "snapshot": { "$ref": "definitions.schema.json#/definitions/snapshot" },
+    "roundId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+    "status": { "type": "string", "enum": ["FINALIZED", "SKIPPED", "CANCELLED"] },
+    "cancellationReason": { "description": "Null unless status is CANCELLED. RoundCancellationStarted reason 0 maps to INCOMPLETE_MATCHMAKING and reason 1 maps to RANDOMNESS_FAILURE.", "type": ["string", "null"], "enum": [null, "INCOMPLETE_MATCHMAKING", "RANDOMNESS_FAILURE"] },
+    "battleType": { "$ref": "definitions.schema.json#/definitions/battleType" },
+    "timing": {
+      "type": "object", "additionalProperties": false,
+      "required": ["registrationCloseTimestamp", "matchmakingCloseTimestamp", "commitCloseTimestamp", "revealCloseTimestamp", "finalizedTimestamp"],
+      "properties": {
+        "registrationCloseTimestamp": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "matchmakingCloseTimestamp": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "commitCloseTimestamp": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "revealCloseTimestamp": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "finalizedTimestamp": { "description": "Timestamp of the canonical block containing RoundOpened(roundId + 1).", "$ref": "definitions.schema.json#/definitions/uintString" }
+      }
+    },
+    "lifecycleBlocks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["openedBlockNumber", "openedBlockHash", "registrationClosedBlockNumber", "registrationClosedBlockHash", "finalizedBlockNumber", "finalizedBlockHash"],
+      "properties": {
+        "openedBlockNumber": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "openedBlockHash": { "$ref": "definitions.schema.json#/definitions/bytes32" },
+        "registrationClosedBlockNumber": { "$ref": "definitions.schema.json#/definitions/nullableUintString" },
+        "registrationClosedBlockHash": { "anyOf": [{ "$ref": "definitions.schema.json#/definitions/bytes32" }, { "type": "null" }] },
+        "finalizedBlockNumber": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "finalizedBlockHash": { "$ref": "definitions.schema.json#/definitions/bytes32" }
+      }
+    },
+    "configuration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["matchmaker", "riskBps", "feeBps", "feeRecipient", "needSelectionAttempts", "mintedUpperBound"],
+      "properties": {
+        "matchmaker": { "$ref": "definitions.schema.json#/definitions/address" },
+        "riskBps": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "feeBps": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "feeRecipient": { "$ref": "definitions.schema.json#/definitions/nullableAddress" },
+        "needSelectionAttempts": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "mintedUpperBound": { "$ref": "definitions.schema.json#/definitions/uintString" }
+      }
+    },
+    "entrants": {
+      "type": "array", "uniqueItems": true,
+      "items": { "$ref": "definitions.schema.json#/definitions/uintString" }
+    },
+    "byeTokenId": { "$ref": "definitions.schema.json#/definitions/nullableUintString" },
+    "battles": { "type": "array", "items": { "$ref": "#/definitions/battle" } },
+    "randomness": {
+      "type": "object", "additionalProperties": false,
+      "required": ["applicable", "requestId", "seed", "attempts", "requestedAt", "fulfilled", "cancelled"],
+      "properties": {
+        "applicable": { "description": "False when this round never required resolution randomness, including skipped, bye-only, and incomplete-matchmaking cancellation paths.", "type": "boolean" },
+        "requestId": { "$ref": "definitions.schema.json#/definitions/nullableUintString" },
+        "seed": { "$ref": "definitions.schema.json#/definitions/nullableUintString" },
+        "attempts": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "requestedAt": { "$ref": "definitions.schema.json#/definitions/nullableUintString" },
+        "fulfilled": { "type": ["boolean", "null"] },
+        "cancelled": { "type": ["boolean", "null"] }
+      }
+    },
+    "needs": {
+      "type": "object", "additionalProperties": false,
+      "required": ["configuredAttempts", "processedAttempts", "expiredAttempts", "assignments"],
+      "properties": {
+        "configuredAttempts": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "processedAttempts": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "expiredAttempts": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "assignments": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["attemptIndex", "tokenId", "assigned", "effectiveRound", "event"],
+            "properties": {
+              "attemptIndex": { "$ref": "definitions.schema.json#/definitions/uintString" },
+              "tokenId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+              "assigned": { "type": "boolean" },
+              "effectiveRound": { "$ref": "definitions.schema.json#/definitions/nullableUintString" },
+              "event": { "$ref": "definitions.schema.json#/definitions/eventReference" }
+            }
+          }
+        }
+      }
+    },
+    "totals": {
+      "type": "object", "additionalProperties": false,
+      "required": ["entrantCount", "pairCount", "resolvedBattleCount", "voidBattleCount", "cancelledBattleCount", "byeCount", "committedTokenCount", "revealedTokenCount", "xpAwarded", "stakeSharesTransferred", "feeSharesAccrued"],
+      "properties": {
+        "entrantCount": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "pairCount": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "resolvedBattleCount": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "voidBattleCount": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "cancelledBattleCount": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "byeCount": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "committedTokenCount": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "revealedTokenCount": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "xpAwarded": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "stakeSharesTransferred": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "feeSharesAccrued": { "description": "Sum of StakeSettled.feeShares for the round.", "$ref": "definitions.schema.json#/definitions/uintString" }
+      }
+    },
+    "completion": {
+      "type": "object", "additionalProperties": false,
+      "required": ["registrationClosed", "matchmakingCompleted", "randomnessFulfilled", "battlesCompleted", "needProcessingCompleted", "cleanupCompleted"],
+      "properties": {
+        "registrationClosed": { "type": "boolean" },
+        "matchmakingCompleted": { "type": "boolean" },
+        "randomnessFulfilled": { "type": ["boolean", "null"] },
+        "battlesCompleted": { "type": "boolean" },
+        "needProcessingCompleted": { "type": "boolean" },
+        "cleanupCompleted": { "type": "boolean", "const": true }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "CANCELLED" } } },
+      "then": { "properties": { "cancellationReason": { "type": "string" } } },
+      "else": { "properties": { "cancellationReason": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "randomness": { "properties": { "applicable": { "const": false } } } } },
+      "then": {
+        "properties": {
+          "randomness": {
+            "properties": {
+              "requestId": { "type": "null" },
+              "seed": { "type": "null" },
+              "attempts": { "const": "0" },
+              "requestedAt": { "type": "null" },
+              "fulfilled": { "type": "null" },
+              "cancelled": { "type": "null" }
+            }
+          },
+          "completion": { "properties": { "randomnessFulfilled": { "type": "null" } } }
+        }
+      },
+      "else": {
+        "properties": {
+          "randomness": {
+            "properties": {
+              "requestId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+              "requestedAt": { "$ref": "definitions.schema.json#/definitions/uintString" },
+              "fulfilled": { "type": "boolean" },
+              "cancelled": { "type": "boolean" }
+            }
+          },
+          "completion": { "properties": { "randomnessFulfilled": { "type": "boolean" } } }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "decision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tokenId", "committed", "revealed", "combatType", "power", "relayed"],
+      "properties": {
+        "tokenId": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "committed": { "type": "boolean" },
+        "revealed": { "type": "boolean" },
+        "combatType": { "anyOf": [{ "$ref": "definitions.schema.json#/definitions/combatType" }, { "type": "null" }] },
+        "power": { "$ref": "definitions.schema.json#/definitions/nullableUintString" },
+        "relayed": { "type": ["boolean", "null"] }
+      }
+    },
+    "battle": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pairIndex", "battleId", "tokenA", "tokenB", "status", "resolutionKind", "winnerTokenId", "loserTokenId", "stake", "decisions", "materializedEvent", "terminalEvent"],
+      "properties": {
+        "pairIndex": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "battleId": { "$ref": "definitions.schema.json#/definitions/bytes32" },
+        "tokenA": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "tokenB": { "$ref": "definitions.schema.json#/definitions/uintString" },
+        "status": { "type": "string", "enum": ["RESOLVED", "VOID", "CANCELLED"] },
+        "resolutionKind": { "type": ["string", "null"], "enum": [null, "COMBAT", "COMMIT_FORFEIT", "REVEAL_FORFEIT", "MUTUAL_INACTIVITY"] },
+        "winnerTokenId": { "$ref": "definitions.schema.json#/definitions/nullableUintString" },
+        "loserTokenId": { "$ref": "definitions.schema.json#/definitions/nullableUintString" },
+        "stake": {
+          "type": "object", "additionalProperties": false,
+          "required": ["sharesEach", "winnerShares", "feeShares", "feeRecipient", "released"],
+          "properties": {
+            "sharesEach": { "$ref": "definitions.schema.json#/definitions/uintString" },
+            "winnerShares": { "$ref": "definitions.schema.json#/definitions/uintString" },
+            "feeShares": { "$ref": "definitions.schema.json#/definitions/uintString" },
+            "feeRecipient": { "$ref": "definitions.schema.json#/definitions/nullableAddress" },
+            "released": { "type": "boolean" }
+          }
+        },
+        "decisions": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/definitions/decision" } },
+        "materializedEvent": { "$ref": "definitions.schema.json#/definitions/eventReference" },
+        "terminalEvent": { "$ref": "definitions.schema.json#/definitions/eventReference" }
+      }
+    }
+  }
+}
