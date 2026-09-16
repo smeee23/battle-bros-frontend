@@ -34,6 +34,7 @@ vm.runInContext(`
   const MAX_TERRAIN_FLOORS = 64;
   const BUILDABLE_LAND_Y_OFFSET = 0, TOP_H = 0;
   const terrainRiseForLevel = level => (level - 1) * 0.2;
+  function terrainLevelForCell(cell) { return cell?.terrainFloors || 1; }
   let heights = new Map();
   const terrainRiseAt = (x,z) => heights.get(x+","+z) || 0;
   let blocked = new Set();

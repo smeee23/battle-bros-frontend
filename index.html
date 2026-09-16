@@ -14258,13 +14258,13 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     return {x, z, key, cell, object};
   }
 
-  function tryScenerySmash(mover, stuck = false) {
+  function tryScenerySmash(mover, stuck = false, terrainTarget = null) {
     if (typeof cellMeshes === 'undefined') return false;
-    if (mover.smash || (mover.smashCooldown || 0) > 0 || mover.root.userData.previewHome
+    if (mover.smash || (!terrainTarget && (mover.smashCooldown || 0) > 0) || mover.root.userData.previewHome
       || mover.root.userData.terrainConsume || mover.root.userData.rockThrow) return false;
     if (!stuck && Math.random() > .12) return false;
     for (const [dx,dz] of [[0,1],[1,0],[0,-1],[-1,0]]) {
-      const target = scenerySmashTarget(mover, mover.cellX+dx, mover.cellZ+dz);
+      const target = terrainTarget || scenerySmashTarget(mover, mover.cellX+dx, mover.cellZ+dz);
       if (!target) continue;
       const root=mover.root, visual=root.userData.rig;
       const parts={...mover.parts, torso:visual.torso || mover.parts.torso || visual.rig, head:visual.head,
@@ -14273,7 +14273,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       const nodes=[root, parts.torso, parts.head, parts.rearingPivot,
         parts.leftArm?.shoulder, parts.rightArm?.shoulder,
         parts.minotaurLegs?.frontLeft, parts.minotaurLegs?.frontRight].filter(Boolean);
-      mover.smash={...target, parts, style, elapsed:0, impacted:false, yaw:Math.atan2(dx,dz),
+      mover.smash={...target, parts, style, elapsed:0, impacted:false, yaw:Math.atan2(target.x-mover.cellX,target.z-mover.cellZ),
         poses:nodes.map(node=>({node,position:node.position.clone(),rotation:node.rotation.clone()})),
         objectScale:target.object.scale.clone(), objectRotation:target.object.rotation.clone()};
       scenerySmashLocks.set(target.key,mover);
@@ -14288,7 +14288,9 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     if (!a) return;
     for(const p of a.poses) {p.node.position.copy(p.position);p.node.rotation.copy(p.rotation);}
     if(a.object.parent) {a.object.scale.copy(a.objectScale);a.object.rotation.copy(a.objectRotation);}
-    scenerySmashLocks.delete(a.key);mover.smash=null;
+    scenerySmashLocks.delete(a.key);
+    if(a.terrainSmash)terrainConsumeLocks.delete(a.key);
+    mover.smash=null;
     mover.pauseRemaining=.3;mover.idleRemaining=.3;
   }
 
@@ -14297,7 +14299,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     const a=mover.smash;
     if(!a) return false;
     if(!mover.root.parent || neighborInspectionState.active || (!a.impacted &&
-      (getWorldCell(a.x,a.z)!==a.cell || cellMeshes[a.key]?.object!==a.object))) {
+      (getWorldCell(a.x,a.z)!==a.cell || (!a.terrainSmash && cellMeshes[a.key]?.object!==a.object)))) {
       finishScenerySmash(mover);return true;
     }
     a.elapsed+=Math.min(dt,.05);
@@ -14323,11 +14325,13 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     if(p>=.64 && !a.impacted) {
       a.impacted=true;
       // The scenery is a local visual world. Never route this through resource accounting.
-      const ok=withSetCellMutationAuthority('scenery-smash',()=>setCell(a.x,a.z,{
+      if(a.terrainSmash && !validateTerrainConsume(mover,a,a,true).ok) {finishScenerySmash(mover);return true;}
+      const ok=withSetCellMutationAuthority(a.terrainSmash?'terrain-consume':'scenery-smash',()=>setCell(a.x,a.z,
+        a.terrainSmash ? {...a.cell,terrainFloors:a.level-1,animate:false,impactDust:false} : {
         terrain:a.cell.terrain,terrainFloors:a.cell.terrainFloors,kind:null,extras:[],sceneryRubble:true,animate:false,impactDust:false}));
       if(ok===false) {finishScenerySmash(mover);return true;}
       const pos=tilePos(a.x,a.z);
-      spawnDustBurst(pos.x,battleBroGroundHeight(a.x,a.z)+.1,pos.z,24);
+      spawnDustBurst(pos.x,battleBroGroundHeight(a.x,a.z)+.1,pos.z,10,true);
     }
     if(!a.impacted && p>.52) {
       a.object.rotation.z=a.objectRotation.z+Math.sin(p*180)*.055;
@@ -14382,12 +14386,18 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     if (['grass', 'dirt', 'plant'].includes(terrain)) return 'plant';
     return ['rock', 'stone'].includes(terrain) ? 'rock' : null;
   }
-  function validateTerrainConsume(mover, target, owner = null) {
+  function validateTerrainConsume(mover, target, owner = null, smash = false) {
+    if (mover?.root?.userData.previewHome || (typeof neighborInspectionState !== 'undefined' && neighborInspectionState.active)) return {ok:false, reason:'read-only-world'};
     if (!mover?.root?.parent || !target || !Number.isInteger(target.x) || !Number.isInteger(target.z)
       || target.x < 0 || target.z < 0 || target.x >= GRID || target.z >= GRID) return {ok:false, reason:'invalid-target'};
     const {x,z} = target, cell = getWorldCell(x,z), key = x+','+z;
     if (trainingFacilityOccupiesCell(x, z) || !cell || cell.kind || cell.extras?.length || !terrainConsumeMaterial(cell.terrain)) return {ok:false, reason:'non-terrain'};
-    for (const other of lavaMonsterMovers) {
+    const actors = [...lavaMonsterMovers,
+      ...(typeof minotaurMovers === 'undefined' ? [] : minotaurMovers),
+      ...(typeof specterMovers === 'undefined' ? [] : specterMovers)];
+    for (const other of actors) {
+      if (other !== mover && ((other.cellX === x && other.cellZ === z)
+        || (other.targetCellX === x && other.targetCellZ === z))) return {ok:false,reason:'occupied-contact'};
       if(other!==mover && other.state!=='IDLE' && Math.hypot(other.root.position.x-(x-GRID/2+.5),other.root.position.z-(z-GRID/2+.5))<3)
         return {ok:false,reason:'occupied-contact'};
       const contacts=other.anchors || [other.leftAnchor,other.rightAnchor];
@@ -14401,11 +14411,12 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     }
     const level = terrainLevelForCell(cell), base = terrainLevelForCell(null);
     if (!Number.isInteger(level) || level <= base || level > MAX_TERRAIN_FLOORS) return {ok:false, reason:'base-ground'};
-    if (terrainConsumeLocks.has(key) && terrainConsumeLocks.get(key) !== owner) return {ok:false, reason:'cell-busy'};
+    if ((scenerySmashLocks.has(key) && scenerySmashLocks.get(key) !== owner?.mover) || (terrainConsumeLocks.has(key) && terrainConsumeLocks.get(key) !== owner)) return {ok:false, reason:'cell-busy'};
     const p = tilePos(x,z), root = mover.root;
     const distance = Math.hypot(root.position.x-p.x, root.position.z-p.z);
     const height = battleBroGroundHeight(x,z);
-    if (distance < .6 || distance > 1.65 || Math.abs(height-root.position.y) > .65) return {ok:false, reason:'out-of-reach'};
+    if (distance < .6 || distance > 1.65 || (!smash && Math.abs(height-root.position.y) > .65)
+      || (smash && height <= battleBroGroundHeight(mover.cellX,mover.cellZ))) return {ok:false, reason:'out-of-reach'};
     // Bounded sight samples reject intervening walls/objects. Never create cells.
     for (let i=1;i<8;i++) {
       const u=i/8, cx=Math.floor(root.position.x+(p.x-root.position.x)*u+GRID/2);
@@ -14428,7 +14439,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     return best;
   }
   function removeConsumedTerrainLevel(action) {
-    const v=validateTerrainConsume(action.mover,action.target,action);
+    const v=validateTerrainConsume(action.mover,action.target,action,action.smash);
     if (!v.ok || v.level!==action.level || v.cell!==action.cell || v.cell.terrain!==action.terrain) return false;
     const result=withSetCellMutationAuthority('terrain-consume',()=>setCell(action.target.x,action.target.z,
       {...v.cell, terrainFloors:v.level-1, animate:false, impactDust:false}));
@@ -14454,15 +14465,23 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     batch.meshes.forEach((m,i)=>{m.material=terrainConsumeMaterials.get(a.material)[i<8?0:1];m.visible=false;});
     return batch;
   }
-  function consumeTerrain(mover, target) {
-    if (!mover || mover.state!=='IDLE' || mover.turn || mover.root.userData.rockThrow || mover.root.userData.terrainConsume) return {ok:false,reason:'actor-busy'};
+  function consumeTerrain(mover, target, smash = false) {
+    if (!mover || mover.state!=='IDLE' || mover.turn || mover.smash || mover.root.userData.rockThrow || mover.root.userData.terrainConsume) return {ok:false,reason:'actor-busy'};
     target = target || selectTerrainConsumeTarget(mover);
-    const v=validateTerrainConsume(mover,target); if(!v.ok) return v;
+    const v=validateTerrainConsume(mover,target,null,smash); if(!v.ok) return v;
     const root=mover.root, form=root.userData.form;
-    const a={...v, mover,root,target:{x:target.x,z:target.z},terrain:v.cell.terrain, age:0, impacted:false,
+    const a={...v, smash, mover,root,target:{x:target.x,z:target.z},terrain:v.cell.terrain, age:0, impacted:false,
       ik:{joint:new THREE.Vector3(),tip:new THREE.Vector3(),goal:new THREE.Vector3(),delta:new THREE.Quaternion(),world:new THREE.Quaternion(),parent:new THREE.Quaternion()},
       windup:form===7?1.65:form===6?.85:form===5?1.25:1.1, duration:0, poses:[], scratch:new THREE.Vector3(),core:new THREE.Vector3(),
       expression:root.userData.slots?.face?.userData.expression?.name||'neutral', cycle:root.userData.expressionCycleEnabled};
+    // Strike the near face at reachable height; fragments still originate at the removed layer.
+    a.strikePoint=a.point.clone();
+    if (smash) {
+      const dx=a.point.x-root.position.x, dz=a.point.z-root.position.z;
+      const inset=.5/Math.max(Math.abs(dx),Math.abs(dz));
+      a.strikePoint.x-=dx*inset;a.strikePoint.z-=dz*inset;
+      a.strikePoint.y=Math.min(a.point.y,root.position.y+.4);
+    }
     a.strikingArm=root.userData.rig.rightUpperArm||root.userData.rig.leftUpperArm;
     a.ik.joints=a.strikingArm?[a.strikingArm.elbow,a.strikingArm.arm,a.strikingArm.shoulder]:[];
     a.ik.saved=a.ik.joints.map(()=>new THREE.Quaternion());a.contact=new THREE.Vector3();
@@ -14511,7 +14530,9 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     const post=a.age-a.windup;
     if(!a.impacted && post>=0) {
       if(!removeConsumedTerrainLevel(a)){a.cancelled=true;finishTerrainConsume(a);return;}
-      a.impacted=true;a.batch.marker.visible=false;a.batch.group.visible=true;setBattleBroExpression(a.root,'veryAngry',{automatic:true});
+      a.impacted=true;a.batch.marker.visible=false;a.batch.group.visible=true;
+      spawnDustBurst(a.strikePoint.x,a.strikePoint.y,a.strikePoint.z,10,true);
+      setBattleBroExpression(a.root,'veryAngry',{automatic:true});
     }
     if(a.age>=a.duration){finishTerrainConsume(a);return;}
     const root=a.root, rig=root.userData.rig, form=root.userData.form;
@@ -14519,11 +14540,11 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     const wind=smoothBattleBroStep(a.age/(a.windup*.78));
     const hit=smoothBattleBroStep((a.age-a.windup*.78)/(a.windup*.22));
     const body=rig.torso||rig.rig;
-    a.scratch.copy(a.point);root.worldToLocal(a.scratch);
+    a.scratch.copy(a.strikePoint);root.worldToLocal(a.scratch);
     if(body){body.rotation.y+=Math.atan2(a.scratch.x,a.scratch.z)*.3*settle;
       body.rotation.x+=(-.18*wind+.43*hit)*settle;
       if(form>=5)body.position.y-=.9*hit*settle;body.rotation.z+=(form===5?.12:form<4?.09:.025)*wind*settle;}
-    const strike=a.scratch.copy(a.point);strike.y+=(form>=5?2.5:.7)*wind*(1-hit)+(form>=5?.45:0);
+    const strike=a.scratch.copy(a.strikePoint);strike.y+=(form>=5?2.5:.7)*wind*(1-hit)+(form>=5?.45:0);
     const strength=wind*settle;
     root.updateMatrixWorld(true);
     if(form<4) {
@@ -14644,9 +14665,6 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   ];
   function lavaClamberMaxStep(mover) {
     if (mover.clamberPlanning && mover.clamberLimit !== undefined) return mover.clamberLimit;
-    // After sustained failure, ordinary terrain height must not imprison an
-    // actor. A deliberately exaggerated climb is preferable to a frozen scene.
-    if ((mover.stationaryFor || 0) >= 8 && (mover.blockedAttempts || 0) >= 2) return terrainRiseForLevel(MAX_TERRAIN_FLOORS) + 0.001;
     return BATTLEBRO_TERRAIN_LEVEL_HEIGHT * (mover.root.userData.form < 3 ? 3 : 4) + 0.001;
   }
 
@@ -15146,6 +15164,25 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     if (memory.size > 16) memory.delete(memory.keys().next().value);
   }
 
+  function tryBlockedTerrainSmash(mover) {
+    if (!mover.terrainContacts || mover.state !== 'IDLE' || mover.turn
+      || (mover.blockedAttempts || 0) < 2 || (mover.stationaryFor || 0) < 3) return false;
+    const ground = battleBroGroundHeight(mover.cellX,mover.cellZ);
+    const candidates = BATTLEBRO_DIRECTIONS.map(([dx,dz]) => ({x:mover.cellX+dx,z:mover.cellZ+dz,dx,dz}))
+      .filter(p => p.x>=0 && p.z>=0 && p.x<GRID && p.z<GRID
+        && battleBroGroundHeight(p.x,p.z)-ground > lavaContactMaxStep(mover))
+      .sort((a,b) => Math.abs(battleBroYawDelta(Math.atan2(a.dx,a.dz)-mover.root.rotation.y))
+        - Math.abs(battleBroYawDelta(Math.atan2(b.dx,b.dz)-mover.root.rotation.y)));
+    for (const target of candidates) {
+      if (consumeTerrain(mover,target,true).ok) {
+        mover.failedTerrain?.delete(target.x+','+target.z);
+        mover.recoveryState='SMASH';
+        return true;
+      }
+    }
+    return false;
+  }
+
   function selectLavaWalkRoute(mover) {
     if (tryScenerySmash(mover, (mover.blockedAttempts || 0) >= 2)) return null;
     const now = mover.traversalClock || 0, yaw = mover.root.rotation.y;
@@ -15186,7 +15223,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     // Long planted gait/turn phases and deliberate attack pauses cannot enter
     // recovery. Both repeated full searches and sustained lack of progress count.
     if (!mover.terrainContacts || mover.blockedAttempts < 2 || (mover.stationaryFor || 0) < 3
-      || now < (mover.recoveryAfter || 0)) { showLavaTraversalDebug(mover); return null; }
+      || now < (mover.recoveryAfter || 0)) { tryBlockedTerrainSmash(mover); showLavaTraversalDebug(mover); return null; }
     mover.recoveryAfter = now + 10;
     const retreats = directions.filter(([dx, dz]) => dx * Math.sin(yaw) + dz * Math.cos(yaw) < 0.35)
       .slice().sort((a, b) => {
@@ -15221,6 +15258,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       showLavaTraversalDebug(mover, route);
       return route;
     }
+    tryBlockedTerrainSmash(mover);
     showLavaTraversalDebug(mover);
     return null;
   }
@@ -16516,6 +16554,21 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     return true;
   }
 
+  function tryMinotaurTerrainSmash(mover) {
+    if ((mover.smashFailedSearches || 0) < 2) return false;
+    for (const [dx,dz] of MINOTAUR_DIRECTIONS) {
+      const target={x:mover.cellX+dx,z:mover.cellZ+dz};
+      const v=validateTerrainConsume(mover,target,null,true);
+      if (!v.ok || v.point.y-minotaurGroundHeight(mover.cellX,mover.cellZ)<=MINOTAUR_MAX_STEP_HEIGHT) continue;
+      if (tryScenerySmash(mover,true,{...target,...v,terrainSmash:true,object:new THREE.Group()})) {
+        mover.smash.mover=mover;
+        terrainConsumeLocks.set(v.key,mover.smash);
+        return true;
+      }
+    }
+    return false;
+  }
+
   function chooseMinotaurWalkTarget(mover) {
     if (tryScenerySmash(mover, (mover.smashFailedSearches || 0) >= 2)) return true;
     const first = Math.floor(Math.random() * MINOTAUR_DIRECTIONS.length);
@@ -16541,7 +16594,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     }
     mover.pauseRemaining = 0.8 + Math.random() * 1.6;
     mover.smashFailedSearches = (mover.smashFailedSearches || 0) + 1;
-    return false;
+    return tryMinotaurTerrainSmash(mover);
   }
 
   function registerMinotaurMover(root, cellX, cellZ) {
@@ -29381,8 +29434,7 @@ function neighborStarVector(edge, index) {
   const FP_NEAR = 0.02;
   const PERS_NEAR_DEFAULT = persCam.near;
   const PERS_FOV_DEFAULT  = persCam.fov;
-  // Low-gravity tuning (world units, seconds): ~0.50 high / 1.06s airborne.
-  // Lower launch speed and gravity together to add float without extra height.
+  // Low-gravity tuning (world units, seconds): ~1.805 high / 3.8s airborne.
   const FP_JUMP_V0 = 1.9;        // units / sec (originally 3.2)
   const FP_GRAVITY = 1.0;        // units / sec²; also applies when walking off ledges
   const FP_LANDING_DIP_MAX = 0.01; // camera only; set to 0 to disable
@@ -29395,7 +29447,7 @@ function neighborStarVector(edge, index) {
   const FP_TERRAIN_LIFT_LERP = 8;
   const fp = {
     active: false,
-    pos: new THREE.Vector3(0, TOP_H + FP_EYE_H, 0),
+    pos: new THREE.Vector3(0, BUILDABLE_LAND_Y_OFFSET + TOP_H + FP_EYE_H, 0),
     yaw: 0,
     pitch: 0,
     vy: 0,
@@ -29410,11 +29462,8 @@ function neighborStarVector(edge, index) {
     // Convert world-space (x, z) back to grid indices.
     const gx = Math.round(worldX + GRID / 2 - 0.5);
     const gz = Math.round(worldZ + GRID / 2 - 0.5);
-    const cell = (world[gx] && world[gx][gz]) ? world[gx][gz] : null;
-    const tf = cell ? (cell.terrainFloors || 1) : 1;
-    // Match the renderer's terrainRiseForLevel: each floor adds ~TOP_H.
-    const rise = (tf - 1) * TOP_H;
-    return rise + TOP_H + FP_EYE_H;
+    // Use the renderer's terrain levels, floor cap, and world-space offset.
+    return BUILDABLE_LAND_Y_OFFSET + TOP_H + terrainRiseAt(gx, gz) + FP_EYE_H;
   }
 
   function enterFP() {
@@ -31843,7 +31892,7 @@ function neighborStarVector(edge, index) {
       s.position.x += s.userData.vx * dt;
       s.position.z += s.userData.vz * dt;
       s.material.opacity = (s.userData.maxOpacity !== undefined ? s.userData.maxOpacity : 0.65) * (1 - t);
-      const sc = 1 + t * 1.4;
+      const sc = (s.userData.baseScale || 1) * (1 + t * 1.4);
       s.scale.set(sc, sc, sc);
       if (t >= 1) {
         if (s.parent) s.parent.remove(s);
@@ -31865,22 +31914,27 @@ function neighborStarVector(edge, index) {
   // The new rock/fence drops in on top during step 1/2 via setCell's
   // existing drop-in animation.
   const squashAnims = [];
-  function spawnDustBurst(x, y, z, count = 14) {
+  // Smash clouds remain available when ambient smoke is disabled.
+  const MAX_SMASH_DUST_PARTICLES = 96;
+  function spawnDustBurst(x, y, z, count = 14, cloud = false) {
     for (let i = 0; i < count; i++) {
-      if (smokeParticles.length >= MAX_SMOKE_PARTICLES) break;
+      if (smokeParticles.length >= (cloud ? MAX_SMASH_DUST_PARTICLES : MAX_SMOKE_PARTICLES)) break;
       const d = new THREE.Mesh(smokeGeo, smokeMat.clone());
       d.material.color.setHex(0xcab38a);
-      d.material.opacity = 0.95;
+      d.material.opacity = cloud ? 0.55 : 0.95;
+      const baseScale = cloud ? 1.6 + Math.random() * .7 : 1;
+      d.scale.setScalar(baseScale);
       const a = (i / count) * Math.PI * 2 + Math.random() * 0.3;
       const r = 0.05 + Math.random() * 0.08;
       d.position.set(x + Math.cos(a) * r, y + 0.04 + Math.random() * 0.03, z + Math.sin(a) * r);
       d.userData = {
         life: 0,
-        maxLife: 0.55 + Math.random() * 0.25,
-        maxOpacity: 0.85,
-        vy: 0.35 + Math.random() * 0.35,
-        vx: Math.cos(a) * (0.85 + Math.random() * 0.5),
-        vz: Math.sin(a) * (0.85 + Math.random() * 0.5),
+        maxLife: cloud ? .85 + Math.random() * .35 : 0.55 + Math.random() * 0.25,
+        baseScale,
+        maxOpacity: cloud ? .55 : .85,
+        vy: cloud ? .35 + Math.random() * .2 : 0.35 + Math.random() * 0.35,
+        vx: Math.cos(a) * (cloud ? .18 + Math.random() * .22 : 0.85 + Math.random() * 0.5),
+        vz: Math.sin(a) * (cloud ? .18 + Math.random() * .22 : 0.85 + Math.random() * 0.5),
       };
       xrWorldRoot.add(d);
       smokeParticles.push(d);

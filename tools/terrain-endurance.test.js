@@ -46,22 +46,14 @@ api.setBlocked([]);api.setTerrainHeights([[x+','+z,3]]);
 assert.equal(api.evaluateLavaTerrainStep(x,z,m).reason,'step-height');
 console.log('terrain endurance: all seven simultaneous actors traverse fragmented terrain for five simulated minutes without sustained stalls');
 
-// An actor surrounded by maximum-height normal terrain must eventually climb
-// out, including after the selected route resets the failed-attempt counter.
+// Waiting must never grant unlimited cliff-climbing reach.
 for(let form=1;form<=7;form++) {
   api.lavaMonsterMovers.clear();api.setBlocked([]);
-  api.setTerrainHeights(Array.from({length:15*15},(_,i)=>{
-    const x=25+i%15,z=25+Math.floor(i/15);return [x+','+z,x===32&&z===32?0:1.4];
-  }));
+  api.setTerrainHeights([['32,32',0],['32,33',1.4]]);
   const root=api.createRockBattleBro({variant:'lava',form});root.position.set(.5,0,.5);api.worldGroup.add(root);
-  const mover=api.registerLavaMonsterMover(root,32,32);mover.pauseRemaining=0;
-  let escaped=false,usedEmergency=false;
-  for(let frame=0;frame<700;frame++) {
-    api.tickLavaMonsterMovers(frame*.05,.05);
-    usedEmergency ||= mover.terrainPlan?.clamberLimit>1.39;
-    if(mover.cellX!==32||mover.cellZ!==32){escaped=true;break;}
-  }
-  assert(escaped&&usedEmergency,`Form ${form}: climbs out of maximum-height terrain pocket`);
+  const mover=api.registerLavaMonsterMover(root,32,32);
+  mover.stationaryFor=30;mover.blockedAttempts=10;
+  assert.equal(api.evaluateLavaTerrainStep(32,33,mover).reason,'step-height');
   api.worldGroup.remove(root);
 }
-console.log('terrain emergency: all seven forms climb out of maximum-height terrain pockets');
+console.log('terrain recovery: waiting does not bypass cliff height limits');
