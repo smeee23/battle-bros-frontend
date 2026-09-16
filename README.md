@@ -84,6 +84,21 @@ upper torso follows its weight shifts with breathing, upper-arm idle motion,
 blinking, loose rocks and eight irregular orbiting fragments. Dedicated Apex
 combat animation and further gait polishing are deferred.
 
+### Scenery smashing
+
+Roaming creatures occasionally smash adjacent houses, trees, rocks, fences,
+bushes, and flowers. Repeated failed movement searches trigger a strike when
+an eligible obstacle is available; each creature then waits 25–50 seconds
+before another strike. Specters and monster Forms IV–VII use their arms,
+monster Forms I–III headbutt, and long necks rear up and stomp.
+
+Targets shake and compress before impact, then release dust and leave a low,
+walkable broken foundation with scattered rubble. Rubble survives world
+save/load and disappears when the spot is rebuilt or repainted. Training
+facilities, connected multi-cell houses, and cells with extra objects are
+excluded. This is local scenery animation; rampage and need-driven behavior
+are deferred.
+
 ### Terrain smash / consume
 
 `window.battleBroTerrainActions` exposes the local visual-world action for registered
@@ -200,26 +215,3 @@ unaffordable runs place nothing. Existing costs, level caps, facility protection
 terrain locks and fence coexistence/intersections are retained. Legacy edge
 fences remain supported in saved worlds. `node tools/fence-line.test.js` covers
 axis selection, pointer interactions, previews, accounting and validation.
-
-### 96 × 96 island rendering
-
-The playable board is fixed at 96 × 96. Older saves retain their original cell
-coordinates; added cells receive base terrain. World intent exists for every
-cell regardless of whether a detailed mesh is loaded.
-
-`assets/home-world-lod.js` batches distant terrain and simplified object
-silhouettes into 16 × 16 sections, with bounds-based culling compatible with
-Three.js r128. The whole island stays visible and pickable. Only nearby cells
-use the existing detailed renderer and decorative animations. Walking/flying
-moves that detail window with the camera. Orbit views choose detail from
-projected cell size, with hysteresis at the overview threshold. Distant fences
-preserve their orientation and junction endpoints.
-
-`homeDetailRadius()` controls the detail budget (31 × 31 nearby cells, 17 × 17
-at medium zoom, overview only below 12 pixels per cell; detailed rendering
-returns above 15 pixels). Overview rebuilding and detailed cell construction
-are queued separately. Changed cells invalidate their overview section and
-adjacent sections when needed. These are starting budgets, not FPS guarantees.
-
-Run `node tools/home-world-lod.test.js` for full-island coverage, far-edge picking,
-elevation updates, detail handoff, camera focus, and draw-call budget checks.

@@ -14,7 +14,6 @@ new vm.Script(inlineApp, { filename: 'index.inline.js' });
 for (const relativePath of [
   'vendor/three/three.r128.min.js',
   'runtime-config.js',
-  'assets/home-world-lod.js',
   'vendor/three/GLTFLoader.r128.js',
   'vendor/tiny-crowd-layer.js',
   'models/stunt_plane.glb',

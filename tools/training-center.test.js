@@ -36,7 +36,7 @@ const api = context.api;
 for (const make of [api.makeSkyscraper, api.makeVoxelSkyscraper]) {
   const first = make(1), last = make(8);
   const box = new THREE.Box3().setFromObject(first), size = box.getSize(new THREE.Vector3());
-  assert(size.x > 4.5 && size.x <= 5 && size.z > 4.4 && size.z <= 5, 'Fits a true five-cell plot');
+  assert(size.x > 4.2 && size.x < 4.4 && size.z > 4.4 && size.z <= 5, 'Narrower shell retains entrance depth');
   assert(Math.abs(box.max.y - 1.85) < 1e-6, 'Fixed old level-six shell and clean roof cap');
   assert.deepEqual(new THREE.Box3().setFromObject(last), box, 'Levels never resize the facility');
   const shell = first.children.find(m => m.material === materials.habitatShell);
@@ -60,7 +60,15 @@ assert.equal(facility.getObjectByName('Training Center').children.find(m=>m.geom
 const box = new THREE.Box3().setFromObject(facility);
 assert(box.min.x < -10 && box.min.z < -10,'Building extends beyond playable corner');
 assert(box.min.y < -3 && box.max.y > 8,'Footing descends into island; building dominates skyline');
-assert(api.trainingFacilityOccupiesCell(2,2));
+assert(api.trainingFacilityOccupiesCell(0,0));
+assert(!api.trainingFacilityOccupiesCell(1,1),'Approach to the door is available');
+assert(!api.trainingFacilityOccupiesCell(2,2),'Former facility center is reclaimed');
+const layout=api.trainingFacilityLayout(20);
+const doorFace=new THREE.Vector3(0,0,layout.depth/2).applyMatrix4(facility.matrixWorld);
+assert(Math.abs(doorFace.x-(-9.5-.25))<1e-6 && Math.abs(doorFace.z-(-9.5-.25))<1e-6,'Entrance face sits at playable corner');
+let reserved=0;
+for(let x=0;x<20;x++)for(let z=0;z<20;z++)reserved+=Number(api.trainingFacilityOccupiesCell(x,z));
+assert(reserved<=3,'At most three corner cells reserved');
 assert(!api.trainingFacilityOccupiesCell(19,19));
 api.syncTrainingFacility();
 assert.equal(root.children.length,1,'Reset/reload does not duplicate landmark');
@@ -68,5 +76,5 @@ assert.equal(facility.parent,null,'Old instance removed cleanly');
 assert(!html.includes("{ id: 'highrise',"),'Facility removed from build menu and its thumbnails');
 console.log('training facility: real walls/plasma, unchanged design, enlarged door, border integration, reserved footprint and permanent lifecycle OK');
 
-assert.equal(api.setCell(2,2,{terrain:'stone',kind:null}),false,'Player cannot erase or reshape the permanent foundation');
+assert.equal(api.setCell(0,0,{terrain:'stone',kind:null}),false,'Player cannot erase or reshape the permanent foundation');
 assert.equal(api.setCell(19,19,{terrain:'stone',kind:'house',buildingType:'skyscraper'}),false,'Cannot place another facility');
