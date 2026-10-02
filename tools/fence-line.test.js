@@ -9,7 +9,7 @@ const noop=()=>{};
 const ctx=vm.createContext({THREE,world,GRID:20,MAX_FLOORS:3,BATTLEBROS_MIGRATION_MODE:false,
   selectedTool:{kind:'fence'},ghostRotation:0,ghostPreview:null,xrWorldRoot:new THREE.Group(),
   hoverMesh:{visible:false,position:new THREE.Vector3()},currentHover:null,TOP_H:.18,BUILDABLE_LAND_Y_OFFSET:-.18,
-  terrainConsumeLocks:new Map(),trainingFacilityOccupiesCell:(x,z)=>x===2&&z===2,
+  terrainConsumeLocks:new Map(),stargateOccupiesCell:()=>false,trainingFacilityOccupiesCell:(x,z)=>x===2&&z===2,
   catalogCellTotals:c=>({goldCost:tally(c)}),editableResourceBigInt:()=>gold,normalizeFenceSide:s=>s||'n',
   applyCatalogCellMutation(x,z,next){gold-=tally(next)-tally(world[x][z]);world[x][z]=next;mutations++;return true;},
   renderCellExtras(){extrasRendered++;},refreshVehiclesForWorldObstacleChange:noop,

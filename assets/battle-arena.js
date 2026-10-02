@@ -138,6 +138,7 @@
   const key=new THREE.DirectionalLight(0xf1f6ff,.95);key.position.set(-10,18,14);scene.add(key);
   const fill=new THREE.DirectionalLight(0x93c7e8,.6);fill.position.set(12,9,-6);scene.add(fill);
   const actors=[],actions=options.actions;
+  const characterForms=options.characterForms||{juggernaut:[1,2,3,4,5,6,7],monsters:[1,2,3,4,5,6,7],specter:[1,2,3,4,5,6,7],longneck:[1,2,3,4,5,6,7]};
   function makeActor(index,appearance){
     const side=index===0?-1:1,root=createCharacter(appearance);
     root.name=side<0?'arenaAmberChallenger':'arenaAzureChallenger';root.position.set(side*5.6,deckLift+.46,1);root.rotation.y=-side*Math.PI/2;scene.add(root);
@@ -156,7 +157,8 @@
   function resetCombat(){actions?.cancel(actors);for(const actor of actors){actor.root.position.copy(actor.home);actor.root.quaternion.copy(actor.facing);}}
   function setFighter(index,appearance){
     if(index!==0&&index!==1)return false;
-    if(!['monsters','specter','longneck'].includes(appearance?.character||'monsters')||!['lava','sand','plant','ice'].includes(appearance?.variant)||!Number.isInteger(appearance?.form)||appearance.form<1||appearance.form>7)return false;
+    const character=appearance?.character||'monsters';
+    if(!characterForms[character]?.includes(appearance?.form)||!['lava','sand','plant','ice'].includes(appearance?.variant))return false;
     resetCombat();const old=actors[index];actors[index]=makeActor(index,appearance);
     const field=old.root.userData.looseRocks?.orbitField;if(field)field.parent?.remove(field);
     old.root.parent?.remove(old.root);options.disposeCharacter?.(old.root,field);return true;

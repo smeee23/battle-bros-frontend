@@ -12,7 +12,7 @@ for(const seed of ['review','battlebros','0','alternate']) {
   assert.equal(new Set(data.cells.map(c=>c.x+','+c.z)).size,2500);
   assert.equal(JSON.stringify(data),JSON.stringify(generate({seed})));
   const at=(x,z)=>data.cells.find(c=>c.x===x&&c.z===z);
-  assert(data.cells.every(c=>c.terrain === 'stone' && c.terrainFloors >= 1 && c.terrainFloors <= 4), 'Mountain replaced by low stone terrain');
+  assert(data.cells.every(c=>c.terrain === 'stone' && c.terrainFloors >= 1 && c.terrainFloors <= (context.stargateTerrainLevel(c.x,c.z,50) || 4)), 'Low stone terrain with a stepped portal corner');
   for (let x=0;x<50;x++) for(let z=0;z<50;z++) {
     if (context.trainingFacilityTerrainCell(x,z,50)) assert.equal(at(x,z).terrainFloors,3,'Level facility foundation and approach');
   }

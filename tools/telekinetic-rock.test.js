@@ -112,3 +112,35 @@ bro.userData.looseRocks={phase:0};fixtureContext.update(.1);assert.equal(shots,1
 assert(acquired.getVelocity(new THREE.Vector3()).equals(state.velocity));
 state.curve={};assert.equal(acquired.isActive(),false,'Reused aircraft object is not confused with previous flight');
 console.log('plane adapter: shared turret eligibility, velocity, landing exclusions and flight identity OK');
+
+// Mature juggernauts finish both steps before throwing and remain planted
+// through recall/settle, even when their walking pause has already expired.
+for (const form of [4,5,6,7]) {
+  api.lavaMonsterMovers.clear();
+  const root=api.createBattleBroCharacter({character:'juggernaut',variant:'lava',form});
+  root.position.set(.5,0,.5);api.worldGroup.add(root);
+  const mover=api.registerLavaMonsterMover(root,32,32);
+  mover.pauseRemaining=1000;api.tickLavaMonsterMovers(0,1/60);
+  const target={isActive:()=>true,getPosition:out=>out.set(7,6,9),getVelocity:out=>out.set(0,0,0),onImpact:()=>{}};
+  mover.targetX=mover.startX+.5;mover.targetZ=mover.startZ;
+  mover.leftGoal.copy(mover.leftAnchor).add(new THREE.Vector3(.5,0,0));
+  mover.rightGoal.copy(mover.rightAnchor).add(new THREE.Vector3(.5,0,0));
+  api.beginJuggernautStride(mover);
+  const start=root.position.clone();
+  api.tickJuggernautStride(mover,.05);
+  assert(root.position.distanceTo(start)<1e-9,'Body waits for reaching support');
+  assert.equal(api.telekineticRockThrow(root,target),false,'Cannot interrupt a stride');
+  for(let i=0;i<150 && mover.juggernautStride;i++)api.tickJuggernautStride(mover,.05);
+  assert.equal(mover.state,'IDLE');
+  assert(mover.leftAnchor.distanceTo(mover.leftGoal)<1e-9,'Trailing support completes its step');
+  const action=api.telekineticRockThrow(root,target);assert(action);
+  const planted=root.position.clone();mover.pauseRemaining=-1;
+  for(let i=0;i<1800 && root.userData.rockThrow;i++) {
+    api.tickLavaMonsterMovers(i/60,1/60);
+    assert.equal(mover.state,'IDLE','Throw owns stance through settling');
+    assert(root.position.distanceTo(planted)<1e-8,'Body stays above planted supports');
+  }
+  assert.equal(root.userData.rockThrow,null,'Stance lock releases after throw');
+  api.worldGroup.remove(root);
+}
+console.log('juggernaut: complete stride before throw and hold stance through recall/settle OK');

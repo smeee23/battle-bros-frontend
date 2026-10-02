@@ -4,7 +4,7 @@ const source=fs.readFileSync(require('node:path').join(__dirname,'../index.html'
 const start=source.indexOf('  function applyTool(x, z)'),end=source.indexOf('  async function applyAutoTool(',start);
 let rejected=0;
 const context=vm.createContext({setCellMutationAuthority:'test',isImmersiveReadOnlyMode:()=>false,
- trainingFacilityOccupiesCell:()=>null,window:{},world:[],selectedTool:{},BASE_TERRAIN:'stone',MAX_TERRAIN_FLOORS:64,
+ stargateOccupiesCell:()=>false,trainingFacilityOccupiesCell:()=>null,window:{},world:[],selectedTool:{},BASE_TERRAIN:'stone',MAX_TERRAIN_FLOORS:64,
  CROP_KINDS:new Set(['crop']),terrainLevelForCell:c=>c.terrainFloors||1,
  resourceRuleForTool:()=>null,trySpendForPlacementWithReplacement:()=>true,
  playMockResourcePlacementSuccess:()=>{},rejectMockResourceMaxLevelAction:()=>rejected++,

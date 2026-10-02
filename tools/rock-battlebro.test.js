@@ -40,18 +40,19 @@ vm.runInContext(`
   let blocked = new Set();
   const getWorldCell = (x,z) => ({terrain: blocked.has(x+','+z) ? 'water' : 'grass'});
   const trainingFacilityOccupiesCell = () => null;
+  const stargateOccupiesCell = () => false;
   const tilePos = (x,z) => ({x:x-GRID/2+0.5, z:z-GRID/2+0.5});
   const worldGroup = new THREE.Group();
   const spawnDustBurst = () => {};
   ${section('  function battleBroYawDelta(', '  const LAVA_MOVE_STATE =')}
   ${section('  const LAVA_MOVE_STATE =', '  let baseBattleBroPrototype =')}
   ${section('  const rockVariantExamples =', '  const VEHICLE_BASE_WHEEL_RADIUS =')}
-  globalThis.api = {setBattleBroExpression, tickBattleBroExpression, BATTLEBRO_EXPRESSIONS, createRockBattleBro, createLavaMonsterBattleBro, ROCK_BATTLEBRO_M,
+  globalThis.api = {setBattleBroExpression, tickBattleBroExpression, BATTLEBRO_EXPRESSIONS, createRockBattleBro, createLavaMonsterBattleBro, createBattleBroCharacter, ROCK_BATTLEBRO_M,
     beginLavaTurn, tickLavaTurn, solveLavaTurnArm, battleBroYawDelta, tickUpperArmMotion, triggerUpperArmClawGesture,
     telekineticRockThrow, cancelTelekineticRockThrow, restoreTelekineticBody,
-    evaluateLavaTerrainStep, tickLavaTraversalProgress, chooseLavaContactSwing, planLavaContactSwing, lavaContactCandidates, selectLavaWalkRoute, chooseLavaWalkTarget, setLavaHandAnchor, planLavaTerrainMove, planLavaTerrainTurn, safeLavaContact, lavaContactExtent, sampleLavaContactSwing, lavaTerrainRectangle,
+    evaluateLavaTerrainStep, tickLavaTraversalProgress, chooseLavaContactSwing, planLavaContactSwing, lavaContactCandidates, selectJuggernautImpactRoute, selectLavaWalkRoute, chooseLavaWalkTarget, setLavaHandAnchor, planLavaTerrainMove, planLavaTerrainTurn, safeLavaContact, lavaContactExtent, sampleLavaContactSwing, lavaTerrainRectangle,
     setTerrainHeights: entries => heights = new Map(entries),
-    registerLavaMonsterMover, tickLavaMonsterMovers, tickLooseRockAttachments, tickBattleBroOrbitField, lavaMonsterMovers, worldGroup,
+    registerLavaMonsterMover, beginJuggernautStride, tickJuggernautStride, tickLavaMonsterMovers, tickLooseRockAttachments, tickBattleBroOrbitField, lavaMonsterMovers, worldGroup,
     ensureRockVariantExamples, rockVariantExamples, lavaCellIsWalkable, tilePos,
     setBlocked: cells => blocked = new Set(cells)};
 `, context);
@@ -168,7 +169,10 @@ for (let frame = 0; frame < 2400; frame++) {
   }
 }
 for (const mover of movers) {
-  for (const state of (mover.root.userData.form < 4 ? ['REACH', 'PULL'] : ['REACH_RIGHT', 'PLANT_RIGHT', 'PULL_RIGHT', 'REACH_LEFT', 'PLANT_LEFT', 'PULL_LEFT', 'SETTLE'])) {
+  const expectedStates=(mover.root.userData.locomotionForm||mover.root.userData.form)>=4
+    ? ['JUGGERNAUT_STRIDE']
+    :mover.root.userData.form < 4 ? ['REACH', 'PULL'] : ['REACH_RIGHT', 'PLANT_RIGHT', 'PULL_RIGHT', 'REACH_LEFT', 'PLANT_LEFT', 'PULL_LEFT', 'SETTLE'];
+  for (const state of expectedStates) {
     assert(seen.get(mover).has(state), mover.root.name + ' completed ' + state);
   }
   assert(moved.has(mover), mover.root.name + ' moved away from its spawn');
@@ -353,7 +357,8 @@ for (const side of ['left', 'right']) {
   }
 }
 assert(greater.userData.looseRocks.debris.length < apex.userData.looseRocks.debris.length);
-assert(greater.userData.looseRocks.chunks.length < apex.userData.looseRocks.chunks.length);
+assert(greater.userData.looseRocks.chunks.filter(chunk => !chunk.node.name.startsWith('greaterSecond')).length
+  < apex.userData.looseRocks.chunks.length, 'Greater body retains fewer stones before its additional head');
 const energy = greater.getObjectByName('greaterLowerHeart').material.emissiveIntensity;
 assert(energy > api.ROCK_BATTLEBRO_M.lava.core.emissiveIntensity);
 assert(energy < apex.getObjectByName('apexMoltenHeart').material.emissiveIntensity);
@@ -369,7 +374,7 @@ console.log('greater: asymmetric single arm, offset head, unchanged support geom
 
 const advanced = api.rockVariantExamples.get('lava-advanced');
 assert.equal(advanced.userData.form, 6);
-assert.equal(advanced.userData.approximateHeight, greater.userData.approximateHeight);
+assert.equal(advanced.userData.approximateHeight, greater.userData.approximateHeight, 'Both forms frame their raised second head');
 assert(Number.isFinite(advanced.userData.rig.head.position.x), 'Authored head offset remains valid');
 assert.equal(advanced.userData.advancedMovement.parts, advanced.userData.locomotionRig);
 assert(advanced.userData.rig.rightUpperArm);
@@ -458,10 +463,41 @@ for (let form = 1; form <= 7; form++) {
 }
 console.log('turning: all seven forms, both directions, wraparound, alternating supports and exact 3D contacts OK');
 
+// Juggernaut IV–VII use one uninterrupted right/left stride per terrain cell.
+for(const form of [4,5,6,7]){
+  const root=api.createBattleBroCharacter({character:'juggernaut',variant:'lava',form});
+  api.worldGroup.add(root);root.position.set(.5,0,.5);
+  const mover=api.registerLavaMonsterMover(root,32,32),scale=root.userData.locomotionScale||1;
+  mover.startX=.5;mover.startZ=.5;mover.startY=0;
+  mover.targetX=.5;mover.targetZ=1.5;mover.targetY=0;mover.targetCellX=32;mover.targetCellZ=33;
+  api.setLavaHandAnchor(mover.rightGoal,.5,1,0,1,0,scale);
+  api.setLavaHandAnchor(mover.leftGoal,.5,1.5,0,-1,0,scale);
+  api.beginJuggernautStride(mover);
+  let previousZ=root.position.z,minTravel=Infinity,maxPitch=0,rightLift=0,leftLift=0;
+  let plantedRight=null,plantedLeft=null,maxRightDrift=0,maxLeftDrift=0;
+  for(let frame=0;frame<500&&mover.state==='JUGGERNAUT_STRIDE';frame++){
+    api.tickJuggernautStride(mover,1/60);
+    const p=mover.progress;
+    minTravel=Math.min(minTravel,root.position.z-previousZ);previousZ=root.position.z;
+    maxPitch=Math.max(maxPitch,Math.abs(mover.parts.torso.rotation.x));
+    rightLift=Math.max(rightLift,mover.rightAnchor.y-mover.rightGoal.y);
+    leftLift=Math.max(leftLift,mover.leftAnchor.y-mover.leftGoal.y);
+    if(p>.32&&p<.49){if(plantedRight)maxRightDrift=Math.max(maxRightDrift,mover.rightAnchor.distanceTo(plantedRight));plantedRight=mover.rightAnchor.clone();}
+    if(p>.82&&p<.99){if(plantedLeft)maxLeftDrift=Math.max(maxLeftDrift,mover.leftAnchor.distanceTo(plantedLeft));plantedLeft=mover.leftAnchor.clone();}
+  }
+  assert.equal(mover.state,'IDLE',`Juggernaut ${form} completes a continuous stride cycle`);
+  assert(minTravel>=-1e-9,'Body progression never reverses');
+  assert(rightLift>.08*scale&&leftLift>.08*scale,'Both articulated contacts make a clear long stride');
+  assert(maxRightDrift<1e-8&&maxLeftDrift<1e-8,'Each planted hand remains fixed during support');
+  assert(maxPitch<.02,'The torso remains centered around its neutral pitch');
+  api.lavaMonsterMovers.delete(mover);root.parent.remove(root);
+}
+console.log('Juggernaut IV–VII: stable torso, continuous body travel, alternating long reaches and firm plants OK');
+
 // Exercise the full animation loop: idle must not overwrite turn articulation.
-for (const form of [6, 7]) {
+for (const form of [1, 2, 3, 4, 5, 6, 7]) {
   for (const direction of [-1, 1]) {
-    const root = api.createRockBattleBro({form});
+    const root = api.createBattleBroCharacter({character:'monsters',form});
     api.worldGroup.add(root);
     root.position.set(3, 0, 3);
     const mover = api.registerLavaMonsterMover(root, 35, 35);
@@ -474,10 +510,14 @@ for (const form of [6, 7]) {
     assert(mover.parts.torso.rotation.y * direction > 0, 'Hips lead before lower rotation');
     assert(upper.torso.rotation.y * direction > 0.01, 'Chest leads the lower body');
     assert(upper.head.rotation.y * direction > 0.04, 'Head leads the chest after idle');
+    const secondIdleYaw=Math.sin((11/60)*.37+1.7)*.18;
+    assert((upper.head2.rotation.y-secondIdleYaw)*direction>0.005, 'Second head still anticipates in both directions after idle');
+    assert(Math.abs(mover.upperTurn.head2)<Math.abs(mover.upperTurn.head)*.7, 'Second head makes a slower, smaller anticipatory glance');
+    assert(mover.upperTurn.head2Pitch>0, 'Second head adds its own subtle nod');
     for (let frame = 12; mover.state === 'TURNING' && frame < 200; frame++) {
       api.tickLavaMonsterMovers(frame / 60, 1 / 60);
     }
-    assert.equal(mover.state, 'SHIFT_LEFT');
+    assert.equal(mover.state, 'JUGGERNAUT_STRIDE');
     assert(Math.abs(upper.torso.rotation.y) < 1e-8, 'Chest settles into alignment');
     assert(Math.abs(mover.parts.torso.rotation.y) < 1e-8, 'Core settles into alignment');
     assert(Math.abs(upper.leftUpperArm.shoulder.rotation.y) < 0.5, 'Shoulder follow-through stays bounded');
@@ -485,7 +525,7 @@ for (const form of [6, 7]) {
     root.parent.remove(root);
   }
 }
-console.log('advanced turning: head and chest lead planted supports, then settle in both directions OK');
+console.log('all Monster forms turning: head and chest lead planted supports, then settle in both directions OK');
 
 // Shared semantic arm layer: idle, acceleration, turns, stopping and ownership.
 const armResponses = {};

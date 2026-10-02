@@ -112,11 +112,12 @@ const other={root:new THREE.Group(),cellX:32,cellZ:33,targetCellX:32,targetCellZ
 api.worldGroup.add(other.root);api.lavaMonsterMovers.add(other);
 assert.equal(api.evaluateLavaTerrainStep(32,33,m).reason,'destination-occupied');
 api.lavaMonsterMovers.delete(other);api.worldGroup.remove(other.root);clean(m);
-// A failed target is penalized after becoming available, then expires.
-terrain((x,z)=>z===33?1.2:0); m=actor(1);api.selectLavaWalkRoute(m);
-assert(m.failedTerrain.has('32,33'));
+// Failed targets are rechecked after becoming available; diagnostic memory expires.
+terrain((x,z)=>z===33?1.2:0); m=actor(1);
+assert.equal(api.evaluateLavaTerrainStep(32,33,m).grade,'BLOCKED');
+m.failedTerrain=new Map([['32,33',14]]);
 api.setTerrainHeights([]);
-route=api.selectLavaWalkRoute(m);assert(route.x!==32||route.z!==33,'Avoid recent failed target');
+route=api.selectLavaWalkRoute(m);assert(route?.plan,'Choose a currently safe step');
 m.traversalClock=20;
 route=api.selectLavaWalkRoute(m);assert(!m.failedTerrain.has('32,33'),'Failure memory expires');
 clean(m);

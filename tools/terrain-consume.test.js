@@ -9,7 +9,7 @@ fixture=fixture.replace("const getWorldCell = (x,z) => ({terrain: blocked.has(x+
   const getWorldCell=(x,z)=>cells.get(x+','+z)||{terrain:'stone',terrainFloors:1};
   const withSetCellMutationAuthority=(authority,fn)=>fn();
   const setCell=(x,z,c)=>{cells.set(x+','+z,c);heights.set(x+','+z,terrainRiseForLevel(c.terrainFloors));};`);
-fixture=fixture.replace('globalThis.api = {','globalThis.api = {neighborInspectionState, minotaurMovers, createLongNeckBattleBro, registerMinotaurMover, chooseMinotaurWalkTarget, tickScenerySmash, consumeTerrain, validateTerrainConsume, selectTerrainConsumeTarget, terrainConsumePool, terrainConsumeLocks, setCell, getWorldCell, battleBroGroundHeight,');
+fixture=fixture.replace('globalThis.api = {','globalThis.api = {createBattleBroCharacter,neighborInspectionState, minotaurMovers, createLongNeckBattleBro, registerMinotaurMover, chooseMinotaurWalkTarget, tickScenerySmash, consumeTerrain, validateTerrainConsume, selectTerrainConsumeTarget, terrainConsumePool, terrainConsumeLocks, setCell, getWorldCell, battleBroGroundHeight,');
 fixture+='\nmodule.exports={api:context.api,THREE};';
 const Module=require('node:module'),m=new Module(filename,module);m.filename=filename;m.paths=Module._nodeModulePaths(__dirname);m._compile(fixture,filename);
 const {api,THREE}=m.exports;
@@ -42,6 +42,18 @@ for(const variant of ['lava','sand','plant','ice']) for(const form of [1,2,3,4,5
   api.worldGroup.remove(root);
 }
 assert(api.terrainConsumePool.length<=4);
+for(const [character,form] of [['monsters',2],['juggernaut',6]]){
+  api.lavaMonsterMovers.clear();
+  api.setCell(32,32,{terrain:'stone',terrainFloors:1});
+  api.setCell(32,33,{terrain:'stone',terrainFloors:3});
+  const root=api.createBattleBroCharacter({character,variant:'lava',form});
+  root.position.set(.5,0,.5);api.worldGroup.add(root);
+  const mover=api.registerLavaMonsterMover(root,32,32);
+  assert(api.consumeTerrain(mover,{x:32,z:33}).ok,`${character} begins excavation`);
+  for(let i=0;root.userData.terrainConsume&&i<400;i++)api.tickLavaMonsterMovers(i/60,1/60);
+  assert.equal(api.getWorldCell(32,33).terrainFloors,2,`${character} completes excavation`);
+  api.worldGroup.remove(root);
+}
 console.log('Terrain consume: materials, forms, neighbors, impact timing, live heights, repeat/base rejection and cleanup passed.');
 // Interrupted wind-up must not mutate, and releases its pooled resources.
 api.lavaMonsterMovers.clear();

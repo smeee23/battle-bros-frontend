@@ -15,7 +15,8 @@
     if(direction.lengthSq()<1e-8)direction.set(1,0,0);direction.normalize();
     const form=actor.root.userData.form;
     actor.root.userData.battleHit={age:0,duration:form===7?3:2.35,direction,expression:expression(actor.root),
-      chunks:actor.root.userData.looseRocks.chunks.filter(c=>actor.root.userData.rig.spectralBody||actor.root.userData.rig.minotaurLegs||form<5||/^(greater|advanced)|Apex/.test(c.node.name)).slice(0,8),distance:form<4?.38:form===7?.85:.60};
+      chunks:actor.root.userData.looseRocks.chunks.filter(c=>actor.root.userData.rig.spectralBody||actor.root.userData.rig.minotaurLegs
+        ||actor.root.userData.characterFamily==='juggernaut'||form<5||/^(greater|advanced)|Apex/.test(c.node.name)).slice(0,8),distance:form<4?.38:form===7?.85:.60};
     actor.hitsReceived=(actor.hitsReceived||0)+1;setExpression(actor.root,'veryAngry');return true;
   }
   function attack(actors,index){

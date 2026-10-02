@@ -13,14 +13,25 @@ function setup(floors) {
   }
   const camera = {near: .1, fov: 55, position: new Vector3(), lookAt(x,y,z) { this.look = {x,y,z}; }};
   const world = Array.from({length: 20}, (_, x) => Array.from({length: 20}, (_, z) => ({terrainFloors: floors(x,z)})));
+  const terrain = {
+    groundYAt(wx,wz,eye=0) {
+      const x=Math.floor(wx+10),z=Math.floor(wz+10),cell=world[x]?.[z];
+      const level=cell?.terrainFloors ?? (cell ? (cell.kind ? 1 : cell.floors || 1) : floors(x,z));
+      return Math.max(0,(Math.min(64,level)-1)*.2)+eye;
+    },
+    ensureAround() {}, activate() {}, deactivate() {},
+  };
   const handlers = {};
   const context = vm.createContext({THREE: {Vector3}, TOP_H: .18, BUILDABLE_LAND_Y_OFFSET: -.18, MAX_TERRAIN_FLOORS: 64, GRID: 20, world, getWorldCell: (x,z) => world[x]?.[z], persCam: camera,
-    document: {addEventListener() {}}, window: {addEventListener(name, fn) { handlers[name] = fn; }}, markCameraMoving() {}});
+    fpJourney:{warp:0}, activeFPTerrain:()=>terrain, document: {addEventListener() {}}, window: {addEventListener(name, fn) { handlers[name] = fn; }}, markCameraMoving() {}});
   vm.runInContext(terrainSource + source + '\nthis.api = {fp, fpKeys, tickFP, fpGroundYAt, FP_TERRAIN_LIFT_MAX};', context);
   const api = context.api;
   api.fp.active = true;
   api.fp.pos.set(.5, api.fpGroundYAt(.5,.5), .5);
-  return {...api, camera, world, jump() { handlers.keydown({code: 'Space', preventDefault() {}}); }};
+  return {...api, camera, world,
+    pressSpace(repeat=false) { handlers.keydown({code:'Space',key:' ',repeat,preventDefault() {}}); },
+    releaseSpace() { handlers.keyup({code:'Space',key:' '}); },
+    jump() { handlers.keydown({code:'Space',key:' ',preventDefault() {}});handlers.keyup({code:'Space',key:' '}); }};
 }
 function run(a, seconds, hz = 60) { for (let i=0; i<seconds*hz; i++) a.tickFP(1/hz); }
 // Ground height matches rendered tile tops, including legacy cells and capped levels.
@@ -97,4 +108,6 @@ const edge = setup(() => 5);
 edge.fp.pos.set(.5, edge.fpGroundYAt(.5,-9.7), -9.7);
 run(edge, 1);
 assert.equal(edge.fp.terrainLift, 0, 'World edge does not create a false drop');
+edge.fpKeys.add('w');run(edge, 1);
+assert(edge.fp.pos.z < -10,'Exploration movement is not clamped to the Home Base grid');
 console.log('first-person camera: flat ground, slope anticipation, lift cap, look controls, recovery, smoothing, gravity and bounds OK');

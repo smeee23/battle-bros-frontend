@@ -6,12 +6,74 @@ const Module = require('node:module');
 const file = path.join(__dirname, 'rock-battlebro.test.js');
 let fixture = fs.readFileSync(file, 'utf8').split('const api = context.api;')[0];
 fixture = fixture.replace('const M = {', 'const M_ANIMAL = {hoof: new THREE.MeshLambertMaterial({color: 0x241813})}; const M = {');
-fixture = fixture.replace('globalThis.api = {', 'globalThis.api = {createSpecterBattleBro, ensureFloatingRockFormExamples, floatingRockFormExamples, ensureMinotaurBattleBroPrototype, ensureSpecterBattleBroPrototype, tickMinotaurMovers, tickSpecterMovers, minotaurMovers, specterMovers,');
+fixture = fixture.replace('globalThis.api = {', 'globalThis.api = {createSpecterBattleBro, createLongNeckBattleBro, registerMinotaurMover, beginLongneckFootMotion, poseLongneckFeet, resetLongneckFeet, ensureFloatingRockFormExamples, floatingRockFormExamples, ensureMinotaurBattleBroPrototype, ensureSpecterBattleBroPrototype, tickMinotaurMovers, tickSpecterMovers, minotaurMovers, specterMovers,');
 const m = new Module(file, module);
 m.filename = file;
 m.paths = Module._nodeModulePaths(__dirname);
 m._compile(fixture + 'module.exports=context.api;', file);
 const api = m.exports;
+for (let form=1;form<=7;form++) {
+  const root = api.createLongNeckBattleBro({ form });
+  root.position.set(.5, 0, .5);
+  api.worldGroup.add(root);
+  const mover = api.registerMinotaurMover(root, 32, 32);
+  const legs = mover.parts.minotaurLegs;
+  const worldPosition = leg => leg.getWorldPosition(leg.position.clone());
+  const assertCompactFeet = message => {
+    ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'].forEach((name, i) => {
+      const leg = legs[name], rest = mover.longneckFootRest[i];
+      assert(Math.abs(leg.position.x - rest.x) <= .111, message + ': front/back reach');
+      assert(Math.abs(leg.position.z - rest.z) <= .066, message + ': side reach');
+    });
+  };
+  mover.startX = .5; mover.startZ = .5; mover.targetX = 1.5; mover.targetZ = .5;
+  mover.desiredYaw = Math.PI / 2;
+  api.beginLongneckFootMotion(mover, true);
+  const plantedTurnFoot = worldPosition(legs.frontRight);
+  root.rotation.y = Math.PI / 4;
+  api.poseLongneckFeet(mover, .5);
+  assertCompactFeet('Turn');
+  assert(worldPosition(legs.frontRight).distanceTo(plantedTurnFoot) < .2,
+    `Form ${form} limits supporting foot drift while turning`);
+  root.rotation.y = Math.PI / 2;
+  api.poseLongneckFeet(mover, 1);
+  const turnEndFoot = worldPosition(legs.frontRight);
+  api.resetLongneckFeet(mover);
+  assert(worldPosition(legs.frontRight).distanceTo(turnEndFoot) < 1e-6,
+    'Turning returns to the rest pose without a foot jump');
+  api.beginLongneckFootMotion(mover, false);
+  const plantedWalkFoot = worldPosition(legs.frontRight);
+  root.position.x = .8;
+  api.poseLongneckFeet(mover, .28);
+  assertCompactFeet('Walk');
+  assert(worldPosition(legs.frontRight).distanceTo(plantedWalkFoot) < .15,
+    'Form IV limits supporting foot drift while walking');
+  assert(worldPosition(legs.frontLeft).distanceTo(mover.longneckFootMotion[0].start) > .1*root.scale.x,
+    'The opposite diagonal foot swings forward');
+  root.position.x = 1.5;
+  api.poseLongneckFeet(mover, 1);
+  const walkEndFoot = worldPosition(legs.frontRight);
+  api.resetLongneckFeet(mover);
+  assert(worldPosition(legs.frontRight).distanceTo(walkEndFoot) < 1e-6,
+    'Walking returns to the rest pose without a foot jump');
+  root.position.set(.5, 0, .5);
+  mover.startY = 0; mover.targetY = .3;
+  api.beginLongneckFootMotion(mover, false);
+  const plantedStepFoot = worldPosition(legs.frontRight);
+  root.position.set(.8, .15, .5);
+  api.poseLongneckFeet(mover, .28);
+  assertCompactFeet('Terrain step');
+  assert(worldPosition(legs.frontRight).distanceTo(plantedStepFoot) < .15,
+    'Form IV limits supporting foot drift during a terrain step');
+  root.position.set(1.5, .3, .5);
+  api.poseLongneckFeet(mover, 1);
+  const stepEndFoot = worldPosition(legs.frontRight);
+  api.resetLongneckFeet(mover);
+  assert(worldPosition(legs.frontRight).distanceTo(stepEndFoot) < 1e-6,
+    'Terrain step returns to the rest pose without a foot jump');
+  api.worldGroup.remove(root);
+  api.tickMinotaurMovers(0, 1 / 60);
+}
 const minotaur = api.ensureMinotaurBattleBroPrototype();
 const specter = api.ensureSpecterBattleBroPrototype();
 assert.equal(api.ensureMinotaurBattleBroPrototype(), minotaur);
@@ -52,7 +114,7 @@ for (let frame = 0; frame < 3600; frame++) {
   });
   assert(specter.position.y >= 0.64, 'Specter keeps ground clearance');
 }
-for (const kind of ['singleClasp', 'doubleClasp', 'shrug']) assert(gestures.has(kind), kind + ' plays automatically');
+for (const kind of ['singleClasp', 'doubleClasp', 'shrug', 'reach', 'sweep', 'stretch']) assert(gestures.has(kind), kind + ' plays automatically');
 assert(claspSeen, 'Claw jaws close during gestures');
 assert(debris[0].node.position.distanceTo(orbitStart) > .1, 'Satellites orbit');
 assert(states[0].has('WALKING_FLAT'));
