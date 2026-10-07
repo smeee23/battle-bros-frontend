@@ -102,7 +102,7 @@ plane.position.set(10,5,0);bro.userData={visualVariant:'lava',form:4,rockThrowCo
 const state={phase:'flying',isHostile:false,willLandAtAirCommand:false,curve:{},velocity:new THREE.Vector3(1,0,2)};
 let acquired=null,shots=0;
 const fixtureContext={THREE,cropDusterState:state,cropDusterRoot:plane,cropDusterModel:{},
-  lavaMonsterMovers:new Set([{root:bro,state:'IDLE'}]),ANTI_AIR_MIN_RANGE:3,ANTI_AIR_MAX_RANGE:42,
+  lavaMonsterMovers:new Set([{root:bro,state:'IDLE'}]),specterMovers:new Set(),minotaurMovers:new Set(),ANTI_AIR_MIN_RANGE:3,ANTI_AIR_MAX_RANGE:42,
   spawnPlaneHitSmoke:()=>{},telekineticRockThrow:(root,target)=>{acquired=target;shots++;return true;}};
 vm.runInNewContext(html.slice(start,end)+'globalThis.update=tickBattleBroPlaneAttacks;',fixtureContext);
 fixtureContext.update(.1);assert.equal(shots,0,'Friendly planes are never targeted');

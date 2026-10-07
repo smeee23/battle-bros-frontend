@@ -14,18 +14,30 @@ assert.equal(a.position.x,-b.position.x);assert.equal(a.position.z,b.position.z)
 const direction=new THREE.Vector3(0,0,1).applyQuaternion(a.quaternion);
 assert(direction.dot(b.position.clone().sub(a.position).normalize())>.999,'Opponents face each other');
 for(const {root} of arena.actors){const lower=root.userData.locomotionRig;const bottom=Math.min(new THREE.Box3().setFromObject(lower.leftArm.hand).min.y,new THREE.Box3().setFromObject(lower.rightArm.hand).min.y);assert(Math.abs(bottom-3.665)<1e-6,'Feet sit on court');}
-for(const name of ['greenBattleCourt','centerCircle','lowerBowl','middleTier','upperBowl','outerStadiumWall','structuralCrown','amberEntrance','azureEntrance','arenaDisplay','rearSkylight'])assert(arena.scene.getObjectByName(name),name);
+for(const name of ['alloyBattleCourt','armoredHull','bellyArmor','ventGrates','deckFasteners','lowerBowl','middleTier','upperBowl','crownTier','crownScaffolding','crownPlasmaShield','outerStadiumWall','structuralCrown','arenaDisplay','arenaStars','arenaPlanet','stadiumPlasmaShield'])assert(arena.scene.getObjectByName(name),name);
 assert(arena.scene.getObjectByName('spectatorSeats').isInstancedMesh);
-assert(arena.scene.getObjectByName('voxelSpectators').count>25000,'Stadium accommodates tens of thousands');
+assert(arena.scene.getObjectByName('astronautSpectators0').count>47000,'Stadium accommodates all four tiers');
 const seats=arena.scene.getObjectByName('spectatorSeats');
 assert.equal(seats.geometry.parameters.width,.48,'Seat dimensions retained');
 const seatMatrix=new THREE.Matrix4(),bins=new Array(36).fill(0);let minRadius=Infinity,maxRadius=0,maxHeight=0;
 for(let i=0;i<seats.count;i++){seats.getMatrixAt(i,seatMatrix);const x=seatMatrix.elements[12],y=seatMatrix.elements[13],z=seatMatrix.elements[14];const radius=Math.hypot(x,z);minRadius=Math.min(minRadius,radius);maxRadius=Math.max(maxRadius,radius);maxHeight=Math.max(maxHeight,y);bins[Math.min(35,Math.floor((Math.atan2(x,z)+Math.PI)/(2*Math.PI)*36))]++;}
 assert(bins.every(count=>count>500),'Dense seating covers every direction, including the old front cutaway');
-assert(minRadius>37&&maxRadius>94&&maxHeight>40,'Deep, tall bowl around an expanded clear perimeter');
-const floor=arena.scene.getObjectByName('greenBattleCourt');assert.equal(floor.geometry.parameters.width,23);assert.equal(floor.geometry.parameters.depth,14);
-assert.equal(arena.scene.getObjectByName('entranceLintel').geometry.parameters.height,.6,'Entrance details not uniformly scaled');
+assert(minRadius>37&&maxRadius>107&&maxHeight>50,'Deep, tall bowl around an expanded clear perimeter');
+const floor=arena.scene.getObjectByName('alloyBattleCourt');assert.equal(floor.geometry.parameters.width,23);assert.equal(floor.geometry.parameters.depth,14);
+assert.equal(arena.scene.getObjectByName('stadiumBowl').scale.x,1.5);
+for(const name of ['amberEntrance','azureEntrance','courtAccessStep','radialAisleSteps','platformCore','platformFoot','platformBrace','rearSkylight','roofRib','floatingArenaFoundation','upperPlinth','slateConcourse','concourseTiles','centerLine','centerCircle','endLine','challengerStartingMark','levitationGroundGlow'])assert(!arena.scene.getObjectByName(name),name+' removed');
+for(let part=0;part<8;part++)assert.equal(arena.scene.getObjectByName('astronautSpectators'+part).count,seats.count);
+arena.scene.updateMatrixWorld(true);
+const platformBounds=new THREE.Box3().setFromObject(arena.scene.getObjectByName('raisedMatchDeck'));
+assert(platformBounds.max.y-platformBounds.min.y>3.5,'Hull has substantial visible thickness');
+const platformRadius=Math.hypot(Math.max(Math.abs(platformBounds.min.x),Math.abs(platformBounds.max.x)),Math.max(Math.abs(platformBounds.min.z),Math.abs(platformBounds.max.z)));
+assert(34.4*1.5-platformRadius>30,'Over thirty units of open space separate platform and stands');
+const below=new THREE.Raycaster(new THREE.Vector3(0,platformBounds.min.y-.1,1),new THREE.Vector3(0,-1,0));
+assert.equal(below.intersectObject(arena.architecture,true).length,0,'No ground or support beneath the floating platform');
 assert.equal(arena.scene.getObjectByName('outerStadiumWall').geometry.parameters.thetaLength,Math.PI*2,'Seamless full outer wall');
+const crownShield=arena.scene.getObjectByName('crownPlasmaShield');
+assert(crownShield.geometry.parameters.radiusTop<crownShield.geometry.parameters.radiusBottom,'Scaffold shield tapers inward');
+assert(arena.scene.getObjectByName('crownScaffolding').isInstancedMesh,'Scaffold beams share a draw call');
 console.log('stadium seating capacity:',seats.count);
 
 const before=arena.camera.position.clone();arena.orbit(.3,.1);arena.tick(1,.016);assert(arena.camera.position.distanceTo(before)>1);arena.reset();arena.tick(1,0);assert(arena.camera.position.distanceTo(before)<1e-7);

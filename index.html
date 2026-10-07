@@ -13398,9 +13398,9 @@
   // optional impact callback; the action knows nothing about planes or teams.
   function telekineticRockThrow(root, target) {
     const controller = root.userData.looseRocks;
-    const mover = root.userData.lavaMovement;
+    const mover = root.userData.lavaMovement || root.userData.specterMovement || root.userData.minotaurMovement;
     // Shared entry point: direct actions must also wait for both supports.
-    if (mover && (mover.state !== 'IDLE' || mover.turn || mover.smash || mover.juggernautJog)) return false;
+    if (mover && ((!['IDLE','IDLE_HOVER'].includes(mover.state)) || mover.turn || mover.smash || mover.juggernautJog || mover.gallopSettle)) return false;
     if (!root.parent || root.userData.terrainConsume || root.userData.rockThrow || !target?.isActive() || !controller?.debris.length
       || root.userData.upperArmMotion?.arms.some(arm=>arm.weight<1)) return false;
     tickBattleBroOrbitField(root, 0);
@@ -13634,13 +13634,38 @@
     rig.head.rotation.y += w*aim*.5;
     rig.head.rotation.x -= w*.14;
     if(rig.spectralBody) {
-      for(const arm of [rig.leftArm,rig.rightArm]) {
-        remember(arm.shoulder);remember(arm.elbow);
-        arm.shoulder.rotation.x-=w*(.3+.85*release);
-        arm.elbow.rotation.x-=w*.55*(1-release);
+      // One arm conducts the orbit and opens toward the target at release;
+      // the other braces the floating torso, then gathers the returning rock.
+      for(const [index,arm] of [rig.leftArm,rig.rightArm].entries()) {
+        remember(arm.shoulder);remember(arm.elbow);remember(arm.hand);
+        if(index===0) {
+          root.updateMatrixWorld(true);
+          a.scratch.copy(focus);arm.shoulder.parent.worldToLocal(a.scratch);
+          a.scratch.sub(arm.shoulder.position).normalize();
+          a.down.copy(arm.elbow.position).add(arm.hand.position).normalize();
+          a.quaternion.setFromUnitVectors(a.down,a.scratch);
+          arm.shoulder.quaternion.slerp(a.quaternion,w*(.35+.65*release));
+          a.euler.set(-1.05*(1-release),0,0);a.quaternion.setFromEuler(a.euler);
+          arm.elbow.quaternion.slerp(a.quaternion,w);
+          a.euler.set(recalling?.28*(1-release):-.18*(1-release),0,0);a.quaternion.setFromEuler(a.euler);
+          arm.hand.quaternion.slerp(a.quaternion,w);
+        } else {
+          arm.shoulder.rotation.x-=w*(.32+.22*effort);
+          arm.shoulder.rotation.z-=w*.28*(1-release);
+          arm.elbow.rotation.x-=w*(.5+.3*(1-release));
+          arm.hand.rotation.x+=w*.18*(1-release);
+        }
       }
     }
-    if(rig.minotaurLegs) {
+    if(rig.neckPivot) {
+      // The longneck casts through its neck and jaw, keeping all four hooves
+      // planted while the stones wind up, launch and return to their orbit.
+      remember(rig.neckPivot);remember(rig.jaw);
+      rig.neckPivot.rotation.y+=w*aim*.3;
+      rig.neckPivot.rotation.x+=w*(wind?-.24*effort*(1-release)+.34*release:recalling?-.10:.18);
+      rig.head.rotation.x+=w*(wind?.18*(1-release)-.26*release:recalling?-.06:-.12);
+      rig.jaw.rotation.x+=w*(wind?.12*effort*(1-release)+.22*release:recalling?.08:.10);
+    } else if(rig.minotaurLegs) {
       rig.head.rotation.x+=w*(wind?.3*(1-release)-.3*release:-.08);
     }
     const arms=root.userData.upperArmMotion?.arms || [];
@@ -17947,6 +17972,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
 
   // Floating arms combine offset idle drift, movement lag and occasional gestures.
   function tickFloatingRockArmGestures(root, t, dt) {
+    if(root.userData.rockThrow)return;
     const state = root.userData.floatingArmGestures || (root.userData.floatingArmGestures = {
       kind: null, elapsed: 0, wait: 2.5, next: 0, side: -1,
       previousPosition: root.position.clone(), previousYaw: root.rotation.y, travel: 0, turn: 0,
@@ -18367,7 +18393,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
 
   function tickLongneckHead(mover, t, dt) {
     const parts = mover.parts;
-    if (!parts.neckPivot) return;
+    if (!parts.neckPivot || mover.root.userData.rockThrow) return;
     const idle = mover.state === MINOTAUR_MOVE_STATE.IDLE;
     if (idle) {
       mover.lookRemaining -= dt;
@@ -18542,6 +18568,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   function tickMinotaurMovers(t, dt) {
     for (const mover of minotaurMovers) {
       const root = mover.root;
+      if(root)restoreTelekineticBody(root);
       if (tickScenerySmash(mover,t,dt)) continue;
       if (!root || !root.parent) {
         minotaurMovers.delete(mover);
@@ -18589,9 +18616,9 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
         }
         if (mover.longneckFootRest && !parts.neckPivot)
           parts.head.rotation.y *= Math.max(0, 1 - dt * 3);
-        if (!mover.gallopSettle && mover.rearingCooldown <= 0 && canMinotaurRear(mover)) {
+        if (!root.userData.rockThrow && !mover.gallopSettle && mover.rearingCooldown <= 0 && canMinotaurRear(mover)) {
           beginMinotaurRear(mover);
-        } else {
+        } else if(!root.userData.rockThrow) {
           if (mover.rearingCooldown <= 0) mover.rearingCooldown = 1.5 + Math.random() * 2;
           mover.pauseRemaining -= dt;
           if (mover.pauseRemaining <= 0) chooseMinotaurWalkTarget(mover);
@@ -18705,7 +18732,8 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       }
 
       tickLongneckHead(mover, t, dt);
-      tickLooseRockAttachments(root, t, dt);
+      tickLooseRockAttachments(root, t, dt, mover);
+      tickBattleBroExpression(root, dt);
       const blinkCycle = (t + mover.idlePhase) % 4.6;
       const eyeScale = blinkCycle > 4.38 ? Math.max(0.10, Math.abs(blinkCycle - 4.49) / 0.11) : 1;
       parts.leftEye.scale.y = eyeScale;
@@ -18810,6 +18838,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   function tickSpecterMovers(t, dt) {
     for (const mover of specterMovers) {
       const specter = mover.root;
+      if(specter)restoreTelekineticBody(specter);
       if (tickScenerySmash(mover,t,dt)) continue;
       if (!specter || !specter.parent) {
         specterMovers.delete(mover);
@@ -18826,8 +18855,10 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
         parts.rig.position.x = slowSway * 0.008;
         parts.torso.rotation.x *= Math.max(0, 1 - dt * 4);
         parts.torso.rotation.z = slowSway * 0.006;
-        mover.idleRemaining -= dt;
-        if (mover.idleRemaining <= 0) chooseSpecterDestination(mover);
+        if(!specter.userData.rockThrow) {
+          mover.idleRemaining -= dt;
+          if (mover.idleRemaining <= 0) chooseSpecterDestination(mover);
+        }
       } else if (mover.state === SPECTER_MOVE_STATE.START_FLOAT) {
         mover.progress = Math.min(1, mover.progress + dt / (mover.fastFloat ? .32 : .85));
         const eased = smoothMinotaurStep(mover.progress);
@@ -18918,7 +18949,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       }
       tickBattleBroWorldExpression(specter, t);
       tickBattleBroExpression(specter, dt);
-      tickLooseRockAttachments(specter, t, dt);
+      tickLooseRockAttachments(specter, t, dt, mover);
     }
   }
 
@@ -30994,8 +31025,8 @@ function neighborStarVector(edge, index) {
   // Stable logical terrain cells retain edits; streamed island groups supply
   // their current world transforms. Only nearby rigid bodies are simulated.
   const explorationTerrain = (() => {
-    const SPACING=24, STREAM_RADIUS=2, MAX_DRIFT=2.2, STEP=1/30;
-    const cells=new Map(), edits=new Map(), sites=new Map(), islands=new Map(), sleeping=new Map();
+    const SPACING=24, STREAM_RADIUS=2, MAX_DRIFT=2.2, SKY_DRIFT=3.5, STEP=1/30;
+    const cells=new Map(), edits=new Map(), sites=new Map(), islands=new Map(), sleeping=new Map(), skyBodies=new Set();
     const group=new THREE.Group();group.name='explorationWorld';group.visible=false;scene.add(group);
     const dummy=new THREE.Object3D(),box=new THREE.BoxGeometry(TILE,1,TILE);
     let centerX=null,centerZ=null,homeWasVisible=true,clock=0,accumulator=0,lastSafe={x:0,z:0};
@@ -31042,6 +31073,28 @@ function neighborStarVector(edge, index) {
         result.push(sites.get(id));
       }
       return result;
+    }
+    function skySite(sx,sz) {
+      // One small sky fragment in roughly a quarter of sectors, plus a nearby
+      // reachable example at the entry. Sky seeds never alter lower islands.
+      if((sx!==0||sz!==0)&&hash(sx,sz,240)>.24)return null;
+      const id=key(sx,sz)+':sky';if(sites.has(id))return sites.get(id);
+      const width=2+Math.floor(hash(sx,sz,241)*4),length=2+Math.floor(hash(sx,sz,242)*4);
+      const minX=sx*SPACING+(sx===0&&sz===0?-8:Math.floor(hash(sx,sz,243)*12)-6);
+      const minZ=sz*SPACING+(sx===0&&sz===0?-4:Math.floor(hash(sx,sz,244)*12)-6);
+      const x=minX+width/2,z=minZ+length/2;
+      let floor=0;
+      for(let cx=minX-2;cx<minX+width+2;cx++)for(let cz=minZ-2;cz<minZ+length+2;cz++) {
+        const cell=generatedCell(cx,cz);
+        if(cell)floor=Math.max(floor,BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(terrainLevelForCell(cell)));
+      }
+      const low=sx===0&&sz===0||hash(sx,sz,245)<.7;
+      const site={id,sx,sz,x,z,sky:true,width,length,style:2,phase:hash(sx,sz,246)*Math.PI*2,
+        elevation:floor+(low?3.6:9+hash(sx,sz,247)*5),depth:1.7+hash(sx,sz,248)*.7,
+        bounds:{minX,maxX:minX+width-1,minZ,maxZ:minZ+length-1},
+        polygon:[{x:minX,z:minZ},{x:minX+width,z:minZ},{x:minX+width,z:minZ+length},{x:minX,z:minZ+length}],
+        radius:Math.hypot(width,length)/2};
+      sites.set(id,site);return site;
     }
     function neighbors(x,z,radius=1) {
       const sx=Math.round(x/SPACING),sz=Math.round(z/SPACING),out=[];
@@ -31104,30 +31157,86 @@ function neighborStarVector(edge, index) {
       const level=Math.max(1,Math.min(64,3+Math.round(relief*blend)));
       return {terrain:'stone',terrainFloors:level,kind:null,islandId:site.id};
     }
-    function getCell(x,z) {
-      const id=key(x,z);
+    function getCell(x,z,islandId) {
+      const sky=islandId?.endsWith(':sky'),id=sky?islandId+'|'+key(x,z):key(x,z);
       if(edits.has(id))return edits.get(id);
-      if(!cells.has(id))cells.set(id,generatedCell(x,z));
+      if(!cells.has(id)) {
+        if(!sky)cells.set(id,generatedCell(x,z));
+        else {
+          const site=sites.get(islandId);if(!site)return null;
+          const {minX,maxX,minZ,maxZ}=site.bounds;
+          if(x<minX||x>maxX||z<minZ||z>maxZ)return null;
+          const r=((x+.5-site.x)/(site.width/2))**2+((z+.5-site.z)/(site.length/2))**2;
+          cells.set(id,r>1.05?null:{terrain:'stone',terrainFloors:2+Math.round((1-Math.min(1,r))*3),kind:null,islandId});
+        }
+      }
       return cells.get(id);
     }
-    function bodyForCell(x,z) {const cell=getCell(x,z);return cell?islands.get(cell.islandId):null;}
-    function sample(wx,wz) {
-      // Inverse rigid transforms keep contact, mining and rendering aligned.
+    function bodyForCell(x,z,islandId) {const cell=getCell(x,z,islandId);return cell?islands.get(cell.islandId):null;}
+    function surfaceY(hit) {
+      return (hit.body?.site.elevation||0)+BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(terrainLevelForCell(hit.cell));
+    }
+    function skyHits(wx,wz) {
+      const hits=[];
+      for(const body of skyBodies) {
+        if(Math.abs(wx-body.root.position.x)>body.site.width/2+1||Math.abs(wz-body.root.position.z)>body.site.length/2+1)continue;
+        const x=Math.floor(wx-body.ox),z=Math.floor(wz-body.oz),cell=getCell(x,z,body.site.id);
+        if(cell)hits.push({x,z,cell,body});
+      }
+      return hits;
+    }
+    function sample(wx,wz,maxY=null) {
+      // Height-aware selection distinguishes the ground beneath a sky island.
+      let hit=null;
       for(const site of neighbors(wx,wz)) {
         const body=islands.get(site.id),ox=body?.ox||0,oz=body?.oz||0;
         const x=Math.floor(wx-ox),z=Math.floor(wz-oz),cell=getCell(x,z);
-        if(cell?.islandId===site.id)return {x,z,cell,body};
+        if(cell?.islandId===site.id){hit={x,z,cell,body};break;}
       }
-      return null;
+      if(maxY!==null)for(const candidate of skyHits(wx,wz)) {
+        const y=surfaceY(candidate);
+        if(y<=maxY+1e-6&&(!hit||y>surfaceY(hit)))hit=candidate;
+      }
+      return hit;
     }
-    function worldToCell(wx,wz) {const hit=sample(wx,wz);return hit?{x:hit.x,z:hit.z}:{x:Math.floor(wx),z:Math.floor(wz),void:true};}
-    function cellToWorld(x,z) {const body=bodyForCell(x,z);return {x:x+.5+(body?.ox||0),z:z+.5+(body?.oz||0)};}
-    function groundYAt(wx,wz,eyeHeight=0) {
-      const hit=sample(wx,wz);
-      return hit?BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(terrainLevelForCell(hit.cell))+eyeHeight:-Infinity;
+    function worldToCell(wx,wz,maxY=null) {
+      const hit=sample(wx,wz,maxY);
+      return hit?{x:hit.x,z:hit.z,...(hit.body?.site.sky?{islandId:hit.cell.islandId}:{})}:{x:Math.floor(wx),z:Math.floor(wz),void:true};
+    }
+    function cellToWorld(x,z,islandId) {
+      const body=bodyForCell(x,z,islandId);
+      return {x:x+.5+(body?.ox||0),z:z+.5+(body?.oz||0),...(body?.site.sky?{y:body.site.elevation}:{})};
+    }
+    function groundYAt(wx,wz,eyeHeight=0,maxY=null) {
+      const hit=sample(wx,wz,maxY);return hit?surfaceY(hit)+eyeHeight:-Infinity;
+    }
+    function blocksBodyAt(wx,wz,feet,head,step=0) {
+      return skyHits(wx,wz).some(hit=>hit.body.site.elevation-1.4<head-1e-6&&surfaceY(hit)>feet+step+1e-6);
+    }
+    function ceilingYAt(wx,wz,head) {
+      let ceiling=Infinity;
+      for(const hit of skyHits(wx,wz)) {
+        const bottom=hit.body.site.elevation-1.4;
+        if(bottom>=head-1e-6)ceiling=Math.min(ceiling,bottom);
+      }
+      return ceiling;
+    }
+    function nearbyColumns(wx,wz,radius) {
+      const out=[];
+      const add=(x,z,islandId)=>{
+        const cell=getCell(x,z,islandId);if(!cell)return;
+        const p=cellToWorld(x,z,islandId);
+        out.push({x,z,islandId,cell,wx:p.x,wz:p.z,
+          y:(p.y||0)+BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(terrainLevelForCell(cell)),minY:(p.y||0)-1.4});
+      };
+      const gx=Math.floor(wx),gz=Math.floor(wz),r=radius+Math.ceil(MAX_DRIFT);
+      for(let x=gx-r;x<=gx+r;x++)for(let z=gz-r;z<=gz+r;z++)add(x,z);
+      for(const body of skyBodies)if(Math.hypot(body.root.position.x-wx,body.root.position.z-wz)<radius+body.site.radius+1)
+        for(const {x,z} of body.entries)add(x,z,body.site.id);
+      return out;
     }
     function writeInstance(body,x,z,index) {
-      const cell=getCell(x,z),height=1.4+BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(terrainLevelForCell(cell));
+      const cell=getCell(x,z,body.site.sky?body.site.id:undefined),height=1.4+BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(terrainLevelForCell(cell));
       dummy.position.set(x+.5-body.site.x,-1.4+height/2,z+.5-body.site.z);
       dummy.scale.set(TILE,height,TILE);dummy.updateMatrix();body.mesh.setMatrixAt(index,dummy.matrix);
     }
@@ -31143,18 +31252,18 @@ function neighborStarVector(edge, index) {
       shape(site);
       const entries=[],indices=new Map(),{minX,maxX,minZ,maxZ}=site.bounds;
       for(let x=minX;x<=maxX;x++)for(let z=minZ;z<=maxZ;z++) {
-        if(getCell(x,z)?.islandId!==site.id)continue;
+        if(getCell(x,z,site.sky?site.id:undefined)?.islandId!==site.id)continue;
         indices.set(key(x,z),entries.length);entries.push({x,z});
       }
       if(!entries.length)return null;
       if(!materials){const top=terrainVoxelMaterials('stone').base,side=terrainRiserMaterial('stone');materials=[side,side,top,side,side,side];}
-      const root=new THREE.Group();root.name='floating-fragment-'+site.id;
+      const root=new THREE.Group();root.name=(site.sky?'sky-fragment-':'floating-fragment-')+site.id;
       const mesh=new THREE.InstancedMesh(box,materials,entries.length);mesh.name='explorationTerrainWindow';
       mesh.frustumCulled=false;mesh.receiveShadow=true;root.add(mesh);
       // Trace exposed voxel edges into a faceted, tapered iceberg underside.
       const vertices=[];
       const push=p=>vertices.push(p.x-site.x,p.y,p.z-site.z);
-      const tip={x:site.x+Math.sin(site.phase)*2,y:-site.depth,z:site.z+Math.cos(site.phase)*2};
+      const tip={x:site.x+Math.sin(site.phase)*(site.sky?site.width*.2:2),y:-site.depth,z:site.z+Math.cos(site.phase)*(site.sky?site.length*.2:2)};
       for(const {x,z} of entries)for(const [dx,dz,a,b] of [
         [-1,0,[x,z+1],[x,z]],[1,0,[x+1,z],[x+1,z+1]],
         [0,-1,[x,z],[x+1,z]],[0,1,[x+1,z+1],[x,z+1]]]) {
@@ -31168,11 +31277,11 @@ function neighborStarVector(edge, index) {
       const hull=new THREE.Mesh(hullGeometry,materials[0]);hull.name='fractured-rock-underside';root.add(hull);
       const saved=sleeping.get(site.id);sleeping.delete(site.id);
       const collisionPolygon=convexHull(entries.flatMap(({x,z})=>[{x,z},{x:x+1,z},{x,z:z+1},{x:x+1,z:z+1}]));
-      const body={site,root,mesh,hull,indices,collisionPolygon,ox:saved?.ox||0,oz:saved?.oz||0,
-        vx:saved?.vx??Math.cos(site.phase)*.025,vz:saved?.vz??Math.sin(site.phase)*.025,
+      const body={site,root,mesh,hull,indices,entries,collisionPolygon,ox:saved?.ox||0,oz:saved?.oz||0,
+        vx:saved?.vx??Math.cos(site.phase)*(site.sky ? .07 : .025),vz:saved?.vz??Math.sin(site.phase)*(site.sky ? .07 : .025),
         mass:entries.length,dx:0,dz:0};
       entries.forEach(({x,z},i)=>writeInstance(body,x,z,i));mesh.instanceMatrix.needsUpdate=true;
-      root.position.set(site.x+body.ox,0,site.z+body.oz);group.add(root);islands.set(site.id,body);
+      root.position.set(site.x+body.ox,site.elevation||0,site.z+body.oz);group.add(root);islands.set(site.id,body);if(site.sky)skyBodies.add(body);
       return body;
     }
     function ensureAround(wx,wz) {
@@ -31182,7 +31291,7 @@ function neighborStarVector(edge, index) {
       centerX=sx;centerZ=sz;pending=[];
       const wanted=new Set();
       for(let x=sx-STREAM_RADIUS;x<=sx+STREAM_RADIUS;x++)for(let z=sz-STREAM_RADIUS;z<=sz+STREAM_RADIUS;z++)
-        for(const site of sectorSites(x,z)) {
+        for(const site of [...sectorSites(x,z),skySite(x,z)].filter(Boolean)) {
           wanted.add(site.id);
           if(!islands.has(site.id)) {
             if(firstWindow)buildIsland(site);else pending.push(site);
@@ -31195,22 +31304,23 @@ function neighborStarVector(edge, index) {
       if(!islands.has(standing.id))buildIsland(standing);
       for(const [id,body] of islands)if(!wanted.has(id)) {
         sleeping.set(id,{ox:body.ox,oz:body.oz,vx:body.vx,vz:body.vz});
-        group.remove(body.root);body.hull.geometry.dispose();body.mesh.dispose();islands.delete(id);
+        group.remove(body.root);body.hull.geometry.dispose();body.mesh.dispose();islands.delete(id);skyBodies.delete(body);
       }
       while(sleeping.size>128)sleeping.delete(sleeping.keys().next().value);
-      for(const id of cells.keys()) {const [x,z]=id.split(',').map(Number);if(Math.abs(x-wx)>96||Math.abs(z-wz)>96)cells.delete(id);}
+      for(const id of cells.keys()) {const [x,z]=id.slice(id.lastIndexOf('|')+1).split(',').map(Number);if(Math.abs(x-wx)>96||Math.abs(z-wz)>96)cells.delete(id);}
       for(const [id,site] of sites)if(Math.abs(site.sx-sx)>4||Math.abs(site.sz-sz)>4)sites.delete(id);
     }
-    function setCell(x,z,patch) {
+    function setCell(x,z,patch,islandId) {
       if(!Number.isInteger(x)||!Number.isInteger(z))return false;
-      const cell=getCell(x,z);if(!cell)return false;
-      edits.set(key(x,z),{...cell,...patch,islandId:cell.islandId});
+      const cell=getCell(x,z,islandId);if(!cell)return false;
+      edits.set(islandId?.endsWith(':sky')?islandId+'|'+key(x,z):key(x,z),{...cell,...patch,islandId:cell.islandId});
       const body=islands.get(cell.islandId),index=body?.indices.get(key(x,z));
       if(index!==undefined){writeInstance(body,x,z,index);body.mesh.instanceMatrix.needsUpdate=true;}
       return true;
     }
-    function canExcavate(x,z) {const cell=getCell(x,z);return !!cell&&!cell.kind&&!cell.extras?.length;}
+    function canExcavate(x,z,islandId) {const cell=getCell(x,z,islandId);return !!cell&&!cell.kind&&!cell.extras?.length;}
     function contact(a,b) {
+      if(!!a.site.sky!==!!b.site.sky || (a.site.sky&&Math.abs(a.site.elevation-b.site.elevation)>3))return null;
       if(Math.hypot(a.root.position.x-b.root.position.x,a.root.position.z-b.root.position.z)>a.site.radius+b.site.radius+1)return null;
       let separation=-Infinity,normal=null;
       for(const body of [a,b])for(let i=0;i<body.collisionPolygon.length;i++) {
@@ -31231,13 +31341,14 @@ function neighborStarVector(edge, index) {
         // Inertia plus a slowly changing local force; no position keyframes,
         // shared bobbing phase or prescribed orbit. Confinement preserves gaps.
         const epoch=Math.floor(clock/35),blend=(clock/35-epoch)**2*(3-2*(clock/35-epoch));
-        const force=salt=>(hash(b.site.sx,b.site.sz,epoch+salt)*(1-blend)+hash(b.site.sx,b.site.sz,epoch+1+salt)*blend-.5)*.002;
+        const wind=b.site.sky?2.5:1,maxDrift=b.site.sky?SKY_DRIFT:MAX_DRIFT,maxSpeed=b.site.sky ? .09 : .045;
+        const force=salt=>(hash(b.site.sx,b.site.sz,epoch+salt)*(1-blend)+hash(b.site.sx,b.site.sz,epoch+1+salt)*blend-.5)*.002*wind;
         b.vx+=(force(30)-b.ox*.00055-b.vx*.018)*dt;
         b.vz+=(force(90)-b.oz*.00055-b.vz*.018)*dt;
-        const speed=Math.hypot(b.vx,b.vz);if(speed>.045){b.vx*=.045/speed;b.vz*=.045/speed;}
+        const speed=Math.hypot(b.vx,b.vz);if(speed>maxSpeed){b.vx*=maxSpeed/speed;b.vz*=maxSpeed/speed;}
         b.ox+=b.vx*dt;b.oz+=b.vz*dt;
         const distance=Math.hypot(b.ox,b.oz);
-        if(distance>MAX_DRIFT){const nx=b.ox/distance,nz=b.oz/distance,out=b.vx*nx+b.vz*nz;b.ox=nx*MAX_DRIFT;b.oz=nz*MAX_DRIFT;if(out>0){b.vx-=out*nx;b.vz-=out*nz;}}
+        if(distance>maxDrift){const nx=b.ox/distance,nz=b.oz/distance,out=b.vx*nx+b.vz*nz;b.ox=nx*maxDrift;b.oz=nz*maxDrift;if(out>0){b.vx-=out*nx;b.vz-=out*nz;}}
       }
       for(let i=0;i<bodies.length;i++)for(let j=i+1;j<bodies.length;j++) {
         const a=bodies[i],b=bodies[j],hit=contact(a,b);if(!hit)continue;
@@ -31253,17 +31364,18 @@ function neighborStarVector(edge, index) {
       ensureAround(player.pos.x,player.pos.z);
       while(pending.length&&islands.has(pending[0].id))pending.shift();
       if(pending.length)buildIsland(pending.shift());
-      const support=player.grounded?sample(player.pos.x,player.pos.z)?.body:null;
+      const standing=player.grounded?sample(player.pos.x,player.pos.z,player.pos.y-eyeHeight+.02):null;
+      const support=standing&&Math.abs(surfaceY(standing)+eyeHeight-player.pos.y)<.3?standing.body:null;
       const petSupport=companion?sample(companion.position.x,companion.position.z)?.body:null;
       for(const b of islands.values()){b.dx=b.ox;b.dz=b.oz;}
       accumulator+=Math.min(.1,dt);
       while(accumulator>=STEP){simulate(STEP);accumulator-=STEP;}
-      for(const b of islands.values()){b.dx=b.ox-b.dx;b.dz=b.oz-b.dz;b.root.position.set(b.site.x+b.ox,0,b.site.z+b.oz);}
+      for(const b of islands.values()){b.dx=b.ox-b.dx;b.dz=b.oz-b.dz;b.root.position.set(b.site.x+b.ox,b.site.elevation||0,b.site.z+b.oz);}
       if(starfield)starfield.position.copy(player.pos);
       if(support){player.pos.x+=support.dx;player.pos.z+=support.dz;}
       if(petSupport){companion.position.x+=petSupport.dx;companion.position.z+=petSupport.dz;}
-      const hit=sample(player.pos.x,player.pos.z);
-      if(player.grounded&&hit?.body&&edgeDistance(hit.body.site,hit.x+.5,hit.z+.5)>2)lastSafe={x:hit.x,z:hit.z};
+      const hit=sample(player.pos.x,player.pos.z,player.pos.y-eyeHeight+.02);
+      if(player.grounded&&hit?.body&&!hit.body.site.sky&&edgeDistance(hit.body.site,hit.x+.5,hit.z+.5)>2)lastSafe={x:hit.x,z:hit.z};
       if(player.pos.y < -24) {
         const safe=cellToWorld(lastSafe.x,lastSafe.z);ensureAround(safe.x,safe.z);
         const p=cellToWorld(lastSafe.x,lastSafe.z);
@@ -31292,8 +31404,8 @@ function neighborStarVector(edge, index) {
     }
     function deactivate() {group.visible=false;xrWorldRoot.visible=homeWasVisible;explorationActive=false;scene.background=homeBackground;applyDistanceMistSettings(currentSkyBgHex);}
     function diagnostics() {return {islands:islands.size,pending:pending.length,cells:cells.size,sites:sites.size,sleeping:sleeping.size,
-      fragments:[...islands.values()].map(b=>({id:b.site.id,style:b.site.style,count:b.mass,ox:b.ox,oz:b.oz,vx:b.vx,vz:b.vz}))};}
-    return {group,getCell,setCell,worldToCell,cellToWorld,groundYAt,ensureAround,canExcavate,activate,deactivate,tick,diagnostics};
+      fragments:[...islands.values()].map(b=>({id:b.site.id,sky:!!b.site.sky,elevation:b.site.elevation||0,width:b.site.width,length:b.site.length,style:b.site.style,count:b.mass,ox:b.ox,oz:b.oz,vx:b.vx,vz:b.vz}))};}
+    return {group,getCell,setCell,worldToCell,cellToWorld,groundYAt,blocksBodyAt,ceilingYAt,nearbyColumns,ensureAround,canExcavate,activate,deactivate,tick,diagnostics};
   })();
   const homeFPTerrain = {
     get group() { return worldGroup; },
@@ -31412,11 +31524,11 @@ function neighborStarVector(edge, index) {
     document.getElementById('excavation-inventory').innerHTML = Object.entries(EXCAVATION_GEMS)
       .map(([key, gem]) => `<span style="color:${gem.color}">${gem.label}: <b>${excavation.gems[key]}</b></span>`).join('');
   }
-  function excavationCellIsClear(x,z) {
-    return Number.isInteger(x) && Number.isInteger(z) && activeFPTerrain().canExcavate(x,z);
+  function excavationCellIsClear(x,z,islandId) {
+    return Number.isInteger(x) && Number.isInteger(z) && activeFPTerrain().canExcavate(x,z,islandId);
   }
-  function validExcavationCell(x,z) {
-    return excavationCellIsClear(x,z) && terrainLevelForCell(activeFPTerrain().getCell(x,z))>1;
+  function validExcavationCell(x,z,islandId) {
+    return excavationCellIsClear(x,z,islandId) && terrainLevelForCell(activeFPTerrain().getCell(x,z,islandId))>1;
   }
   function makeExcavationAxe() {
     // Grip pivot at the origin; the head sits above the metal handle at rest.
@@ -31523,19 +31635,27 @@ function neighborStarVector(edge, index) {
     if(excavation.aimDirection.y>=-.04)return null;
     const ray=excavation.aimRay; ray.set(persCam.position,excavation.aimDirection);
     const terrain=activeFPTerrain();
-    const {x:gx,z:gz}=terrain.worldToCell(fp.pos.x,fp.pos.z);
-    const radius=Math.ceil(EXCAVATION_TUNING.reach)+1+(explorationActive?5:0);
+    const radius=Math.ceil(EXCAVATION_TUNING.reach)+1;
+    let columns;
+    if(terrain.nearbyColumns)columns=terrain.nearbyColumns(fp.pos.x,fp.pos.z,radius);
+    else {
+      columns=[];
+      const {x:gx,z:gz}=terrain.worldToCell(fp.pos.x,fp.pos.z);
+      for(let x=gx-radius;x<=gx+radius;x++)for(let z=gz-radius;z<=gz+radius;z++) {
+        const cell=terrain.getCell(x,z);if(!cell)continue;
+        const {x:wx,z:wz}=terrain.cellToWorld(x,z);
+        columns.push({x,z,cell,wx,wz,y:terrain.groundYAt(wx,wz),minY:BUILDABLE_LAND_Y_OFFSET-DIRT_H});
+      }
+    }
     let nearest=Infinity, target=null;
-    for(let x=gx-radius;x<=gx+radius;x++)for(let z=gz-radius;z<=gz+radius;z++) {
-      const cell=terrain.getCell(x,z); if(!cell)continue;
-      const {x:wx,z:wz}=terrain.cellToWorld(x,z),y=terrain.groundYAt(wx,wz);
-      excavation.aimBox.min.set(wx-.5,explorationActive?-1.4:BUILDABLE_LAND_Y_OFFSET-DIRT_H,wz-.5);
+    for(const {x,z,islandId,cell,wx,wz,y,minY} of columns) {
+      excavation.aimBox.min.set(wx-.5,minY,wz-.5);
       excavation.aimBox.max.set(wx+.5,y+(cell.kind || cell.extras?.length ? Math.max(.3,(cell.floors||1)*.2) : 0),wz+.5);
       if(!ray.intersectBox(excavation.aimBox,excavation.aimPoint))continue;
       const distance=excavation.aimPoint.distanceToSquared(persCam.position);
       if(distance>=nearest)continue;
       nearest=distance;
-      target={x,z,wx,wz,y,level:terrainLevelForCell(cell),cell,point:excavation.aimPoint.clone()};
+      target={x,z,islandId,wx,wz,y,level:terrainLevelForCell(cell),cell,point:excavation.aimPoint.clone()};
     }
     return target && excavationWithinReach(target) ? target : null;
   }
@@ -31545,7 +31665,7 @@ function neighborStarVector(edge, index) {
     excavation.gems[type]++;renderExcavationInventory();
     excavation.gem.material.color.set(EXCAVATION_GEMS[type].color);
     excavation.gem.material.emissive.copy(excavation.gem.material.color);
-    excavation.gem.position.set(target.wx,activeFPTerrain().groundYAt(target.wx,target.wz)+.12,target.wz);
+    excavation.gem.position.set(target.wx,activeFPTerrain().groundYAt(target.wx,target.wz,0,target.y)+.12,target.wz);
     excavation.gemAge=0;
     return type;
   }
@@ -31559,14 +31679,14 @@ function neighborStarVector(edge, index) {
   function impactExcavationSwing(swing) {
     const target=swing.target;
     if(!target)return false;
-    const terrain=activeFPTerrain(),cell=terrain.getCell(target.x,target.z);
+    const terrain=activeFPTerrain(),cell=terrain.getCell(target.x,target.z,target.islandId);
     const aimed=pickExcavationTarget();
-    if(!excavation.active || !canMutateActiveColony() || !validExcavationCell(target.x,target.z)
+    if(!excavation.active || !canMutateActiveColony() || !validExcavationCell(target.x,target.z,target.islandId)
       || cell!==target.cell || terrainLevelForCell(cell)!==target.level || !excavationWithinReach(target)
-      || !aimed || aimed.x!==target.x || aimed.z!==target.z)return false;
+      || !aimed || aimed.x!==target.x || aimed.z!==target.z || aimed.islandId!==target.islandId)return false;
     // Same layer operation as the trash tool, without its unrelated resource refund.
-    const result=terrain.setCell(target.x,target.z,{...cell,terrainFloors:target.level-1,userEdited:true});
-    if(result===false || terrainLevelForCell(terrain.getCell(target.x,target.z))!==target.level-1)return false;
+    const result=terrain.setCell(target.x,target.z,{...cell,terrainFloors:target.level-1,userEdited:true},target.islandId);
+    if(result===false || terrainLevelForCell(terrain.getCell(target.x,target.z,target.islandId))!==target.level-1)return false;
     playSfx('knock',.7);
     excavation.fragmentAge=0; excavation.fragmentOrigin={wx:target.wx,wz:target.wz,y:target.y};
     excavation.fragments.material.color.copy(terrainVoxelMaterials(cell.terrain).low.color);
@@ -31647,7 +31767,7 @@ function neighborStarVector(edge, index) {
     excavation.time+=dt;
     tickExcavationSwing(dt);
     excavation.target=pickExcavationTarget();
-    const target=excavation.target, removable=target && validExcavationCell(target.x,target.z);
+    const target=excavation.target, removable=target && validExcavationCell(target.x,target.z,target.islandId);
     excavation.marker.visible=!!target;
     if(target){excavation.marker.position.set(target.wx,target.y+.014,target.wz);excavation.marker.material.color.setHex(removable?0xffd580:0xcc6666);}
     const swing=excavation.swing;
@@ -32207,7 +32327,7 @@ function neighborStarVector(edge, index) {
   }
 
   function fpGroundYAt(worldX, worldZ) {
-    return activeFPTerrain().groundYAt(worldX,worldZ,FP_EYE_H);
+    return activeFPTerrain().groundYAt(worldX,worldZ,FP_EYE_H,fp.pos.y-FP_EYE_H+(fp.grounded?FP_MAX_HEIGHT_DIFFERENCE:0));
   }
 
   function moveFPAcrossTerrain(dx, dz) {
@@ -32215,6 +32335,7 @@ function neighborStarVector(edge, index) {
     const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dz)) / 0.2));
     const stepX = dx / steps, stepZ = dz / steps;
     const canStep = (x, z) => {
+      if(activeFPTerrain().blocksBodyAt?.(x,z,fp.pos.y-FP_EYE_H,fp.pos.y+.12,fp.grounded?FP_MAX_HEIGHT_DIFFERENCE:0))return false;
       const currentGround = fpGroundYAt(fp.pos.x, fp.pos.z);
       const nextGround = fpGroundYAt(x, z);
       if (nextGround <= currentGround + 1e-9) return true;
@@ -32379,6 +32500,8 @@ function neighborStarVector(edge, index) {
       const previousY=fp.pos.y;
       fp.pos.y += fp.vy * dt - 0.5 * FP_GRAVITY * dt * dt;
       fp.vy -= FP_GRAVITY * dt;
+      const ceiling=activeFPTerrain().ceilingYAt?.(fp.pos.x,fp.pos.z,previousY+.12)??Infinity;
+      if(fp.pos.y+.12>ceiling&&fp.vy>0){fp.pos.y=ceiling-.12;fp.vy=0;}
       if (Number.isFinite(groundY) && fp.vy<=0 && previousY>=groundY-1e-6 && fp.pos.y <= groundY) {
         fp.landingDip = FP_LANDING_DIP_MAX * Math.min(1, Math.max(0, -fp.vy) / FP_LANDING_FULL_SPEED);
         fp.landingTime = FP_LANDING_DURATION;
@@ -36357,25 +36480,26 @@ function neighborStarVector(edge, index) {
     onImpact: point => spawnPlaneHitSmoke(point, cropDusterState.velocity),
   };
   const battleBroPlanePosition = new THREE.Vector3();
+  const battleBroPlaneMoverGroups=[lavaMonsterMovers,specterMovers,minotaurMovers];
   function tickBattleBroPlaneAttacks(dt) {
     let active = 0;
-    for (const mover of lavaMonsterMovers) {
+    for (const movers of battleBroPlaneMoverGroups) for (const mover of movers) {
       if (mover.root.userData.rockThrow) active++;
       mover.root.userData.rockThrowCooldown = Math.max(0,
         (mover.root.userData.rockThrowCooldown ?? (2 + mover.root.userData.looseRocks?.phase || 2)) - dt);
     }
     if (!battleBroPlaneTarget.isActive() || active >= 2) return;
     battleBroPlaneTarget.getPosition(battleBroPlanePosition);
-    for (const mover of lavaMonsterMovers) {
+    for (const movers of battleBroPlaneMoverGroups) for (const mover of movers) {
       const root = mover.root;
       if (!root.parent || !root.visible || !root.userData.looseRocks
-        || root.userData.rockThrow || root.userData.rockThrowCooldown > 0 || mover.state !== 'IDLE') continue;
+        || root.userData.rockThrow || root.userData.rockThrowCooldown > 0 || !['IDLE','IDLE_HOVER'].includes(mover.state)) continue;
       const distance = root.getWorldPosition(new THREE.Vector3()).distanceTo(battleBroPlanePosition);
       if (distance < ANTI_AIR_MIN_RANGE || distance > Math.min(32,ANTI_AIR_MAX_RANGE)) continue;
       const flightCurve = cropDusterState.curve;
       const target = { ...battleBroPlaneTarget,
         isActive: () => cropDusterState.curve === flightCurve && battleBroPlaneTarget.isActive() };
-      if (telekineticRockThrow(root,target) && ++active >= 2) break;
+      if (telekineticRockThrow(root,target) && ++active >= 2) return;
     }
   }
 
