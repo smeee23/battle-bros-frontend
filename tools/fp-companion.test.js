@@ -29,7 +29,7 @@ const terrain={group,groundYAt:(x,z)=>Math.floor(x/5)*.2,
 // Fix follow delays and target offsets without changing the application's randomness.
 const companionMath=Object.create(Math);
 companionMath.random=()=>.5;
-const context=vm.createContext({THREE,fp,Math:companionMath,baseBattleBroPrototype:source('battlebro-longneck-prototype',2,'ice'),
+const context=vm.createContext({THREE,fp,explorationActive:true,Math:companionMath,baseBattleBroPrototype:source('battlebro-longneck-prototype',2,'ice'),
   activeFPTerrain:()=>terrain,createLongNeckBattleBro:a=>makeRoot('longneck',a),
   createSpecterBattleBro:a=>makeRoot('specter',a),createRockBattleBro:a=>makeRoot('monsters',a),
   createJuggernautBattleBro:a=>makeRoot('juggernaut',a),
@@ -122,6 +122,7 @@ fixture=fixture.replace('const M = {','const M_ANIMAL={hoof:new THREE.MeshLamber
 fixture=fixture.replace('globalThis.api = {',`
   let baseBattleBroPrototype=null;
   const fp={active:true,pos:new THREE.Vector3(0,.3,0),yaw:0};
+  const explorationActive=true;
   const companionTerrain={group:new THREE.Group(),groundYAt:(x,z)=>0.4,
     worldToCell:(x,z)=>({x:Math.floor(x),z:Math.floor(z)}),getCell:()=>({terrain:'stone'})};
   worldGroup.add(companionTerrain.group);
@@ -152,3 +153,9 @@ for(const [character,form,variant] of [['longneck',2,'ice'],['juggernaut',6,'lav
 }
 real.api.stopExplorationCompanion();
 console.log('first-person companion: loose follow, backing away, terrain height, animations, live switching and cleanup OK');
+
+context.explorationActive=false;
+startPet();assert.equal(pet.root,null,'Home never creates a duplicate companion');
+assert.equal(group.children.length,0);
+context.explorationActive=true;startPet();assert(pet.root,'Other world retains its companion');
+context.explorationActive=false;tick(30,1/60);assert.equal(pet.root,null,'Returning home removes the companion');

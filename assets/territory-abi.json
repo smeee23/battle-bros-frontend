@@ -1,0 +1,1262 @@
+{
+  "TerritoryCombat": [
+    {
+      "name": "MAX_FEE_BPS",
+      "signature": "MAX_FEE_BPS()",
+      "selector": "0xd55be8c6",
+      "inputs": []
+    },
+    {
+      "name": "MIN_ATTACK_YIELD",
+      "signature": "MIN_ATTACK_YIELD()",
+      "selector": "0xa0bb4c6f",
+      "inputs": []
+    },
+    {
+      "name": "acceptOwnership",
+      "signature": "acceptOwnership()",
+      "selector": "0x79ba5097",
+      "inputs": []
+    },
+    {
+      "name": "bros",
+      "signature": "bros()",
+      "selector": "0xf2f0baa8",
+      "inputs": []
+    },
+    {
+      "name": "challenge",
+      "signature": "challenge(uint256,uint256,uint8,uint16,uint64,uint64,uint64,uint16[3])",
+      "selector": "0x8b0f0454",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "location",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint8",
+          "name": "action",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint16",
+          "name": "power",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint64",
+          "name": "expectedNonce",
+          "type": "uint64"
+        },
+        {
+          "internalType": "uint64",
+          "name": "expectedDefenseNonce",
+          "type": "uint64"
+        },
+        {
+          "internalType": "uint64",
+          "name": "transactionDeadline",
+          "type": "uint64"
+        },
+        {
+          "internalType": "uint16[3]",
+          "name": "defense",
+          "type": "uint16[3]"
+        }
+      ]
+    },
+    {
+      "name": "challengeState",
+      "signature": "challengeState(uint256)",
+      "selector": "0xf15842ef",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "claim",
+      "signature": "claim(uint256,uint256,uint64,uint16[3])",
+      "selector": "0x8344a2d9",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "location",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint64",
+          "name": "expectedNonce",
+          "type": "uint64"
+        },
+        {
+          "internalType": "uint16[3]",
+          "name": "defense",
+          "type": "uint16[3]"
+        }
+      ]
+    },
+    {
+      "name": "config",
+      "signature": "config()",
+      "selector": "0x79502c55",
+      "inputs": []
+    },
+    {
+      "name": "configEffectiveAt",
+      "signature": "configEffectiveAt()",
+      "selector": "0x67ed6feb",
+      "inputs": []
+    },
+    {
+      "name": "createLocations",
+      "signature": "createLocations(uint32,uint32,uint256)",
+      "selector": "0x4504d0a5",
+      "inputs": [
+        {
+          "internalType": "uint32",
+          "name": "minLevel",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "maxLevel",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "count",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "currentConfig",
+      "signature": "currentConfig()",
+      "selector": "0xcae58807",
+      "inputs": []
+    },
+    {
+      "name": "eligibleLocation",
+      "signature": "eligibleLocation(uint256,uint256)",
+      "selector": "0x4a56e6cf",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "location",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "expire",
+      "signature": "expire(uint256)",
+      "selector": "0xbf81bf43",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "locationOf",
+      "signature": "locationOf(uint256)",
+      "selector": "0x6b8b81b8",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "locations",
+      "signature": "locations(uint256)",
+      "selector": "0xb9e0db35",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "locked",
+      "signature": "locked(uint256)",
+      "selector": "0xb45a3c0e",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "nextChallengeId",
+      "signature": "nextChallengeId()",
+      "selector": "0xfc67aa50",
+      "inputs": []
+    },
+    {
+      "name": "nextLocationId",
+      "signature": "nextLocationId()",
+      "selector": "0x5182d7eb",
+      "inputs": []
+    },
+    {
+      "name": "owner",
+      "signature": "owner()",
+      "selector": "0x8da5cb5b",
+      "inputs": []
+    },
+    {
+      "name": "pendingByToken",
+      "signature": "pendingByToken(uint256)",
+      "selector": "0xb48b696e",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "pendingOwner",
+      "signature": "pendingOwner()",
+      "selector": "0xe30c3978",
+      "inputs": []
+    },
+    {
+      "name": "randomness",
+      "signature": "randomness()",
+      "selector": "0x36013189",
+      "inputs": []
+    },
+    {
+      "name": "reclaimAllowed",
+      "signature": "reclaimAllowed(uint256,uint256)",
+      "selector": "0xabaedf55",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "location",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "reclaimBlocks",
+      "signature": "reclaimBlocks(uint256)",
+      "selector": "0x3c4048cf",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "renounceOwnership",
+      "signature": "renounceOwnership()",
+      "selector": "0x715018a6",
+      "inputs": []
+    },
+    {
+      "name": "requestDeparture",
+      "signature": "requestDeparture(uint256)",
+      "selector": "0xfa964327",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "resolve",
+      "signature": "resolve(uint256)",
+      "selector": "0x4f896d4f",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "scheduleConfiguration",
+      "signature": "scheduleConfiguration((uint16,uint16,uint16,uint16,uint32,address))",
+      "selector": "0x89c28aa9",
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "uint16",
+              "name": "riskBps",
+              "type": "uint16"
+            },
+            {
+              "internalType": "uint16",
+              "name": "feeBps",
+              "type": "uint16"
+            },
+            {
+              "internalType": "uint16",
+              "name": "minimumBps",
+              "type": "uint16"
+            },
+            {
+              "internalType": "uint16",
+              "name": "defenderBps",
+              "type": "uint16"
+            },
+            {
+              "internalType": "uint32",
+              "name": "timeout",
+              "type": "uint32"
+            },
+            {
+              "internalType": "address",
+              "name": "feeRecipient",
+              "type": "address"
+            }
+          ],
+          "internalType": "struct TerritoryCombat.Config",
+          "name": "value",
+          "type": "tuple"
+        }
+      ]
+    },
+    {
+      "name": "scheduledConfig",
+      "signature": "scheduledConfig()",
+      "selector": "0xf3266381",
+      "inputs": []
+    },
+    {
+      "name": "setEnabled",
+      "signature": "setEnabled(uint256,bool)",
+      "selector": "0xe5c13dd1",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "location",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "enabled",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "signature": "transferOwnership(address)",
+      "selector": "0xf2fde38b",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "vacate",
+      "signature": "vacate(uint256)",
+      "selector": "0x9fb3f476",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "vault",
+      "signature": "vault()",
+      "selector": "0xfbfa77cf",
+      "inputs": []
+    }
+  ],
+  "TerritoryBro": [
+    {
+      "name": "DAILY_DEFENDER_XP_CAP",
+      "signature": "DAILY_DEFENDER_XP_CAP()",
+      "selector": "0x7561bee3",
+      "inputs": []
+    },
+    {
+      "name": "FULL_XP_STAKE",
+      "signature": "FULL_XP_STAKE()",
+      "selector": "0xc9106c87",
+      "inputs": []
+    },
+    {
+      "name": "MAX_NAME_BYTES",
+      "signature": "MAX_NAME_BYTES()",
+      "selector": "0x680c60c7",
+      "inputs": []
+    },
+    {
+      "name": "MAX_NEED_CHECKS",
+      "signature": "MAX_NEED_CHECKS()",
+      "selector": "0x2a3df994",
+      "inputs": []
+    },
+    {
+      "name": "MAX_SUPPLY",
+      "signature": "MAX_SUPPLY()",
+      "selector": "0x32cb6b0c",
+      "inputs": []
+    },
+    {
+      "name": "MIN_HATCH_YIELD",
+      "signature": "MIN_HATCH_YIELD()",
+      "selector": "0x7489e1b3",
+      "inputs": []
+    },
+    {
+      "name": "acceptOwnership",
+      "signature": "acceptOwnership()",
+      "selector": "0x79ba5097",
+      "inputs": []
+    },
+    {
+      "name": "approve",
+      "signature": "approve(address,uint256)",
+      "selector": "0x095ea7b3",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "balanceOf",
+      "signature": "balanceOf(address)",
+      "selector": "0x70a08231",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "broName",
+      "signature": "broName(uint256)",
+      "selector": "0x8719f30e",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "broState",
+      "signature": "broState(uint256)",
+      "selector": "0x7a2fa8ea",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "capacityOf",
+      "signature": "capacityOf(uint256)",
+      "selector": "0x1317b432",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "care",
+      "signature": "care(uint256)",
+      "selector": "0xc803f981",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "checkpoint",
+      "signature": "checkpoint(uint256)",
+      "selector": "0xed64bab2",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "checkpointNeedsExemption",
+      "signature": "checkpointNeedsExemption(uint256)",
+      "selector": "0xd111114b",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "combat",
+      "signature": "combat()",
+      "selector": "0x08f2d4e8",
+      "inputs": []
+    },
+    {
+      "name": "defenderXP",
+      "signature": "defenderXP(uint256)",
+      "selector": "0xc4f78c97",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "finalizeBattle",
+      "signature": "finalizeBattle(uint256,uint256,bool,uint256,uint256)",
+      "selector": "0xd94ea6fe",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "attacker",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "defender",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "attackerWon",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "challenge",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "xpStakeValue",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "finishPower",
+      "signature": "finishPower(uint256,bool)",
+      "selector": "0x2c50e8e8",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "refund",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "getApproved",
+      "signature": "getApproved(uint256)",
+      "selector": "0x081812fc",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "hatch",
+      "signature": "hatch(uint256,uint8,uint16[3],uint16[3],string)",
+      "selector": "0xe2a93bb4",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint8",
+          "name": "kind",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint16[3]",
+          "name": "training",
+          "type": "uint16[3]"
+        },
+        {
+          "internalType": "uint16[3]",
+          "name": "defense",
+          "type": "uint16[3]"
+        },
+        {
+          "internalType": "string",
+          "name": "newName",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "isApprovedForAll",
+      "signature": "isApprovedForAll(address,address)",
+      "selector": "0xe985e9c5",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "operator",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "levelOf",
+      "signature": "levelOf(uint256)",
+      "selector": "0x6d5e3032",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mintWithETH",
+      "signature": "mintWithETH()",
+      "selector": "0x8f2aef5b",
+      "inputs": []
+    },
+    {
+      "name": "mintWithStETH",
+      "signature": "mintWithStETH()",
+      "selector": "0x89152a6b",
+      "inputs": []
+    },
+    {
+      "name": "name",
+      "signature": "name()",
+      "selector": "0x06fdde03",
+      "inputs": []
+    },
+    {
+      "name": "needs",
+      "signature": "needs()",
+      "selector": "0x0d479064",
+      "inputs": []
+    },
+    {
+      "name": "needsExempt",
+      "signature": "needsExempt(uint256)",
+      "selector": "0xbefaab23",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "nextTokenId",
+      "signature": "nextTokenId()",
+      "selector": "0x75794a3c",
+      "inputs": []
+    },
+    {
+      "name": "owner",
+      "signature": "owner()",
+      "selector": "0x8da5cb5b",
+      "inputs": []
+    },
+    {
+      "name": "ownerOf",
+      "signature": "ownerOf(uint256)",
+      "selector": "0x6352211e",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "pendingOwner",
+      "signature": "pendingOwner()",
+      "selector": "0xe30c3978",
+      "inputs": []
+    },
+    {
+      "name": "prepare",
+      "signature": "prepare(uint256)",
+      "selector": "0xcb577480",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "remainingDefenderXP",
+      "signature": "remainingDefenderXP(uint256)",
+      "selector": "0x064127b7",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "rename",
+      "signature": "rename(uint256,string)",
+      "selector": "0x3ec2d836",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        },
+        {
+          "internalType": "string",
+          "name": "newName",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "renounceOwnership",
+      "signature": "renounceOwnership()",
+      "selector": "0x715018a6",
+      "inputs": []
+    },
+    {
+      "name": "reservePower",
+      "signature": "reservePower(uint256,uint8,uint16)",
+      "selector": "0x7877812d",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint8",
+          "name": "lane",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint16",
+          "name": "amount",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "safeTransferFrom",
+      "signature": "safeTransferFrom(address,address,uint256)",
+      "selector": "0x42842e0e",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "safeTransferFrom",
+      "signature": "safeTransferFrom(address,address,uint256,bytes)",
+      "selector": "0xb88d4fde",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "tokenId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "data",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "setApprovalForAll",
+      "signature": "setApprovalForAll(address,bool)",
+      "selector": "0xa22cb465",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "operator",
+          "type": "address"
+        },
+        {
+          "internalType": "bool",
+          "name": "approved",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "setEntryDefense",
+      "signature": "setEntryDefense(uint256,uint16[3])",
+      "selector": "0xd1a9767d",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint16[3]",
+          "name": "weights",
+          "type": "uint16[3]"
+        }
+      ]
+    },
+    {
+      "name": "setWeights",
+      "signature": "setWeights(uint256,uint16[3],bool)",
+      "selector": "0x4f6ae79e",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint16[3]",
+          "name": "weights",
+          "type": "uint16[3]"
+        },
+        {
+          "internalType": "bool",
+          "name": "defensive",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "settle",
+      "signature": "settle(uint256)",
+      "selector": "0x8df82800",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "supportsInterface",
+      "signature": "supportsInterface(bytes4)",
+      "selector": "0x01ffc9a7",
+      "inputs": [
+        {
+          "internalType": "bytes4",
+          "name": "interfaceId",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "symbol",
+      "signature": "symbol()",
+      "selector": "0x95d89b41",
+      "inputs": []
+    },
+    {
+      "name": "syncNeeds",
+      "signature": "syncNeeds(uint256,uint256)",
+      "selector": "0x7a756fce",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "limit",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "tokenURI",
+      "signature": "tokenURI(uint256)",
+      "selector": "0xc87b56dd",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferFrom",
+      "signature": "transferFrom(address,address,uint256)",
+      "selector": "0x23b872dd",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "signature": "transferOwnership(address)",
+      "selector": "0xf2fde38b",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "vault",
+      "signature": "vault()",
+      "selector": "0xfbfa77cf",
+      "inputs": []
+    },
+    {
+      "name": "wire",
+      "signature": "wire(address)",
+      "selector": "0xf6487d8c",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "battle",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "withdrawAll",
+      "signature": "withdrawAll(uint256)",
+      "selector": "0x958e2d31",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    }
+  ],
+  "NeedsOracle": [
+    {
+      "name": "acceptOwnership",
+      "signature": "acceptOwnership()",
+      "selector": "0x79ba5097",
+      "inputs": []
+    },
+    {
+      "name": "activate",
+      "signature": "activate(uint256,uint256,uint64)",
+      "selector": "0x2f36f8d6",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "day",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "value",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint64",
+          "name": "receivedAt",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "configurations",
+      "signature": "configurations(uint256)",
+      "selector": "0x8749e26f",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "daysByEpoch",
+      "signature": "daysByEpoch(uint256)",
+      "selector": "0x5184c1f6",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "epoch",
+      "signature": "epoch()",
+      "selector": "0x900cf0cf",
+      "inputs": []
+    },
+    {
+      "name": "owner",
+      "signature": "owner()",
+      "selector": "0x8da5cb5b",
+      "inputs": []
+    },
+    {
+      "name": "pendingOwner",
+      "signature": "pendingOwner()",
+      "selector": "0xe30c3978",
+      "inputs": []
+    },
+    {
+      "name": "probabilityFor",
+      "signature": "probabilityFor(uint256)",
+      "selector": "0x70518df2",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "day",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "randomness",
+      "signature": "randomness()",
+      "selector": "0x36013189",
+      "inputs": []
+    },
+    {
+      "name": "renounceOwnership",
+      "signature": "renounceOwnership()",
+      "selector": "0x715018a6",
+      "inputs": []
+    },
+    {
+      "name": "requestNeeds",
+      "signature": "requestNeeds()",
+      "selector": "0xf12a602c",
+      "inputs": []
+    },
+    {
+      "name": "scheduleProbability",
+      "signature": "scheduleProbability(uint16)",
+      "selector": "0xbc24235a",
+      "inputs": [
+        {
+          "internalType": "uint16",
+          "name": "bps",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "seedAt",
+      "signature": "seedAt(uint256)",
+      "selector": "0xd5fa3127",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "index",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "seedCount",
+      "signature": "seedCount()",
+      "selector": "0x8bed5bd2",
+      "inputs": []
+    },
+    {
+      "name": "selected",
+      "signature": "selected((uint256,uint256,uint64,uint16),uint256)",
+      "selector": "0xfa2b3502",
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "uint256",
+              "name": "epoch",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "value",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint64",
+              "name": "activatedAt",
+              "type": "uint64"
+            },
+            {
+              "internalType": "uint16",
+              "name": "probabilityBps",
+              "type": "uint16"
+            }
+          ],
+          "internalType": "struct NeedsOracle.Seed",
+          "name": "s",
+          "type": "tuple"
+        },
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "signature": "transferOwnership(address)",
+      "selector": "0xf2fde38b",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ]
+    }
+  ],
+  "StETH": [
+    {
+      "name": "totalSupply",
+      "signature": "totalSupply()",
+      "selector": "0x18160ddd",
+      "inputs": []
+    },
+    {
+      "name": "getTotalShares",
+      "signature": "getTotalShares()",
+      "selector": "0xd5002f2e",
+      "inputs": []
+    }
+  ]
+}

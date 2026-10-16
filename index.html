@@ -4404,7 +4404,7 @@
   body.training-appearance-active #excavation-hud,
   body.training-appearance-active #excavation-reticle { display:none !important; }
   body.training-appearance-active .battlebro-panel-section:has(#battlebro-capital),
-  body.training-appearance-active .battlebro-panel-section:has(#battlebro-round),
+  body.training-appearance-active .battlebro-panel-section:has(#battlebro-territory),
   body.training-appearance-active .battlebro-panel-section:has(#excavation-inventory),
   body.training-appearance-active .battlebro-panel-actions { display:none; }
   body.arena-active > :not(#app):not(#arena-hud):not(script):not(style) { display:none !important; }
@@ -4432,26 +4432,7 @@
   .arena-versus { font:700 18px 'Orbitron',sans-serif; color:#d4bd8f; }
   .arena-camera-hint { position:absolute; bottom:8px; width:100%; text-align:center; font-size:10px; color:#c1ccd2; }
   @media(max-width:600px) { .arena-header { padding:16px 12px; gap:8px; } .arena-header h1 { font-size:17px; } .arena-header button { padding:9px; font-size:10px; } .arena-footer { gap:12px; width:calc(100% - 24px); } .arena-contender { min-width:0; flex:1; padding:10px; } .arena-contender strong { font-size:12px; } }
-  #battle-calendar-modal { z-index: 120; padding: 12px; }
-  .battle-calendar-dialog { box-sizing: border-box; width: min(780px, 100%); }
-  .battle-calendar-nav { display:flex; align-items:center; gap:10px; margin:20px 0 12px; }
-  .battle-calendar-nav h3 { flex:1; margin:0; text-align:center; font-size:18px; }
-  .battle-calendar-legend { display:flex; flex-wrap:wrap; gap:8px 16px; margin-bottom:16px; font-size:11px; }
-  .battle-calendar-legend .is-major { color:#805600; font-weight:700; }
-  .battle-calendar-legend .is-championship { color:#69429a; font-weight:700; }
-  .battle-calendar-week,.battle-calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; }
-  .battle-calendar-week { text-align:center; font-size:11px; color:#756a5b; margin-bottom:8px; }
-  .battle-calendar-day { min-width:0; min-height:70px; padding:9px 3px; border:1px solid #d7cebd; border-radius:10px; background:#fffdf6; color:#312b22; cursor:pointer; font:inherit; display:flex; flex-direction:column; align-items:center; gap:8px; }
-  .battle-calendar-day small { max-width:100%; font:600 10px/1.2 sans-serif; overflow-wrap:anywhere; }
-  .battle-calendar-day.is-major { border:2px solid #b88824; background:#fff0c4; font-weight:700; }
-  .battle-calendar-day.is-championship { border:2px solid #9164bb; background:#f0e4fc; font-weight:700; }
-  .battle-calendar-day[aria-current="date"]>span { border-radius:50%; background:#312b22; color:white; padding:2px 6px; }
-  .battle-calendar-day[aria-pressed="true"] { outline:2px solid #396796; outline-offset:1px; }
-  .battle-calendar-day:focus-visible { outline:3px solid #245b94; outline-offset:1px; }
-  .battle-calendar-details { margin:18px 0 12px; padding:12px 16px; background:#eee7d8; border-radius:12px; font-size:12px; line-height:1.5; }
-  .battle-calendar-details h3 { margin:0 0 6px; font-size:14px; }
-  .battle-calendar-details p { margin:5px 0; }
-  @media(max-width:480px) { .battle-calendar-dialog { padding:12px; } .battle-calendar-grid { gap:3px; } .battle-calendar-day { min-height:64px; border-radius:6px; } .battle-calendar-day small { font-size:9px; } .battle-calendar-nav { gap:5px; } .battle-calendar-nav h3 { font-size:14px; } }
+
   .battlebro-mock-badge { display: inline-block; margin-top: 12px; padding: 4px 7px; border-radius: 999px; background: #efe3c4; color: #775f2e; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
   .battle-history-modal { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 18px; background: rgba(31, 26, 19, .55); backdrop-filter: blur(5px); }
   .battle-history-modal[hidden] { display: none; }
@@ -4631,8 +4612,8 @@
       <div class="battlebro-panel-grid" id="battlebro-capital"></div>
     </div>
     <div class="battlebro-panel-section">
-      <h3>Current round</h3>
-      <div class="battlebro-panel-grid" id="battlebro-round"></div>
+      <h3>Territory status</h3>
+      <div class="battlebro-panel-grid" id="battlebro-territory"></div>
     </div>
     <div class="battlebro-panel-section">
       <h3>Excavation gems</h3>
@@ -4642,13 +4623,9 @@
     </div>
     <div class="battlebro-panel-section battlebro-panel-actions">
       <button class="btn battlebro-info-action" id="battlebro-arena-action" type="button">Battle Arena</button>
-      <button class="btn battlebro-info-action" id="battlebro-calendar-action" type="button" aria-haspopup="dialog" aria-controls="battle-calendar-modal">Battle Calendar</button>
+      <a class="btn battlebro-info-action" id="battlebro-territory-action" href="territory.html">Territory locations</a>
       <button class="btn battlebro-info-action" id="battlebro-history-action" type="button">Battle history</button>
-      <button class="btn battlebro-info-action" id="battlebro-opponent-action" type="button">Opponent intel</button>
-      <button class="btn" type="button" disabled>Care</button>
-      <button class="btn" type="button" disabled>Set training</button>
-      <button class="btn" type="button" disabled>Register</button>
-      <button class="btn" type="button" disabled>Commit / Reveal</button>
+      <button class="btn battlebro-info-action" id="battlebro-opponent-action" type="button">Look up BattleBro</button>
     </div>
     <section class="battlebro-panel-section" id="training-appearance-controls" hidden aria-label="Appearance selection">
       <h3>Appearance</h3>
@@ -4657,7 +4634,7 @@
       <p class="battlebro-panel-note" id="training-appearance-status" role="status"></p>
       <button class="btn" id="training-appearance-done" type="button">Done · Return outside</button>
     </section>
-    <span class="battlebro-mock-badge" id="battlebro-source-badge">MOCK FRONTEND STATE</span>
+    <span class="battlebro-mock-badge" id="battlebro-source-badge">NOT CONNECTED</span>
   </aside>
   </div>
   <script>
@@ -4708,18 +4685,6 @@
     <p class="arena-camera-hint">Drag to orbit · Scroll to zoom · Esc to return</p>
   </div>
 
-  <div class="modal battle-history-modal" id="battle-calendar-modal" hidden>
-    <section class="battle-history-dialog battle-calendar-dialog" role="dialog" aria-modal="true" aria-labelledby="battle-calendar-title">
-      <div class="battle-history-head"><div><h2 id="battle-calendar-title">Battle Calendar</h2><p class="battle-history-subtitle">All dates and times are UTC.</p></div><button type="button" class="battle-history-close" id="battle-calendar-close" aria-label="Close battle calendar">×</button></div>
-      <div class="battle-calendar-nav"><button class="btn" type="button" id="battle-calendar-prev" aria-label="Previous month">‹</button><h3 id="battle-calendar-month" aria-live="polite"></h3><button class="btn" type="button" id="battle-calendar-next" aria-label="Next month">›</button><button class="btn" type="button" id="battle-calendar-today">Today</button></div>
-      <div class="battle-calendar-legend"><span>Daily · Regular</span><span class="is-major">Major · Saturday</span><span class="is-championship">Championship · Every fourth Major</span></div>
-      <div class="battle-calendar-week" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
-      <div class="battle-calendar-grid" id="battle-calendar-grid" role="group" aria-label="Battle dates"></div>
-      <section id="battle-calendar-details" class="battle-calendar-details" aria-live="polite" aria-label="Selected date details"></section>
-      <p class="battle-history-subtitle">*Times are subject to change. Championship replaces the Major on its scheduled Saturday.</p>
-    </section>
-  </div>
-
   <div class="battle-history-modal" id="battle-history-modal" hidden>
     <section class="battle-history-dialog" role="dialog" aria-modal="true" aria-labelledby="battle-history-title">
       <div class="battle-history-head">
@@ -4732,7 +4697,7 @@
       <form class="battle-history-search" id="battle-history-search">
         <input id="battle-history-token-id" type="text" inputmode="numeric" pattern="[0-9]+" aria-label="BattleBro token ID" placeholder="BattleBro token ID" required />
         <button class="btn" type="submit">Look up</button>
-        <button class="btn battle-history-mine" id="battle-history-mine" type="button">My BattleBro</button>
+        <button class="btn battle-history-mine" id="battle-history-mine" type="button">Selected BattleBro</button>
       </form>
       <div class="battle-history-error" id="battle-history-error" role="alert" hidden></div>
       <div id="battle-history-content"></div>
@@ -5653,8 +5618,6 @@
 
   <script defer src="assets/character-battle-actions.js"></script>
   <script defer src="assets/battle-arena.js"></script>
-  <script defer src="assets/battle-schedule.js"></script>
-  <script defer src="assets/battle-calendar.js"></script>
   <script src="runtime-config.js"></script>
   <script src="vendor/three/three.r128.min.js"></script>
   <script src="vendor/three/GLTFLoader.r128.js"></script>
@@ -5672,25 +5635,8 @@
   // TODO(contract/indexer): replace these values with contract, indexer, or S3
   // game-state snapshot data when real game-state integration lands.
   const BATTLEBROS_MIGRATION_MODE = true;
-  // TODO(backend/contracts): replace this complete object through
-  // setBattleBroFrontendState() after validating the versioned BattleBros read
-  // model. Values representing onchain integers stay decimal strings here.
-  const BATTLEBRO_FRONTEND_MOCK = Object.freeze({
-    source: 'mock',
-    battleBro: {
-      id: '42', owner: '0x0000…B042', hatched: true, type: 'Type1',
-      level: '4', xp: '790', hasNeed: false, needSinceRound: null,
-      attack: '38', defend: '31', counter: '27', totalCapacity: '115',
-      attackWeightBps: '4000', defendWeightBps: '3500', counterWeightBps: '2500',
-      originalPrincipalAmount: '0.100', originalPrincipalUnit: 'ETH',
-      protectedPrincipalStETH: '0.100', availableYieldStETH: '0.004',
-    },
-    currentRound: {
-      id: '18', phase: 'REGISTRATION', battleType: 'Daily', registered: false,
-      opponentBattleBroId: null, commitmentStatus: 'NONE', revealStatus: 'NONE',
-    },
-  });
-  let battleBroFrontendState = BATTLEBRO_FRONTEND_MOCK;
+  const BATTLEBRO_FRONTEND_EMPTY = Object.freeze({source:'unavailable',battleBro:{}});
+  let battleBroFrontendState = BATTLEBRO_FRONTEND_EMPTY;
 
   function battleBroStatRows(targetId, rows) {
     const target = document.getElementById(targetId);
@@ -5707,7 +5653,12 @@
 
   function renderBattleBroPanel(state = battleBroFrontendState) {
     const bro = state && state.battleBro || {};
-    const round = state && state.currentRound || {};
+    if(!bro.id) {
+      document.getElementById('battlebro-name').textContent='No BattleBro selected';
+      for(const id of ['core-stats','reserves','training','capital','territory'])
+        battleBroStatRows('battlebro-'+id,[['Status','No confirmed data']]);
+      return;
+    }
     const name = document.getElementById('battlebro-name');
     if (name) name.textContent = 'BattleBro #' + (bro.id || '—');
     battleBroStatRows('battlebro-core-stats', [
@@ -5726,21 +5677,17 @@
       ['Counter', formatBattleBrosWeight(BigInt(bro.counterWeightBps || '0'))],
     ]);
     battleBroStatRows('battlebro-capital', [
-      ['Original principal', (bro.originalPrincipalAmount || '—') + ' ' + (bro.originalPrincipalUnit || 'stETH')],
       ['Protected principal', (bro.protectedPrincipalStETH || '—') + ' stETH'],
       ['Available yield', (bro.availableYieldStETH || '—') + ' stETH'],
     ]);
-    battleBroStatRows('battlebro-round', [
-      ['Round', round.id || '—'], ['Phase', round.phase || 'Unavailable'],
-      ['Battle type', round.battleType || '—'],
-      ['Registration', round.registered === null ? 'Not in v1 read model' : (round.registered ? 'Registered' : 'Not registered')],
-      ['Match', round.opponentBattleBroId ? 'BattleBro #' + round.opponentBattleBroId : 'Pending'],
-      ['Commit / Reveal', (round.commitmentStatus || 'NONE') + ' / ' + (round.revealStatus || 'NONE')],
+    battleBroStatRows('battlebro-territory', [
+      ['Location', bro.locationId == null ? 'Unoccupied' : '#'+bro.locationId],
+      ['Pending challenge', bro.pendingChallengeId == null ? 'None' : '#'+bro.pendingChallengeId],
     ]);
   }
 
   function setBattleBroFrontendState(nextState) {
-    if (!nextState || typeof nextState !== 'object' || !nextState.battleBro || !nextState.currentRound) {
+    if (!nextState || typeof nextState !== 'object' || !nextState.battleBro) {
       throw new Error('Invalid BattleBros frontend state.');
     }
     battleBroFrontendState = nextState;
@@ -5803,119 +5750,17 @@
     };
   }
 
-  function normalizeBattleBroRoundHistory(value) {
-    if (!Array.isArray(value)) throw new Error('battle-bro.roundHistory must be an array.');
-    return value.map((entry, index) => {
-      const label = 'battle-bro.roundHistory[' + index + ']';
-      requireBattleBrosObject(entry, label);
-      const changes = Array.isArray(entry.reserveChanges) ? entry.reserveChanges : [];
-      return Object.freeze({
-        roundId: requireBattleBrosUint(entry.roundId, label + '.roundId'),
-        registered: entry.registered === true,
-        bye: entry.bye === true,
-        battleId: entry.battleId === null ? null : String(entry.battleId).toLowerCase(),
-        pairIndex: entry.pairIndex === null ? null : requireBattleBrosUint(entry.pairIndex, label + '.pairIndex'),
-        outcome: entry.outcome === null ? null : String(entry.outcome),
-        reserveChanges: Object.freeze(changes.map((change, changeIndex) => {
-          requireBattleBrosObject(change, label + '.reserveChanges[' + changeIndex + ']');
-          return Object.freeze({
-            reason: String(change.reason || ''),
-            combatType: change.combatType === null ? null : String(change.combatType),
-            amount: requireBattleBrosUint(change.amount, label + '.reserveChanges[' + changeIndex + '].amount'),
-          });
-        })),
-      });
-    });
-  }
-
-  function normalizeBattleBrosPublicDocuments(manifestRaw, gameRaw, broRaw, requestedTokenId) {
-    const manifest = requireBattleBrosObject(manifestRaw, 'manifest');
-    const game = requireBattleBrosObject(gameRaw, 'game-state');
-    const bro = requireBattleBrosObject(broRaw, 'battle-bro');
-    for (const [label, document] of [['manifest', manifest], ['game-state', game], ['battle-bro', bro]]) {
-      if (document.schemaVersion !== 1) throw new Error(label + ' schemaVersion ' + document.schemaVersion + ' is unsupported.');
-    }
-    const chainId = requireBattleBrosUint(game.chainId, 'game-state.chainId');
-    const manager = requireBattleBrosAddress(game.battleManagerAddress, 'game-state.battleManagerAddress');
-    if (requireBattleBrosUint(manifest.chainId, 'manifest.chainId') !== chainId
-      || requireBattleBrosAddress(manifest.battleManagerAddress, 'manifest.battleManagerAddress') !== manager
-      || requireBattleBrosUint(bro.chainId, 'battle-bro.chainId') !== chainId
-      || requireBattleBrosAddress(bro.battleManagerAddress, 'battle-bro.battleManagerAddress') !== manager) {
-      throw new Error('BattleBros document chain or BattleManager identity mismatch.');
-    }
-    const gameSnapshot = requireBattleBrosSnapshot(game.snapshot, 'game-state.snapshot');
-    const broSnapshot = requireBattleBrosSnapshot(bro.snapshot, 'battle-bro.snapshot');
-    if (!sameBattleBrosSnapshot(gameSnapshot, broSnapshot)) throw new Error('Current documents come from different confirmed snapshots.');
-
-    const tokenId = requireBattleBrosUint(bro.tokenId, 'battle-bro.tokenId');
-    if (tokenId !== requestedTokenId) throw new Error('Returned BattleBro token ID does not match the request.');
-    const supply = requireBattleBrosObject(game.supply, 'game-state.supply');
-    if (!Array.isArray(supply.battleBroIds) || !supply.battleBroIds.some(id => requireBattleBrosUint(id, 'supply.battleBroIds[]') === tokenId)) {
-      throw new Error('BattleBro is absent from the active supply snapshot.');
-    }
-
-    const progression = requireBattleBrosObject(bro.progression, 'battle-bro.progression');
-    const reserves = normalizeBattleBrosReserves(progression.reserves, 'battle-bro.progression.reserves');
-    const capacity = requireBattleBrosUint(progression.capacity, 'battle-bro.progression.capacity');
-    if (reserves.attack + reserves.defend + reserves.counter > capacity) throw new Error('BattleBro reserves exceed total capacity.');
-    const training = requireBattleBrosObject(bro.training, 'battle-bro.training');
-    const weights = normalizeBattleBrosReserves(training.weightsBps, 'battle-bro.training.weightsBps');
-    if (bro.hatch && weights.attack + weights.defend + weights.counter !== 10000n) throw new Error('Hatched BattleBro weights must total 10,000 bps.');
-    const need = requireBattleBrosObject(bro.need, 'battle-bro.need');
-    const needSinceRound = need.sinceRound === null ? null : requireBattleBrosUint(need.sinceRound, 'battle-bro.need.sinceRound');
-    if (!need.active && needSinceRound !== null) throw new Error('Inactive Need cannot have a sinceRound.');
-    const vault = requireBattleBrosObject(bro.vault, 'battle-bro.vault');
-    const mint = requireBattleBrosObject(bro.mint, 'battle-bro.mint');
-    if (typeof mint.paidWithETH !== 'boolean') throw new Error('battle-bro.mint.paidWithETH must be boolean.');
-    const freeShares = requireBattleBrosUint(vault.freeShares, 'battle-bro.vault.freeShares');
-    const reservedShares = requireBattleBrosUint(vault.reservedShares, 'battle-bro.vault.reservedShares');
-    const totalShares = requireBattleBrosUint(vault.totalShares, 'battle-bro.vault.totalShares');
-    if (freeShares + reservedShares !== totalShares) throw new Error('BattleBro share accounting does not reconcile.');
-    const activeRound = requireBattleBrosObject(game.activeRound, 'game-state.activeRound');
-
-    return Object.freeze({
-      schemaVersion: 1,
-      identity: Object.freeze({
-        tokenId,
-        active: bro.active === true,
-        owner: requireBattleBrosAddress(bro.owner, 'battle-bro.owner', true),
-        hatched: bro.hatch !== null,
-        type: bro.hatch && bro.hatch.battleBroType || null,
-      }),
-      progression: Object.freeze({
-        xp: requireBattleBrosUint(progression.xp, 'battle-bro.progression.xp'),
-        level: requireBattleBrosUint(progression.level, 'battle-bro.progression.level'),
-        capacity,
-        reserves: Object.freeze(reserves),
-      }),
-      training: Object.freeze({
-        lastSettledRound: requireBattleBrosUint(training.lastSettledRound, 'battle-bro.training.lastSettledRound'),
-        weightsBps: Object.freeze(weights),
-        recoveryCarry: requireBattleBrosUint(training.recoveryCarry, 'battle-bro.training.recoveryCarry'),
-        allocationCarry: Object.freeze(normalizeBattleBrosReserves(training.allocationCarry, 'battle-bro.training.allocationCarry')),
-        remainderCursor: requireBattleBrosUint(training.remainderCursor, 'battle-bro.training.remainderCursor'),
-      }),
-      need: Object.freeze({ active: need.active === true, sinceRound: needSinceRound }),
-      mint: Object.freeze({
-        inputAmount: requireBattleBrosUint(mint.inputAmount, 'battle-bro.mint.inputAmount'),
-        paidWithETH: mint.paidWithETH,
-      }),
-      capital: Object.freeze({
-        freeShares, reservedShares, totalShares,
-        currentValue: requireBattleBrosUint(vault.currentValue, 'battle-bro.vault.currentValue'),
-        protectedPrincipal: requireBattleBrosUint(vault.protectedPrincipal, 'battle-bro.vault.protectedPrincipal'),
-        riskableShares: requireBattleBrosUint(vault.riskableShares, 'battle-bro.vault.riskableShares'),
-        yieldRatioBps: requireBattleBrosUint(vault.yieldRatioBps, 'battle-bro.vault.yieldRatioBps'),
-      }),
-      currentRound: Object.freeze({
-        id: requireBattleBrosUint(activeRound.roundId, 'game-state.activeRound.roundId'),
-        status: String(activeRound.status || ''),
-        battleType: String(activeRound.battleType || ''),
-        registrationCloseTimestamp: requireBattleBrosUint(activeRound.registrationCloseTimestamp, 'game-state.activeRound.registrationCloseTimestamp'),
-      }),
-      roundHistory: Object.freeze(normalizeBattleBroRoundHistory(bro.roundHistory)),
-      snapshot: Object.freeze(gameSnapshot),
-    });
+  function normalizeBattleBrosPublicDocuments(manifest, game, bro, requestedTokenId) {
+    if (manifest.schemaVersion !== 2 || game.schemaVersion !== 2 || game.projectionVersion !== 3 || manifest.projectionVersion !== 3) throw new Error('Unsupported territory publication version.');
+    if (manifest.chainId !== game.chainId || manifest.deploymentId !== game.deploymentId || game.contracts.combat.toLowerCase() !== game.deploymentId.toLowerCase() || JSON.stringify(manifest.snapshot) !== JSON.stringify(game.snapshot)) throw new Error('Territory snapshot identity mismatch.');
+    if (!bro || BigInt(bro.tokenId) !== requestedTokenId) throw new Error('BattleBro not found.');
+    const lanes = a => ({attack:BigInt(a[0]),defend:BigInt(a[1]),counter:BigInt(a[2])});
+    return {schemaVersion:2,identity:{tokenId:requestedTokenId,name:bro.name,owner:bro.owner,active:bro.active,hatched:bro.hatchedAt!=='0',type:bro.kind},
+      progression:{xp:BigInt(bro.xp),level:BigInt(bro.level),capacity:BigInt(bro.capacity),reserves:lanes(bro.projectedReserves)},
+      training:{weightsBps:lanes(bro.training),lastTrainingAt:BigInt(bro.lastTrainingAt)},
+      need:{active:bro.need.active,activeSinceTimestamp:bro.need.activeSinceTimestamp},
+      capital:{freeShares:BigInt(bro.freeShares),reservedShares:BigInt(bro.reservedShares),totalShares:BigInt(bro.freeShares)+BigInt(bro.reservedShares),currentValue:BigInt(bro.currentValueWei??0),protectedPrincipal:BigInt(bro.protectedPrincipal),riskableShares:BigInt(bro.riskableShares??0)},
+      defense:{weightsBps:lanes(bro.defense)},snapshot:{...game.snapshot,blockNumber:BigInt(game.snapshot.blockNumber)},territory:bro.locationId,pendingChallengeId:bro.pendingChallengeId};
   }
 
   function formatBattleBrosUnits(value, decimals = 18, maximumFractionDigits = 4) {
@@ -5945,21 +5790,14 @@
       battleBro: {
         id: bro.tokenId.toString(), owner: shortBattleBrosAddress(bro.owner), hatched: bro.hatched, type: bro.type,
         level: progression.level.toString(), xp: progression.xp.toString(), hasNeed: model.need.active,
-        needSinceRound: model.need.sinceRound === null ? null : model.need.sinceRound.toString(),
+        locationId:model.territory,pendingChallengeId:model.pendingChallengeId,
         attack: progression.reserves.attack.toString(), defend: progression.reserves.defend.toString(),
         counter: progression.reserves.counter.toString(), totalCapacity: progression.capacity.toString(),
         attackWeightBps: model.training.weightsBps.attack.toString(),
         defendWeightBps: model.training.weightsBps.defend.toString(),
         counterWeightBps: model.training.weightsBps.counter.toString(),
-        originalPrincipalAmount: formatBattleBrosUnits(model.mint.inputAmount),
-        originalPrincipalUnit: model.mint.paidWithETH ? 'ETH' : 'stETH',
         protectedPrincipalStETH: formatBattleBrosUnits(capital.protectedPrincipal),
         availableYieldStETH: formatBattleBrosUnits(capital.currentValue > capital.protectedPrincipal ? capital.currentValue - capital.protectedPrincipal : 0n),
-      },
-      currentRound: {
-        id: model.currentRound.id.toString(), phase: model.currentRound.status,
-        battleType: model.currentRound.battleType, registered: null,
-        opponentBattleBroId: null, commitmentStatus: 'NOT IN V1 READ MODEL', revealStatus: 'NOT IN V1 READ MODEL',
       },
     });
     battleBroStatRows('battlebro-training', [
@@ -5970,7 +5808,7 @@
     const status = document.getElementById('battlebro-data-status');
     const badge = document.getElementById('battlebro-source-badge');
     if (status) status.textContent = 'Confirmed snapshot block ' + model.snapshot.blockNumber.toString() + '. ' + sourceLabel;
-    if (badge) badge.textContent = 'CONFIRMED PUBLIC READ MODEL V1';
+    if (badge) badge.textContent = 'CONFIRMED TERRITORY V2';
     window.__battleBrosReadModel = model;
   }
 
@@ -5981,7 +5819,7 @@
     const local = location.protocol === 'file:' || host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
     const params = new URLSearchParams(location.search);
     return {
-      manifestUrl: runtime.manifestUrl || params.get('manifestUrl') || (local ? 'assets/mock-public/manifest.json' : null),
+      manifestUrl: params.get('manifestUrl') || runtime.manifestUrl || null,
       tokenId: runtime.tokenId || params.get('battleBroId') || null,
       fixture: !runtime.manifestUrl && !params.get('manifestUrl') && local,
     };
@@ -5993,116 +5831,68 @@
     return response.json();
   }
 
+  async function fetchTerritoryPublication() {
+    const config=battleBrosPublicDataConfig();
+    if(!config.manifestUrl)throw new Error('No territory publication is configured.');
+    const manifestUrl=new URL(config.manifestUrl,location.href);
+    const manifest=await fetchBattleBrosPublicJson(manifestUrl.href,'Manifest');
+    if(manifest.schemaVersion!==2 || manifest.projectionVersion!==3 || !manifest.paths?.gameState)
+      throw new Error('Only current territory publications are supported.');
+    const gameUrl=new URL(manifest.paths.gameState,manifestUrl);
+    const game=await fetchBattleBrosPublicJson(gameUrl.href,'Territory state');
+    if(game.schemaVersion!==2 || game.projectionVersion!==3 || game.chainId!==manifest.chainId
+      || game.deploymentId!==manifest.deploymentId || game.contracts?.combat?.toLowerCase()!==manifest.deploymentId.toLowerCase()
+      || JSON.stringify(game.snapshot)!==JSON.stringify(manifest.snapshot)
+      || !Array.isArray(game.battleBros) || !Array.isArray(game.challenges) || !Array.isArray(game.history))
+      throw new Error('Territory snapshot identity or contents mismatch.');
+    return {manifest,manifestUrl,game,gameUrl};
+  }
+
   async function hydrateBattleBrosReadModel() {
-    const config = battleBrosPublicDataConfig();
-    if (!config.manifestUrl) return null;
-    const status = document.getElementById('battlebro-data-status');
-    if (status) status.textContent = 'Loading confirmed BattleBros public state…';
+    const status=document.getElementById('battlebro-data-status');
+    const badge=document.getElementById('battlebro-source-badge');
+    status.textContent='Loading confirmed territory state…';
+    activeBattleBroReadModel=null;battleBrosPublicationContext=null;window.__battleBrosReadModel=null;
+    setBattleBroFrontendState(BATTLEBRO_FRONTEND_EMPTY);
     try {
-      const manifestUrl = new URL(config.manifestUrl, location.href);
-      const manifest = await fetchBattleBrosPublicJson(manifestUrl.href, 'Manifest');
-      const paths = requireBattleBrosObject(manifest.paths, 'manifest.paths');
-      if (typeof paths.currentGameState !== 'string' || !paths.currentGameState) throw new Error('Manifest has no current game-state path.');
-      const gameUrl = new URL(paths.currentGameState, manifestUrl);
-      const game = await fetchBattleBrosPublicJson(gameUrl.href, 'Current game state');
-      battleBrosPublicationContext = { manifest, manifestUrl, game, gameUrl };
-      const ids = game && game.supply && game.supply.battleBroIds;
-      const requestedText = config.tokenId === null ? ids && ids[0] : config.tokenId;
-      const requestedTokenId = requireBattleBrosUint(String(requestedText), 'Requested BattleBro token ID');
-      // Current BattleBro documents are co-published beside current game state
-      // and share its snapshot. manifest.paths.battleBros addresses the latest
-      // finalized historical bundle, which must not be mixed with current state.
-      const broUrl = new URL('./battle-bros/' + encodeURIComponent(requestedTokenId.toString()) + '.json', gameUrl);
-      const bro = await fetchBattleBrosPublicJson(broUrl.href, 'Current BattleBro');
-      const model = normalizeBattleBrosPublicDocuments(manifest, game, bro, requestedTokenId);
-      renderBattleBroReadModel(model, config.fixture ? 'Local canonical fixture.' : 'Backend publication.');
-      return model;
-    } catch (error) {
-      console.error('[BattleBros public read model]', error);
-      if (status) status.textContent = 'Public state unavailable: ' + (error.message || error) + ' Showing mock state.';
-      const badge = document.getElementById('battlebro-source-badge');
-      if (badge) badge.textContent = 'MOCK FALLBACK';
+      const publication=await fetchTerritoryPublication();
+      const {manifest,game,manifestUrl}=publication;
+      const tokenId=battleBrosPublicDataConfig().tokenId;
+      const bro=game.battleBros.find(b=>tokenId===null?b.active:String(b.tokenId)===String(tokenId));
+      if(bro)renderBattleBroReadModel(normalizeBattleBrosPublicDocuments(manifest,game,bro,BigInt(bro.tokenId)),'Territory publication.');
+      else {status.textContent='No matching BattleBro in the confirmed territory publication. Use token lookup to browse.';badge.textContent='CONFIRMED TERRITORY V2';}
+      battleBrosPublicationContext=publication;
+      document.getElementById('battlebro-territory-action').href='territory.html?manifestUrl='+encodeURIComponent(manifestUrl.href);
+      return publication;
+    } catch(error) {
+      activeBattleBroReadModel=null;battleBrosPublicationContext=null;window.__battleBrosReadModel=null;
+      setBattleBroFrontendState(BATTLEBRO_FRONTEND_EMPTY);
+      status.textContent='Public state unavailable: '+error.message;
+      badge.textContent='DATA UNAVAILABLE';
       return null;
     }
   }
-  window.hydrateBattleBrosReadModel = hydrateBattleBrosReadModel;
-  window.normalizeBattleBrosPublicDocuments = normalizeBattleBrosPublicDocuments;
-
-  function resolveBattleBrosPublicationPath(template, manifest, replacements) {
-    const roundId = replacements.roundId === undefined ? manifest.latestFinalizedRound : replacements.roundId.toString();
-    const finalized = Array.isArray(manifest.finalizedRounds) && manifest.finalizedRounds.find(item => String(item.roundId) === String(roundId));
-    const values = {
-      tokenId: replacements.tokenId === undefined ? null : replacements.tokenId.toString(),
-      roundId: String(roundId),
-      blockHash: finalized && finalized.snapshot && finalized.snapshot.blockHash || manifest.snapshot && manifest.snapshot.blockHash,
-    };
-    return String(template || '').replace(/\{(tokenId|roundId|blockHash)\}/g, (_, key) => {
-      if (values[key] === null || values[key] === undefined) throw new Error('Cannot resolve {' + key + '} in publication path.');
-      return encodeURIComponent(values[key]);
-    });
-  }
+  window.hydrateBattleBrosReadModel=hydrateBattleBrosReadModel;
+  window.normalizeBattleBrosPublicDocuments=normalizeBattleBrosPublicDocuments;
 
   async function loadBattleBroHistory(tokenId) {
-    if (!battleBrosPublicationContext) await hydrateBattleBrosReadModel();
-    const context = battleBrosPublicationContext;
-    if (!context) throw new Error('The public BattleBros feed is not configured.');
-    const id = requireBattleBrosUint(String(tokenId), 'BattleBro token ID');
-    const broUrl = new URL('./battle-bros/' + encodeURIComponent(id.toString()) + '.json', context.gameUrl);
-    const bro = await fetchBattleBrosPublicJson(broUrl.href, 'BattleBro #' + id.toString());
-    const model = normalizeBattleBrosPublicDocuments(context.manifest, context.game, bro, id);
-    const roundsTemplate = context.manifest.paths && context.manifest.paths.rounds;
-    const rounds = new Map();
-    if (roundsTemplate) {
-      await Promise.all(model.roundHistory.map(async entry => {
-        try {
-          const path = resolveBattleBrosPublicationPath(roundsTemplate, context.manifest, { roundId: entry.roundId });
-          let url = new URL(path, context.manifestUrl);
-          let document;
-          try {
-            document = await fetchBattleBrosPublicJson(url.href, 'Round ' + entry.roundId.toString());
-          } catch (primaryError) {
-            // Manifests published before the path-depth fix resolved
-            // ../../snapshots beneath /manifests/. Retry the actual sibling
-            // snapshots root so existing immutable bundles remain readable.
-            if (!url.pathname.includes('/manifests/snapshots/')) throw primaryError;
-            url = new URL(url.href);
-            url.pathname = url.pathname.replace('/manifests/snapshots/', '/snapshots/');
-            document = await fetchBattleBrosPublicJson(url.href, 'Round ' + entry.roundId.toString());
-          }
-          rounds.set(entry.roundId.toString(), document);
-        } catch (error) {
-          console.warn('[BattleBros round history]', error);
-        }
-      }));
-    }
-    return { model, rounds };
+    const id=requireBattleBrosUint(String(tokenId),'Token ID');
+    const {manifest,game}=await fetchTerritoryPublication();
+    const bro=game.battleBros.find(b=>BigInt(b.tokenId)===id);
+    if(!bro)throw new Error('BattleBro #'+id+' was not found in this deployment.');
+    return {model:normalizeBattleBrosPublicDocuments(manifest,game,bro,id),game};
   }
 
-  function summarizeBattleHistory(model, rounds) {
-    const strategies = { ATTACK: { count: 0n, power: 0n }, DEFEND: { count: 0n, power: 0n }, COUNTER: { count: 0n, power: 0n } };
-    let wins = 0n;
-    const battles = model.roundHistory.filter(entry => entry.battleId !== null).map(entry => {
-      if (entry.outcome === 'WIN') wins += 1n;
-      const round = rounds.get(entry.roundId.toString());
-      const battle = round && Array.isArray(round.battles) && round.battles.find(item => String(item.battleId).toLowerCase() === entry.battleId);
-      const decisions = battle && Array.isArray(battle.decisions) ? battle.decisions : [];
-      const own = decisions.find(item => String(item.tokenId) === model.identity.tokenId.toString());
-      const opponent = decisions.find(item => String(item.tokenId) !== model.identity.tokenId.toString());
-      let strategy = own && own.combatType;
-      let power = own && own.power !== null ? requireBattleBrosUint(own.power, 'decision.power') : null;
-      if (!strategy) {
-        const combatChange = entry.reserveChanges.find(change => change.reason === 'COMBAT' && change.combatType);
-        strategy = combatChange && combatChange.combatType;
-        power = combatChange ? combatChange.amount : power;
-      }
-      if (strategy && strategies[strategy] && power !== null) {
-        strategies[strategy].count += 1n;
-        strategies[strategy].power += power;
-      }
-      return { entry, battle, own, opponent, strategy: strategy || null, power };
-    }).reverse();
-    const totalPower = Object.values(strategies).reduce((sum, item) => sum + item.power, 0n);
-    return { battles, strategies, wins, totalPower };
+  function summarizeBattleHistory(model, game) {
+    const id=model.identity.tokenId.toString();
+    const battles=game.challenges.filter(c=>c.attacker===id||c.defender===id)
+      .map(c=>({...c,role:c.attacker===id?'Attack':'Defense',opponent:c.attacker===id?c.defender:c.attacker}))
+      .sort((a,b)=>BigInt(a.challengeId)>BigInt(b.challengeId)?-1:1);
+    const resolved=battles.filter(c=>c.status==='RESOLVED');
+    const wins=resolved.filter(c=>c.winner===id).length;
+    return {battles,resolved:resolved.length,wins,losses:resolved.filter(c=>c.loser===id).length,
+      attacks:battles.filter(c=>c.role==='Attack').length,defenses:battles.filter(c=>c.role==='Defense').length,
+      pending:battles.filter(c=>c.status==='PENDING').length,expired:battles.filter(c=>c.status==='EXPIRED').length};
   }
 
   function historyMetric(label, value) {
@@ -6127,88 +5917,80 @@
     return (hundredths / 100n).toString() + (fraction ? '.' + fraction : '');
   }
 
-  function renderBattleHistory(model, rounds, opponentMode = false) {
-    const content = document.getElementById('battle-history-content');
-    content.replaceChildren();
-    const summary = summarizeBattleHistory(model, rounds);
-    document.getElementById('battle-history-title').textContent = opponentMode ? 'Opponent intel · #' + model.identity.tokenId : 'BattleBro #' + model.identity.tokenId + ' history';
-    document.getElementById('battle-history-subtitle').textContent = summary.battles.length + ' recorded battle' + (summary.battles.length === 1 ? '' : 's') + ' in the confirmed public ledger.';
-    const metrics = document.createElement('div');
-    metrics.className = 'battle-history-summary';
-    const winRate = summary.battles.length ? ((Number(summary.wins) / summary.battles.length) * 100).toFixed(0) + '%' : '—';
-    const allocationCount = Object.values(summary.strategies).reduce((sum, item) => sum + item.count, 0n);
-    const average = formatBattleHistoryAverage(summary.totalPower, allocationCount);
-    metrics.append(historyMetric('Battles', String(summary.battles.length)), historyMetric('Wins', summary.wins.toString()), historyMetric('Win rate', winRate), historyMetric('Avg power', average));
-    content.append(metrics);
-    const strategyRow = document.createElement('div');
-    strategyRow.className = 'battle-history-strategies';
-    for (const type of ['ATTACK', 'DEFEND', 'COUNTER']) {
-      const item = summary.strategies[type];
-      const card = document.createElement('div');
-      card.className = 'battle-history-strategy';
-      const title = document.createElement('strong');
-      const detail = document.createElement('span');
-      title.textContent = type + ' · ' + item.count.toString() + '×';
-      detail.textContent = 'Total ' + item.power.toString() + ' · Avg ' + formatBattleHistoryAverage(item.power, item.count);
-      card.append(title, detail);
-      strategyRow.append(card);
+  function renderBattleHistory(model, game) {
+    const content=document.getElementById('battle-history-content');content.replaceChildren();
+    const summary=summarizeBattleHistory(model,game),id=model.identity.tokenId.toString();
+    document.getElementById('battle-history-title').textContent=(model.identity.name||'BattleBro')+' #'+id;
+    document.getElementById('battle-history-subtitle').textContent='Confirmed block '+model.snapshot.blockNumber+' · History in this territory deployment';
+    const stats=document.createElement('div');stats.className='battle-history-summary';
+    const weights=v=>['attack','defend','counter'].map(k=>k+': '+formatBattleBrosWeight(v[k])).join(' / ');
+    const rows=[['Owner',model.identity.owner||'No owner'],['Status',model.identity.active?(model.identity.hatched?'Hatched':'Unhatched'):'Inactive / burned'],
+      ['Level / XP',model.progression.level+' / '+model.progression.xp],['Type',model.identity.type??'—'],
+      ['Care',model.need.active?'Needs care':'Content'],['Location',model.territory??'Unoccupied'],['Pending challenge',model.pendingChallengeId??'None'],
+      ['Capacity',model.progression.capacity],['Projected reserves (A / D / C)',Object.values(model.progression.reserves).join(' / ')],
+      ['Training weights',weights(model.training.weightsBps)],['Defense weights',weights(model.defense.weightsBps)],
+      ['Last training',new Date(Number(model.training.lastTrainingAt)*1000).toLocaleString()],
+      ['Protected principal',formatBattleBrosUnits(model.capital.protectedPrincipal)+' stETH'],
+      ['Free / reserved shares',model.capital.freeShares+' / '+model.capital.reservedShares],
+      ['Total challenges',summary.battles.length],['Attacks initiated',summary.attacks],['Defenses',summary.defenses],
+      ['Resolved battles',summary.resolved],['Wins / losses',summary.wins+' / '+summary.losses],['Pending / expired',summary.pending+' / '+summary.expired]];
+    for(const [label,value] of rows)stats.append(historyMetric(label,String(value)));content.append(stats);
+    const filter=document.createElement('select');filter.setAttribute('aria-label','Filter battle history');
+    for(const [value,label] of [['all','All battles'],['Attack','Attacks initiated'],['Defense','Defenses']]) {
+      const option=document.createElement('option');option.value=value;option.textContent=label;filter.append(option);
     }
-    content.append(strategyRow);
-    const list = document.createElement('div');
-    list.className = 'battle-history-list';
-    if (!summary.battles.length) {
-      const empty = document.createElement('div');
-      empty.className = 'battle-history-empty';
-      empty.textContent = 'No completed battles have been published for this BattleBro yet.';
-      list.append(empty);
-    }
-    for (const item of summary.battles) {
-      const card = document.createElement('article');
-      card.className = 'battle-history-card';
-      const opponentId = item.opponent ? String(item.opponent.tokenId) : (item.battle ? String(item.battle.tokenA) === model.identity.tokenId.toString() ? String(item.battle.tokenB) : String(item.battle.tokenA) : '—');
-      const ownCommit = item.own ? (item.own.committed ? 'Committed' : 'Missed') + ' / ' + (item.own.revealed ? 'Revealed' : 'Unrevealed') : (item.entry.registered ? 'Commit details unavailable' : 'Not registered');
-      const opponentDecision = item.opponent && item.opponent.combatType ? item.opponent.combatType + ' · ' + item.opponent.power + ' power' : 'Hidden or unavailable';
-      card.innerHTML = '<div class="battle-history-card-head"><strong>Round ' + escapeBattleHistoryHtml(item.entry.roundId) + ' vs #' + escapeBattleHistoryHtml(opponentId) + '</strong><span class="battle-history-result">' + escapeBattleHistoryHtml(item.entry.outcome || 'PENDING') + '</span></div>'
-        + '<div class="battle-history-detail-grid"><span>Your strategy <strong>' + escapeBattleHistoryHtml(item.strategy ? item.strategy + ' · ' + item.power + ' power' : 'Unavailable') + '</strong></span><span>Commitment <strong>' + escapeBattleHistoryHtml(ownCommit) + '</strong></span><span>Opponent strategy <strong>' + escapeBattleHistoryHtml(opponentDecision) + '</strong></span><span>Resolution <strong>' + escapeBattleHistoryHtml(item.battle && item.battle.resolutionKind || 'Unavailable') + '</strong></span></div>';
-      list.append(card);
-    }
-    content.append(list);
+    const list=document.createElement('div');list.className='battle-history-list';
+    const action=value=>value==null?'Unavailable':(['ATTACK','DEFEND','COUNTER'][Number(value)]||'Unavailable');
+    const draw=()=>{
+      list.replaceChildren();
+      const battles=summary.battles.filter(c=>filter.value==='all'||c.role===filter.value);
+      if(!battles.length){const empty=document.createElement('p');empty.textContent='No matching challenges recorded.';list.append(empty);}
+      for(const c of battles) {
+        const card=document.createElement('article');card.className='battle-history-card';
+        const title=document.createElement('strong');
+        const outcome=c.status==='RESOLVED'?(c.winner===id?'Won':c.loser===id?'Lost':'Resolved'):c.status;
+        title.textContent=c.role+' · Challenge #'+c.challengeId+' · '+outcome;
+        const opponent=document.createElement('button');opponent.className='btn';opponent.textContent='View BattleBro #'+c.opponent;
+        opponent.addEventListener('click',()=>showBattleHistory(c.opponent));
+        const detail=document.createElement('p');
+        detail.textContent='Location '+c.location+' · Attacker action '+action(c.action)+' · Committed power '+c.power
+          +' · Defender action '+action(c.defenderAction)
+          +(c.weights?' · Defense weights '+c.weights.map(v=>formatBattleBrosWeight(BigInt(v))).join(' / '):'')
+          +(c.acceptedAt?' · Started '+new Date(Number(c.acceptedAt)*1000).toLocaleString():'')
+          +(c.finishedAt?' · Finished '+new Date(Number(c.finishedAt)*1000).toLocaleString():'');
+        card.append(title,opponent,detail);list.append(card);
+      }
+    };
+    filter.value='all';filter.addEventListener('change',draw);content.append(filter,list);draw();
   }
 
-  async function showBattleHistory(tokenId, opponentMode = false) {
-    const modal = document.getElementById('battle-history-modal');
-    const error = document.getElementById('battle-history-error');
-    const content = document.getElementById('battle-history-content');
-    modal.hidden = false;
-    error.hidden = true;
-    document.getElementById('battle-history-token-id').value = String(tokenId || '');
-    content.innerHTML = '<div class="battle-history-empty">Loading confirmed battle history…</div>';
+  let battleHistoryRequest=0;
+  async function showBattleHistory(tokenId) {
+    const request=++battleHistoryRequest;
+    const modal=document.getElementById('battle-history-modal'),error=document.getElementById('battle-history-error'),content=document.getElementById('battle-history-content');
+    modal.hidden=false;error.hidden=true;content.replaceChildren();
+    document.getElementById('battle-history-title').textContent='Look up BattleBro';
+    document.getElementById('battle-history-subtitle').textContent='Enter a token number to view its stats, attacks and defenses.';
+    document.getElementById('battle-history-token-id').value=tokenId==null?'':String(tokenId);
+    if(tokenId==null || tokenId===''){document.getElementById('battle-history-token-id').focus();return;}
+    content.textContent='Loading confirmed territory history…';
     try {
-      const result = await loadBattleBroHistory(tokenId);
-      renderBattleHistory(result.model, result.rounds, opponentMode);
-    } catch (loadError) {
-      content.replaceChildren();
-      error.textContent = loadError.message || String(loadError);
-      error.hidden = false;
+      const result=await loadBattleBroHistory(tokenId);
+      if(request!==battleHistoryRequest)return;
+      renderBattleHistory(result.model,result.game);
+    } catch(loadError) {
+      if(request!==battleHistoryRequest)return;
+      content.replaceChildren();error.textContent=loadError.message||String(loadError);error.hidden=false;
     }
   }
 
-  document.getElementById('battlebro-history-action').addEventListener('click', () => showBattleHistory(activeBattleBroReadModel ? activeBattleBroReadModel.identity.tokenId : battleBroFrontendState.battleBro.id));
-  document.getElementById('battlebro-opponent-action').addEventListener('click', () => {
-    const opponentId = battleBroFrontendState.currentRound.opponentBattleBroId;
-    if (opponentId) return showBattleHistory(opponentId, true);
-    const modal = document.getElementById('battle-history-modal');
-    modal.hidden = false;
-    document.getElementById('battle-history-title').textContent = 'Opponent intel';
-    document.getElementById('battle-history-subtitle').textContent = 'Upcoming matchup';
-    document.getElementById('battle-history-error').hidden = true;
-    document.getElementById('battle-history-content').innerHTML = '<div class="battle-history-empty">No upcoming opponent has been assigned or published for this BattleBro yet.</div>';
-  });
+  document.getElementById('battlebro-history-action').addEventListener('click',()=>showBattleHistory(activeBattleBroReadModel?.identity.tokenId));
+  document.getElementById('battlebro-opponent-action').addEventListener('click',()=>showBattleHistory(null));
   document.getElementById('battle-history-search').addEventListener('submit', event => {
     event.preventDefault();
     showBattleHistory(document.getElementById('battle-history-token-id').value);
   });
-  document.getElementById('battle-history-mine').addEventListener('click', () => showBattleHistory(activeBattleBroReadModel ? activeBattleBroReadModel.identity.tokenId : battleBroFrontendState.battleBro.id));
+  document.getElementById('battle-history-mine').addEventListener('click', () => showBattleHistory(activeBattleBroReadModel?.identity.tokenId));
   document.getElementById('battle-history-close').addEventListener('click', () => { document.getElementById('battle-history-modal').hidden = true; });
   document.getElementById('battle-history-modal').addEventListener('click', event => { if (event.target.id === 'battle-history-modal') event.currentTarget.hidden = true; });
   const resources = {
@@ -7413,6 +7195,30 @@
     worldGroup.add(root);trainingAppearance.display=root;
     tickLooseRockAttachments(root,0,0);
   }
+  function updateTrainingAppearanceVisuals(actor,appearance) {
+    const sync=(live,fresh)=>{
+      if(fresh.material)live.material=fresh.material;
+      if(fresh.geometry)live.geometry=fresh.geometry;
+      if(fresh.userData.expressionMaterials)live.userData.expressionMaterials=fresh.userData.expressionMaterials;
+      const available=[...fresh.children];
+      for(const child of [...live.children]) {
+        const index=available.findIndex(candidate=>candidate.name===child.name);
+        if(index>=0){const [match]=available.splice(index,1);sync(child,match);}
+        else {live.remove(child);disposeGroup(child);}
+      }
+      for(const child of available)live.add(child);
+    };
+    sync(actor,appearance);
+    for(const key of ['visualVariant','colors','telekineticColor','variantDecorated']) {
+      if(key in appearance.userData)actor.userData[key]=appearance.userData[key];
+      else delete actor.userData[key];
+    }
+    // Detached orbit stones also belong to the same animated character.
+    const freshDebris=appearance.userData.looseRocks?.debris||[];
+    for(const [i,entry] of (actor.userData.looseRocks?.debris||[]).entries()) {
+      if(freshDebris[i]?.node)sync(entry.node,freshDebris[i].node);
+    }
+  }
   function changeTrainingAppearance() {
     if(!trainingAppearance.active)return;
     const controls=trainingAppearance.controls,old=baseBattleBroPrototype;
@@ -7421,19 +7227,9 @@
       const character=trainingAppearanceCharacter(old);
       const root=createBattleBroCharacter({character,form:old.userData.form,variant:controls.skin.value,colors});
       if(!root)return;
-      root.position.copy(old.position);root.rotation.copy(old.rotation);
-      for(const movers of [lavaMonsterMovers,specterMovers,minotaurMovers])
-        for(const mover of movers)if(mover.root===old)movers.delete(mover);
-      if(old.userData.terrainConsume)finishTerrainConsume(old.userData.terrainConsume);
-      cancelTelekineticRockThrow(old);
-      const field=old.userData.looseRocks?.orbitField;
-      field?.parent?.remove(field);if(field)disposeGroup(field);
-      old.parent?.remove(old);disposeGroup(old);
-      baseBattleBroPrototype=root;worldGroup.add(root);
-      const x=worldToCellCoord(root.position.x),z=worldToCellCoord(root.position.z);
-      if(character==='specter')registerSpecterMover(root,x,z,root.position.y);
-      else if(character==='longneck')registerMinotaurMover(root,x,z);
-      else registerLavaMonsterMover(root,x,z);
+      // Transfer visual assets onto the live hierarchy. Its joints, loose-rock
+      // controllers and mover remain intact, including any animation in progress.
+      updateTrainingAppearanceVisuals(old,root);
     }else applyBattleBroColors(old,colors);
     if(battleBroCharacterPreviewPanel) {
       battleBroCharacterPreviewPanel.variant.value=controls.skin.value;
@@ -7595,7 +7391,9 @@
       }
       if(name==='wheel') {
         const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?window.innerHeight:1);
-        state.zoom=Math.max(.35,Math.min(1.6,state.zoom*Math.exp(Math.max(-1,Math.min(1,delta*.001)))));
+        // Keep the camera inside the front wall: at max zoom its local Z is
+        // 2.0725, leaving clearance before the doorway at Z 2.3.
+        state.zoom=Math.max(.35,Math.min(1.05,state.zoom*Math.exp(Math.max(-1,Math.min(1,delta*.001)))));
         markCameraMoving();
       }
     },{capture:true,passive:false});
@@ -13550,6 +13348,11 @@
         if (u >= 1) {
           rockThrowState(a,'IMPACT'); a.impactCount++;
           a.target.onImpact?.(a.position.clone());
+          if(a.target.shatterOnImpact) {
+            a.target.onShatter?.(a.position.clone(),node);
+            a.shattered=true;node.visible=false;
+            rockThrowState(a,'SETTLE');
+          }
           // Keep the actual incoming momentum through the contact point.
           a.impactVelocity = a.position.clone().sub(a.previous).divideScalar(Math.max(dt, 1e-6));
         }
@@ -13589,11 +13392,14 @@
       const attribute=trail.line.geometry.attributes.position;
       trail.points.forEach((p,i)=>{trail.scratch.copy(p);trail.line.parent.worldToLocal(trail.scratch);attribute.setXYZ(i,trail.scratch.x,trail.scratch.y,trail.scratch.z);});
       attribute.needsUpdate=true;
-      trail.line.material.opacity=a.weight * (a.state==='NOTICE' ? 0 : .45);
+      trail.line.material.opacity=a.weight * (a.shattered || a.state==='NOTICE' ? 0 : .45);
     }
     if (a.state === 'SETTLE' && a.elapsed >= a.settleDuration) {
       if(trail) trail.line.material.opacity=0;
       rock.action = null; a.root.userData.rockThrow = null;
+      // The impact destroys the projectile visually; replenish its orbital
+      // rock once the throw settles, without a return-flight animation.
+      if(a.shattered)node.visible=true;
       a.root.userData.rockThrowCooldown = 7 + (a.root.userData.form || 1);
       const cycle = a.root.userData.expressionCycle;
       if (cycle) cycle.nextAt += a.age;
@@ -31167,14 +30973,20 @@ function neighborStarVector(edge, index) {
           const {minX,maxX,minZ,maxZ}=site.bounds;
           if(x<minX||x>maxX||z<minZ||z>maxZ)return null;
           const r=((x+.5-site.x)/(site.width/2))**2+((z+.5-site.z)/(site.length/2))**2;
-          cells.set(id,r>1.05?null:{terrain:'stone',terrainFloors:2+Math.round((1-Math.min(1,r))*3),kind:null,islandId});
+          cells.set(id,r>1.05?null:{terrain:'stone',terrainFloors:8+Math.round((1-Math.min(1,r))*3),kind:null,islandId});
         }
       }
       return cells.get(id);
     }
     function bodyForCell(x,z,islandId) {const cell=getCell(x,z,islandId);return cell?islands.get(cell.islandId):null;}
+    // Sky rock includes six additional base layers; its last layer is 0.2 units thick.
+    // Offset those layers so generated islands retain their original surface height.
+    function columnTop(cell) {
+      return BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(terrainLevelForCell(cell))
+        -(cell.islandId?.endsWith(':sky')?1.2:0);
+    }
     function surfaceY(hit) {
-      return (hit.body?.site.elevation||0)+BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(terrainLevelForCell(hit.cell));
+      return (hit.body?.site.elevation||0)+columnTop(hit.cell);
     }
     function skyHits(wx,wz) {
       const hits=[];
@@ -31227,7 +31039,7 @@ function neighborStarVector(edge, index) {
         const cell=getCell(x,z,islandId);if(!cell)return;
         const p=cellToWorld(x,z,islandId);
         out.push({x,z,islandId,cell,wx:p.x,wz:p.z,
-          y:(p.y||0)+BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(terrainLevelForCell(cell)),minY:(p.y||0)-1.4});
+          y:(p.y||0)+columnTop(cell),minY:(p.y||0)-1.4});
       };
       const gx=Math.floor(wx),gz=Math.floor(wz),r=radius+Math.ceil(MAX_DRIFT);
       for(let x=gx-r;x<=gx+r;x++)for(let z=gz-r;z<=gz+r;z++)add(x,z);
@@ -31236,7 +31048,7 @@ function neighborStarVector(edge, index) {
       return out;
     }
     function writeInstance(body,x,z,index) {
-      const cell=getCell(x,z,body.site.sky?body.site.id:undefined),height=1.4+BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(terrainLevelForCell(cell));
+      const cell=getCell(x,z,body.site.sky?body.site.id:undefined),height=1.4+columnTop(cell);
       dummy.position.set(x+.5-body.site.x,-1.4+height/2,z+.5-body.site.z);
       dummy.scale.set(TILE,height,TILE);dummy.updateMatrix();body.mesh.setMatrixAt(index,dummy.matrix);
     }
@@ -31267,6 +31079,8 @@ function neighborStarVector(edge, index) {
       for(const {x,z} of entries)for(const [dx,dz,a,b] of [
         [-1,0,[x,z+1],[x,z]],[1,0,[x+1,z],[x+1,z+1]],
         [0,-1,[x,z],[x+1,z]],[0,1,[x+1,z+1],[x,z+1]]]) {
+        // Sky columns already have flat box bottoms; only lower islands need a hull.
+        if(site.sky)continue;
         if(indices.has(key(x+dx,z+dz)))continue;
         const p={x:a[0],y:-1.4,z:a[1]},q={x:b[0],y:-1.4,z:b[1]};
         const lower=v=>({x:site.x+(v.x-site.x)*.65,y:-site.depth*.65,z:site.z+(v.z-site.z)*.65});
@@ -31313,6 +31127,17 @@ function neighborStarVector(edge, index) {
     function setCell(x,z,patch,islandId) {
       if(!Number.isInteger(x)||!Number.isInteger(z))return false;
       const cell=getCell(x,z,islandId);if(!cell)return false;
+      if(islandId?.endsWith(':sky') && patch.terrainFloors===0) {
+        edits.set(islandId+'|'+key(x,z),null);
+        const body=islands.get(cell.islandId);
+        if(body) {
+          sleeping.set(cell.islandId,{ox:body.ox,oz:body.oz,vx:body.vx,vz:body.vz});
+          group.remove(body.root);body.hull.geometry.dispose();body.mesh.dispose();
+          islands.delete(cell.islandId);skyBodies.delete(body);
+          buildIsland(body.site);
+        }
+        return true;
+      }
       edits.set(islandId?.endsWith(':sky')?islandId+'|'+key(x,z):key(x,z),{...cell,...patch,islandId:cell.islandId});
       const body=islands.get(cell.islandId),index=body?.indices.get(key(x,z));
       if(index!==undefined){writeInstance(body,x,z,index);body.mesh.instanceMatrix.needsUpdate=true;}
@@ -31428,7 +31253,7 @@ function neighborStarVector(edge, index) {
   };
   function activeFPTerrain() { return explorationActive ? explorationTerrain : homeFPTerrain; }
 
-  const fpJourney = {home:null, previous:null, warp:0, transferred:false, overlay:null, escapeAt:-Infinity};
+  const fpJourney = {home:null, previous:null, warp:0, transferred:false, overlay:null};
   function switchFPWorld(other) {
     leaveExcavation();
     stopExplorationCompanion();
@@ -31452,14 +31277,8 @@ function neighborStarVector(edge, index) {
     if(fpJourney.overlay)fpJourney.overlay.hidden=true;
   }
   function escapeFP() {
-    const now=performance.now();
-    if(now-fpJourney.escapeAt<300)return;
-    fpJourney.escapeAt=now;
-    const wasWarping=fpJourney.warp>0;
-    cancelFPWarp();
-    fpJourney.previous=null;
-    if(explorationActive) switchFPWorld(false);
-    else if(!wasWarping)setCameraMode('perspective');
+    if(!fp.active)return;
+    setCameraMode('perspective');
   }
   function tickFPJourney(dt) {
     if(!fp.active)return false;
@@ -31489,12 +31308,15 @@ function neighborStarVector(edge, index) {
     const across=dx*cos-dz*sin,depth=dx*sin+dz*cos;
     const previous=fpJourney.previous;
     fpJourney.previous={across,depth};
-    if(previous && previous.depth*depth<=0 && Math.abs(previous.depth-depth)>.00001) {
-      const fraction=previous.depth/(previous.depth-depth);
+    // A shallow entry volume catches near misses and fast steps from either
+    // side, instead of requiring the player to cross one exact plane.
+    if(previous && Math.min(previous.depth,depth)<=.55 && Math.max(previous.depth,depth)>=-.55
+      && Math.abs(previous.depth-depth)>.00001) {
+      const fraction=Math.max(0,Math.min(1,previous.depth/(previous.depth-depth)));
       const cross=previous.across+(across-previous.across)*fraction;
       const radius=gate.diameter/2;
       const centerY=BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(stargateTerrainLevel(gate.x,gate.z))+radius+.12;
-      if(Math.hypot(cross,fp.pos.y-centerY)<radius-.44) {
+      if(Math.hypot(cross,fp.pos.y-centerY)<radius+.2) {
         // Return in front of the ring, clear of its crossing plane.
         fp.pos.x=p.x+sin*1.4;fp.pos.z=p.z+cos*1.4;
         if(!fpJourney.overlay) {
@@ -31528,7 +31350,7 @@ function neighborStarVector(edge, index) {
     return Number.isInteger(x) && Number.isInteger(z) && activeFPTerrain().canExcavate(x,z,islandId);
   }
   function validExcavationCell(x,z,islandId) {
-    return excavationCellIsClear(x,z,islandId) && terrainLevelForCell(activeFPTerrain().getCell(x,z,islandId))>1;
+    return excavationCellIsClear(x,z,islandId) && (terrainLevelForCell(activeFPTerrain().getCell(x,z,islandId))>1 || (explorationActive && islandId?.endsWith(':sky')));
   }
   function makeExcavationAxe() {
     // Grip pivot at the origin; the head sits above the metal handle at rest.
@@ -31625,7 +31447,7 @@ function neighborStarVector(edge, index) {
   fpToolsToggle.addEventListener('click',()=>toggleFPToolMenu(fpToolMenu.hidden));
   function excavationWithinReach(target) {
     return fp.grounded && Math.hypot(fp.pos.x-target.wx,fp.pos.z-target.wz)<=EXCAVATION_TUNING.reach
-      && Math.abs(fp.pos.y-FP_EYE_H-target.y)<=.85;
+      && Math.abs(fp.pos.y-fpEyeHeight()-target.y)<=.85;
   }
   // Bounded ray/column intersections query the active terrain, including base
   // cells as occluders. No full-world mesh scan is needed.
@@ -31665,7 +31487,7 @@ function neighborStarVector(edge, index) {
     excavation.gems[type]++;renderExcavationInventory();
     excavation.gem.material.color.set(EXCAVATION_GEMS[type].color);
     excavation.gem.material.emissive.copy(excavation.gem.material.color);
-    excavation.gem.position.set(target.wx,activeFPTerrain().groundYAt(target.wx,target.wz,0,target.y)+.12,target.wz);
+    excavation.gem.position.set(target.wx,target.y+.12,target.wz);
     excavation.gemAge=0;
     return type;
   }
@@ -31686,7 +31508,8 @@ function neighborStarVector(edge, index) {
       || !aimed || aimed.x!==target.x || aimed.z!==target.z || aimed.islandId!==target.islandId)return false;
     // Same layer operation as the trash tool, without its unrelated resource refund.
     const result=terrain.setCell(target.x,target.z,{...cell,terrainFloors:target.level-1,userEdited:true},target.islandId);
-    if(result===false || terrainLevelForCell(terrain.getCell(target.x,target.z,target.islandId))!==target.level-1)return false;
+    const remaining=terrain.getCell(target.x,target.z,target.islandId);
+    if(result===false || (target.level===1 ? remaining!==null : terrainLevelForCell(remaining)!==target.level-1))return false;
     playSfx('knock',.7);
     excavation.fragmentAge=0; excavation.fragmentOrigin={wx:target.wx,wz:target.wz,y:target.y};
     excavation.fragments.material.color.copy(terrainVoxelMaterials(cell.terrain).low.color);
@@ -31742,7 +31565,7 @@ function neighborStarVector(edge, index) {
       e.preventDefault();e.stopImmediatePropagation();if(e.repeat)return;
       if(toggle)toggleFPToolMenu();
       else if(tool){equipExcavationTool(tool.id);if(!fpToolMenu.hidden)toggleFPToolMenu(false);}
-      else toggleFPToolMenu(false);
+      else escapeFP();
       return;
     }
     if(!fpToolMenu.hidden){
@@ -31806,7 +31629,9 @@ function neighborStarVector(edge, index) {
   // the BattleBros grid:
   //   - ground height comes from the active first-person terrain provider.
   //   - props remain non-colliding, as in the existing first-person mode.
-  const FP_EYE_H = 0.6;          // lower eye level for a person-scale view above the cell top
+  const FP_EYE_H = 0.6;          // other-world eye height above terrain
+  const FP_HOME_EYE_H = 0.3;
+  function fpEyeHeight() { return explorationActive ? FP_EYE_H : FP_HOME_EYE_H; }
   const FP_SPEED = 1.4;          // units / sec
   const FP_SPRINT_MULT = 2.2;
   const FP_MAX_HEIGHT_DIFFERENCE = 1.7; // world units; maximum uphill step while walking; drops are unrestricted
@@ -31828,7 +31653,7 @@ function neighborStarVector(edge, index) {
   const FP_TERRAIN_LIFT_LERP = 8;
   const fp = {
     active: false,
-    pos: new THREE.Vector3(0, BUILDABLE_LAND_Y_OFFSET + TOP_H + FP_EYE_H, 0),
+    pos: new THREE.Vector3(0, BUILDABLE_LAND_Y_OFFSET + TOP_H + FP_HOME_EYE_H, 0),
     yaw: 0,
     pitch: 0,
     vy: 0,
@@ -32113,6 +31938,9 @@ function neighborStarVector(edge, index) {
   }
   function startExplorationCompanion() {
     stopExplorationCompanion();
+    // Home already contains the player's BattleBro. Only the other world
+    // needs a separate companion representation.
+    if(!fp.active || !explorationActive)return;
     const source=baseBattleBroPrototype;
     if(!source)return;
     const character=source.userData.kind==='battlebro-longneck-prototype'?'longneck'
@@ -32159,7 +31987,7 @@ function neighborStarVector(edge, index) {
   }
   function tickExplorationCompanion(t,dt) {
     const pet=explorationCompanion;
-    if(!fp.active)return;
+    if(!fp.active || !explorationActive){if(pet.root)stopExplorationCompanion();return;}
     if(baseBattleBroPrototype!==pet.source)startExplorationCompanion();
     if(!pet.root)return;
     const root=pet.root,parts=pet.parts,terrain=activeFPTerrain();
@@ -32327,7 +32155,7 @@ function neighborStarVector(edge, index) {
   }
 
   function fpGroundYAt(worldX, worldZ) {
-    return activeFPTerrain().groundYAt(worldX,worldZ,FP_EYE_H,fp.pos.y-FP_EYE_H+(fp.grounded?FP_MAX_HEIGHT_DIFFERENCE:0));
+    return activeFPTerrain().groundYAt(worldX,worldZ,fpEyeHeight(),fp.pos.y-fpEyeHeight()+(fp.grounded?FP_MAX_HEIGHT_DIFFERENCE:0));
   }
 
   function moveFPAcrossTerrain(dx, dz) {
@@ -32335,7 +32163,7 @@ function neighborStarVector(edge, index) {
     const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dz)) / 0.2));
     const stepX = dx / steps, stepZ = dz / steps;
     const canStep = (x, z) => {
-      if(activeFPTerrain().blocksBodyAt?.(x,z,fp.pos.y-FP_EYE_H,fp.pos.y+.12,fp.grounded?FP_MAX_HEIGHT_DIFFERENCE:0))return false;
+      if(activeFPTerrain().blocksBodyAt?.(x,z,fp.pos.y-fpEyeHeight(),fp.pos.y+.12,fp.grounded?FP_MAX_HEIGHT_DIFFERENCE:0))return false;
       const currentGround = fpGroundYAt(fp.pos.x, fp.pos.z);
       const nextGround = fpGroundYAt(x, z);
       if (nextGround <= currentGround + 1e-9) return true;
@@ -32449,7 +32277,7 @@ function neighborStarVector(edge, index) {
   });
   window.addEventListener('keydown', e => {
     if (!fp.active) return;
-    if (e.key === 'Escape') { if(e.repeat)return; if(!fpToolMenu.hidden)toggleFPToolMenu(false);else escapeFP(); return; }
+    if (e.key === 'Escape') { if(e.repeat)return; escapeFP(); return; }
     if(e.code==='KeyH' && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if(!e.repeat && explorationActive) {
         e.preventDefault();
@@ -32475,7 +32303,7 @@ function neighborStarVector(edge, index) {
 
   function tickFP(dt) {
     if (!fp.active) return;
-    activeFPTerrain().tick?.(dt,fp,FP_EYE_H,explorationCompanion.root);
+    activeFPTerrain().tick?.(dt,fp,fpEyeHeight(),explorationCompanion.root);
     fp.landingTime = Math.max(0, fp.landingTime - dt);
     const sinY = Math.sin(fp.yaw), cosY = Math.cos(fp.yaw);
     let fx = 0, fz = 0;
@@ -32520,10 +32348,12 @@ function neighborStarVector(edge, index) {
     // Keep this visual offset out of fp.pos so stepping, falling and jumping
     // retain their existing rules.
     let liftTarget = 0;
+    const liftMax=explorationActive?FP_TERRAIN_LIFT_MAX:FP_TERRAIN_LIFT_MAX*.5;
+    const lookahead=explorationActive?FP_TERRAIN_LOOKAHEAD:FP_TERRAIN_LOOKAHEAD*.75;
     if (fp.grounded) {
       const aheadX = len > 0 ? fx / len : -sinY;
       const aheadZ = len > 0 ? fz / len : -cosY;
-      for (let distance = 0.25; distance <= FP_TERRAIN_LOOKAHEAD; distance += 0.25) {
+      for (let distance = 0.25; distance <= lookahead; distance += 0.25) {
         const x = fp.pos.x + aheadX * distance;
         const z = fp.pos.z + aheadZ * distance;
         const aheadGround=fpGroundYAt(x,z);
@@ -32531,8 +32361,8 @@ function neighborStarVector(edge, index) {
         const change = Math.abs(aheadGround - groundY);
         // Ignore a single floor; smoothly saturate over larger terraces.
         const t = Math.max(0, Math.min(1, (change - 0.22) / 0.5));
-        const proximity = 1 - 0.5 * distance / FP_TERRAIN_LOOKAHEAD;
-        liftTarget = Math.max(liftTarget, FP_TERRAIN_LIFT_MAX * t * t * (3 - 2 * t) * proximity);
+        const proximity = 1 - 0.5 * distance / lookahead;
+        liftTarget = Math.max(liftTarget, liftMax * t * t * (3 - 2 * t) * proximity);
       }
     }
     fp.terrainLift += (liftTarget - fp.terrainLift) * (1 - Math.exp(-FP_TERRAIN_LIFT_LERP * dt));
@@ -32606,7 +32436,7 @@ function neighborStarVector(edge, index) {
   }
 
   function flightTerrainMinY(worldX, worldZ) {
-    return fpGroundYAt(worldX, worldZ) - FP_EYE_H + FLIGHT_MIN_TERRAIN_CLEARANCE;
+    return fpGroundYAt(worldX, worldZ) - fpEyeHeight() + FLIGHT_MIN_TERRAIN_CLEARANCE;
   }
 
   function sortedAirCommandCells() {
@@ -35622,7 +35452,7 @@ function neighborStarVector(edge, index) {
   // optimised pass that visits every crop cell, exits the area, refuels
   // off-screen for a few seconds, then returns. Sometimes the return run
   // skips the dusting and trails a banner instead.
-  const FLIGHT_OFFSCREEN_DIST = 46;     // how far past the world edge the plane appears from
+  const FLIGHT_OFFSCREEN_DIST = 146;     // how far past the world edge the plane appears from
   const FLIGHT_DUST_SPEED = 5.45;       // m/s while spraying
   const FLIGHT_CRUISE_SPEED = 12.4;      // m/s while transiting / banner pass
   const FLIGHT_DUST_ALT = 3.5;          // height above the target building base
@@ -36477,7 +36307,9 @@ function neighborStarVector(edge, index) {
     isActive: () => canTurretsEngageActivePlane() && !!cropDusterRoot.parent,
     getPosition: out => cropDusterRoot.getWorldPosition(out),
     getVelocity: out => out.copy(cropDusterState.velocity),
-    onImpact: point => spawnPlaneHitSmoke(point, cropDusterState.velocity),
+    onImpact: point => {ensureAntiAirPools();spawnPlaneHitSmoke(point, cropDusterState.velocity);},
+    shatterOnImpact:true,
+    onShatter: (point,rock) => spawnPlaneRockFragments(point,rock),
   };
   const battleBroPlanePosition = new THREE.Vector3();
   const battleBroPlaneMoverGroups=[lavaMonsterMovers,specterMovers,minotaurMovers];
@@ -36698,6 +36530,28 @@ function neighborStarVector(edge, index) {
     return true;
   }
 
+  // Shared bounded shard pool; updated in the existing impact-effect loop.
+  const planeRockFragments=[];
+  function spawnPlaneRockFragments(point,rock) {
+    ensureAntiAirPools();
+    if(!planeRockFragments.length)for(let i=0;i<24;i++) {
+      const material=Array.isArray(rock.material)?rock.material[0]:rock.material;
+      const mesh=new THREE.Mesh(getBoxGeometry(.09,.07,.08),material);
+      mesh.visible=false;worldGroup.add(mesh);
+      planeRockFragments.push({mesh,velocity:new THREE.Vector3(),age:0,active:false});
+    }
+    let spawned=0;
+    for(const shard of planeRockFragments) {
+      if(shard.active)continue;
+      shard.active=true;shard.age=0;
+      shard.mesh.material=Array.isArray(rock.material)?rock.material[0]:rock.material;
+      shard.mesh.position.copy(point);worldGroup.worldToLocal(shard.mesh.position);
+      shard.mesh.scale.setScalar(.7+Math.random()*.9);shard.mesh.visible=true;
+      shard.velocity.set((Math.random()-.5)*3,.3+Math.random()*1.8,(Math.random()-.5)*3);
+      if(++spawned>=8)break;
+    }
+  }
+
   function spawnPlaneHitSmoke(worldPosition, planeVelocity) {
     if (cropDusterState.hitEffectCooldown > 0) return;
     cropDusterState.hitEffectCooldown = PLANE_HIT_EFFECT_COOLDOWN;
@@ -36756,6 +36610,14 @@ function neighborStarVector(edge, index) {
   }
 
   function updatePlaneHitSmoke(dt) {
+    for(const shard of planeRockFragments) {
+      if(!shard.active)continue;
+      shard.age+=dt;shard.velocity.y-=3*dt;
+      shard.mesh.position.addScaledVector(shard.velocity,dt);
+      shard.mesh.rotation.x+=dt*4;shard.mesh.rotation.z+=dt*3;
+      if(shard.age>.7)shard.mesh.scale.multiplyScalar(Math.exp(-8*dt));
+      if(shard.age>=1.2){shard.active=false;shard.mesh.visible=false;}
+    }
     for (const smoke of antiAirState.smokeEffects) {
       if (!smoke.active) continue;
       smoke.age += dt;

@@ -17,12 +17,10 @@ for (const relativePath of [
   'vendor/three/GLTFLoader.r128.js',
   'vendor/tiny-crowd-layer.js',
   'models/stunt_plane.glb',
-  'schemas/game-state.schema.json',
-  'schemas/battle-bro.schema.json',
-  'assets/mock-public/manifest.json',
-  'assets/mock-public/current/game-state.json',
-  'assets/mock-public/current/battle-bros/12.json',
-  'assets/mock-public/rounds/8.json',
+  'schemas/territory-state.schema.json',
+  'schemas/manifest.schema.json',
+  'assets/territory-abi.json',
+  'territory.js',
 ]) {
   if (!fs.existsSync(path.join(root, relativePath))) {
     throw new Error(`Missing runtime asset: ${relativePath}`);

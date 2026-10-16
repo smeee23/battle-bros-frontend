@@ -144,3 +144,44 @@ for (const form of [4,5,6,7]) {
   api.worldGroup.remove(root);
 }
 console.log('juggernaut: complete stride before throw and hold stance through recall/settle OK');
+
+// Plane hits shatter the projectile and replenish its orbital rock after settling.
+for(const form of [2,4,7]) {
+ api.lavaMonsterMovers.clear();
+ const root=api.createRockBattleBro({variant:'lava',form});api.worldGroup.add(root);
+ const mover=api.registerLavaMonsterMover(root,32,32);mover.pauseRemaining=1000;
+ api.tickLavaMonsterMovers(0,1/60);
+ const controller=root.userData.looseRocks,count=controller.debris.length;
+ let dust=0,shards=0;
+ const target={isActive:()=>true,getPosition:out=>out.set(7,6,9),getVelocity:out=>out.set(0,0,0),
+  shatterOnImpact:true,onImpact:()=>dust++,onShatter:(point,node)=>{shards++;assert(node===root.userData.rockThrow.rock.node);}};
+ const action=api.telekineticRockThrow(root,target);assert(action);
+ const states=new Set();
+ for(let i=0;i<1200&&root.userData.rockThrow;i++){api.tickLavaMonsterMovers(i/60,1/60);states.add(action.state);}
+ assert.equal(dust,1);assert.equal(shards,1);assert(action.shattered);
+ assert(!states.has('RETURNING')&&!states.has('REJOINING')&&!states.has('COASTING'),'Shattered boulders never fly back');
+ assert.equal(root.userData.rockThrow,null,'Throw animation finishes normally');
+ assert.equal(controller.debris.length,count);assert(action.rock.node.parent?.parent===controller.orbitField,'Replacement stays in its orbit plane');
+ assert(action.rock.node.visible,'Replacement appears back in orbit');
+ assert.equal(controller.throwTrail.line.material.opacity,0);
+ assert(controller.debris.every(rock=>rock.node.visible),'Other orbiting rocks remain visible');
+ mover.pauseRemaining=1000;
+ const next=api.telekineticRockThrow(root,target);assert(next,'Replenished rock can be thrown again');
+ for(let i=0;i<1200&&root.userData.rockThrow;i++)api.tickLavaMonsterMovers(30+i/60,1/60);
+ assert.equal(dust,2);assert.equal(shards,2);assert.equal(controller.debris.length,count);
+ assert(controller.debris.every(rock=>rock.node.visible),'Repeated hits keep a full orbit');
+ api.worldGroup.remove(root);
+}
+console.log('Plane boulders: one dust/shard impact, replenished projectile, no recall, normal actor recovery and repeated throws passed');
+
+const fxGroup=new THREE.Group(),material=new THREE.MeshBasicMaterial();
+const fx=vm.createContext({THREE,Math,worldGroup:fxGroup,ensureAntiAirPools(){},getBoxGeometry:(...args)=>new THREE.BoxGeometry(...args),antiAirState:{smokeEffects:[]}});
+vm.runInContext(html.slice(html.indexOf('  const planeRockFragments=[];'),html.indexOf('  function spawnPlaneHitSmoke('))+
+ html.slice(html.indexOf('  function updatePlaneHitSmoke('),html.indexOf('  function updateAntiAirDefense(')),fx);
+for(let i=0;i<6;i++)fx.spawnPlaneRockFragments(new THREE.Vector3(2,3,4),{material});
+assert.equal(fxGroup.children.length,24,'Fragment pool stays bounded across simultaneous hits');
+assert(fxGroup.children.every(mesh=>mesh.visible&&mesh.material===material));
+for(let i=0;i<90;i++)fx.updatePlaneHitSmoke(1/60);
+assert(fxGroup.children.every(mesh=>!mesh.visible),'Fragments expire without another render loop');
+fx.spawnPlaneRockFragments(new THREE.Vector3(),{material});assert.equal(fxGroup.children.length,24,'Later hits reuse fragment meshes');
+console.log('Plane fragments: shared material, bounded pool, lifetime cleanup and reuse passed');

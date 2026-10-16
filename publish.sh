@@ -4,7 +4,9 @@ set -eu
 output_dir="dist"
 mkdir -p "$output_dir"
 node scripts/generate-runtime-config.mjs --output runtime-config.js
+node scripts/export-territory-abi.mjs
 cp index.html "$output_dir/index.html"
+cp territory.html territory.js "$output_dir/"
 cp runtime-config.js "$output_dir/runtime-config.js"
 for asset_dir in vendor models sounds crowd schemas assets; do
   rm -rf "$output_dir/$asset_dir"

@@ -59,11 +59,16 @@ fire('pointerup');assert.equal(captures.size,0,'Release clears pointer capture')
 const originalDistance=camera.position.distanceTo(run('trainingAppearance.look'));
 fire('wheel',{deltaY:-300});run('tickTrainingAppearance(.05,1)');
 assert(camera.position.distanceTo(run('trainingAppearance.look'))<originalDistance,'Scroll up zooms in');
-for(let i=0;i<20;i++)fire('wheel',{deltaY:1000});assert.equal(run('trainingAppearance.zoom'),1.6);
+for(let i=0;i<20;i++)fire('wheel',{deltaY:1000});assert.equal(run('trainingAppearance.zoom'),1.05);
+run('tickTrainingAppearance(.05,1)');
+const zoomedOutLocal=facility.worldToLocal(camera.position.clone());
+assert(zoomedOutLocal.z<2.1,'Maximum zoom stays inside the doorway with clearance');
+assert(zoomedOutLocal.z>1.95,'A little zoom-out remains available');
 for(let i=0;i<20;i++)fire('wheel',{deltaY:-1000});assert.equal(run('trainingAppearance.zoom'),.35);
 run("trainingAppearance.controls.skin.value='ice';changeTrainingAppearance()");
 assert.equal(context.baseBattleBroPrototype.userData.characterFamily,'juggernaut');assert.equal(context.baseBattleBroPrototype.userData.form,4);
 assert.equal(run('trainingAppearance.display.rotation.y'),originalYaw+.5,'Appearance changes preserve preview rotation');
+assert.equal(context.baseBattleBroPrototype,source,'Skin changes preserve the existing world actor');
 assert.equal(context.baseBattleBroPrototype.userData.visualVariant,'ice');assert.deepEqual(context.baseBattleBroPrototype.position,source.position,'Changing skin preserves home location');
 run("trainingAppearance.controls.eye.value='blue';changeTrainingAppearance()");assert.equal(context.baseBattleBroPrototype.userData.colors.eye,'blue');
 run('leaveTrainingAppearance()');assert.equal(shell.visible,true);assert.equal(get('training-appearance-controls').hidden,true);assert.equal(resumed,1);
@@ -72,3 +77,14 @@ for(const mesh of building.children.filter(mesh=>mesh.userData.trainingDoorSide)
  assert(Math.abs(mesh.position.x-mesh.userData.trainingDoorSide*(mesh.geometry.parameters.width===.96?.5:.09))<1e-8,'Door and handle return to closed positions');assert(!run('trainingDoorApproach(fp.pos,trainingFacility)'),'Exit lands outside trigger');
 for(let i=0;i<60;i++)run('tickTrainingAppearance(.05,3)');assert(!run('trainingAppearance.active'),'Standing outside does not re-enter');
 console.log('training appearance: doorway-only home entry, smooth camera, pedestal, fixed type/form, live skin/colors, cleanup and safe exit passed');
+
+// Real companion lifecycle on training exit must not spawn a home-world copy.
+const companionStart=html.indexOf('  // ---------- first-person companion ----------');
+vm.runInContext(html.slice(companionStart,html.indexOf('  function fpGroundYAt(',companionStart)),context);
+run('enterTrainingAppearance()');
+run("trainingAppearance.controls.skin.value='lava';changeTrainingAppearance()");
+run('leaveTrainingAppearance()');
+assert.equal(context.baseBattleBroPrototype,source,'Training exit retains the same BattleBro');
+assert.equal(run('explorationCompanion.root'),null,'Training exit creates no following clone');
+assert.equal(run('trainingAppearance.display'),null,'Training preview is removed on exit');
+assert.equal(worldGroup.children.filter(child=>child.userData.characterFamily==='juggernaut').length,1,'Only the original BattleBro remains at home');

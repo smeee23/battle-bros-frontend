@@ -9,7 +9,6 @@ const expectations = [
   ['BattleBro public transport', /async function hydrateBattleBrosReadModel\(/],
   ['deployment runtime config', /<script src="runtime-config\.js"><\/script>/],
   ['BattleBro bigint normalizer', /function normalizeBattleBrosPublicDocuments\(/],
-  ['mint principal adapter', /originalPrincipalAmount: formatBattleBrosUnits\(model\.mint\.inputAmount\)/],
   ['resource-neutral tool lookup', /function resourceRuleForTool\(tool\) \{\s*if \(BATTLEBROS_MIGRATION_MODE\) return null;/],
   ['resource-neutral catalog mutation', /function applyCatalogCellMutation\(x, z, opts\) \{\s*if \(BATTLEBROS_MIGRATION_MODE\) return setCell\(x, z, opts\);/],
   ['snapshot boot isolation', /if \(!BATTLEBROS_MIGRATION_MODE\) \{[\s\S]*hydratePlayerGameContext/],

@@ -31,10 +31,11 @@ const dom={pointerLockElement:null,exitPointerLock(){this.pointerLockElement=nul
 const renderer={domElement:{addEventListener(){},requestPointerLock(){dom.pointerLockElement=this;}}};
 const thumbnails=[];
 const context=vm.createContext({THREE,Math:math,setTimeout:fn=>fn(),buildToolThumb:(tool,canvas)=>thumbnails.push({tool,canvas}),world,GRID:20,TILE:1,TOP_H:.18,DIRT_H:.5,BUILDABLE_LAND_Y_OFFSET:-.18,
-  explorationActive:false,fp,FP_EYE_H:.3,persCam:camera,scene:new THREE.Scene(),battleBroGroundHeight:height,
+  explorationActive:false,fp,FP_EYE_H:.3,fpEyeHeight:()=>context.FP_EYE_H,persCam:camera,scene:new THREE.Scene(),battleBroGroundHeight:height,
   terrainLevelForCell:c=>c?.terrainFloors||1,terrainConsumeLocks:locks,lavaMonsterMovers:[],activeFPTerrain:()=>terrain,
   canMutateActiveColony:()=>true,battleArenaView:{active:false},trainingFacilityOccupiesCell:(x,z)=>x===2&&z===2,
   getBoxGeometry:(...args)=>new THREE.BoxGeometry(...args),terrainVoxelMaterials:()=>({low:palette}),playSfx(group){sounds.push(group);},
+  escapeFP(){context.api.toggleFPToolMenu(false);fp.active=false;dom.exitPointerLock();},
   fpKeys,renderer,document:dom,window:{addEventListener(name,fn){handlers[name]=fn;}}});
 vm.runInContext(html.slice(html.indexOf('  // ---------- frontend excavation ----------'),html.indexOf('  // ---------- first-person walk ----------'))+
   '\nthis.api={excavation,validExcavationCell,createExcavationVisuals,equipExcavationTool,pickExcavationTarget,startExcavationSwing,tickExcavationSwing,leaveExcavation,updateExcavationAxePose,rollExcavationGem,toggleFPToolMenu};',context);
@@ -60,7 +61,7 @@ press('Tab');assert.equal(dom.activeElement.dataset.tool,'axe');
 press('Enter');assert.equal(e.equipped,'axe');
 assert.equal(element('fp-tool-menu').hidden,true,'Selecting tool closes menu');
 assert.equal(dom.pointerLockElement,renderer.domElement,'Selection restores mouse look');
-press('q','KeyQ');press('Escape');assert(element('fp-tool-menu').hidden,'Escape resumes walk');
+press('q','KeyQ');press('Escape');assert(element('fp-tool-menu').hidden && !fp.active,'Escape exits walk with menu open');assert.equal(dom.pointerLockElement,null);fp.active=true;
 equip('hands');
 world[10][10].terrainFloors=3;assert(valid(10,10));
 for(const [x,z] of [[0,10],[19,10],[-1,2],[2,2]])assert(!valid(x,z));

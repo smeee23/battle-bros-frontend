@@ -8,7 +8,7 @@ const sky=[...terrain.test.islands.values()].filter(b=>b.site.sky);
 assert(sky.length>=2&&sky.length<terrain.test.islands.size/3,'Sparse sky layer above the main fragments');
 for(const body of sky) {
   assert(body.site.width<=5&&body.site.length<=5&&body.mass<=25,'No fragment exceeds five cells in either direction');
-  assert(body.mesh.isInstancedMesh&&body.hull.geometry.attributes.position.count>0,'Mini fragments reuse instanced terrain and tapered hulls');
+  assert(body.mesh.isInstancedMesh&&body.hull.geometry.attributes.position.count===0,'Mini fragments use flat box bases without pointed undersides');
   assert.equal(body.mesh.material,[...terrain.test.islands.values()].find(b=>!b.site.sky).mesh.material,'Shared ground terrain materials');
 }
 const body=terrain.test.islands.get('0,0:sky'),id=body.site.id,{x,z}=body.entries[0];
@@ -38,7 +38,7 @@ const mining=new Function('require',miningSource+'return {context,create,equip,p
 mining.context.activeFPTerrain=()=>terrain;mining.context.explorationActive=true;mining.context.FP_EYE_H=.6;
 mining.create();mining.equip('axe');
 // Use an unmined, interior sky cell for a complete swing.
-const target=body.entries.find(q=>terrain.getCell(q.x,q.z,id).terrainFloors>2);
+const target=body.entries.find(q=>terrain.getCell(q.x,q.z,id).terrainFloors>8);
 p=terrain.cellToWorld(target.x,target.z,id);top=terrain.groundYAt(p.x,p.z,0,Infinity);
 mining.fp.pos.set(p.x,top+.6,p.z);mining.camera.position.copy(mining.fp.pos);
 mining.camera.lookAt(p.x,top,p.z);mining.camera.updateMatrixWorld();
@@ -91,3 +91,33 @@ for(let i=0;i<180;i++) {
   assert(fp.pos.y+.12<=entry.site.elevation-1.4+1e-8,'Jumping directly underneath cannot pass through the island');
 }
 console.log('sky traversal: ordinary jump reaches a drifting sky island and stepping off lands below OK');
+
+// Dig a sky column all the way through using real axe impacts.
+const digging=setup();digging.terrain.activate();
+mining.context.activeFPTerrain=()=>digging.terrain;
+const digBody=digging.terrain.test.islands.get('0,0:sky');
+const digCell=digBody.entries[0],digId=digBody.site.id;
+const digPoint=digging.terrain.cellToWorld(digCell.x,digCell.z,digId);
+const groundBefore=digging.terrain.getCell(digCell.x,digCell.z);
+let hits=0;
+while(digging.terrain.getCell(digCell.x,digCell.z,digId)) {
+  const y=digging.terrain.groundYAt(digPoint.x,digPoint.z,0,Infinity);
+  mining.fp.pos.set(digPoint.x,y+.6,digPoint.z);mining.fp.grounded=true;
+  mining.camera.position.copy(mining.fp.pos);mining.camera.lookAt(digPoint.x,y,digPoint.z);mining.camera.updateMatrixWorld();
+  assert.equal(mining.pick().islandId,digId);
+  mining.tick(1);assert(mining.start());mining.tick(.31);
+  const after=digging.terrain.getCell(digCell.x,digCell.z,digId);
+  const nextY=after?digging.terrain.groundYAt(digPoint.x,digPoint.z,0,Infinity):digBody.site.elevation-1.4;
+  assert(Math.abs(y-nextY-.2)<1e-9,'Every strike removes 0.2 units, including the final base layer');
+  assert(++hits<=11,'Every hit removes a layer including the bottom');
+}
+assert.equal(digging.terrain.getCell(digCell.x,digCell.z),groundBefore,'Breakthrough preserves the lower plane');
+assert(!digging.terrain.nearbyColumns(digPoint.x,digPoint.z,2).some(c=>c.islandId===digId&&c.x===digCell.x&&c.z===digCell.z),'Removed column is no longer targetable');
+assert(!digging.terrain.blocksBodyAt(digPoint.x,digPoint.z,digBody.site.elevation-1,digBody.site.elevation+1),'Breakthrough removes collision');
+const remainingBody=digging.terrain.test.islands.get(digId);
+remainingBody.root.updateMatrixWorld(true);
+const ray=new THREE.Raycaster(new THREE.Vector3(digPoint.x,30,digPoint.z),new THREE.Vector3(0,-1,0));
+assert.equal(ray.intersectObject(remainingBody.root,true).length,0,'No rendered underside seals the mined opening');
+digging.terrain.ensureAround(1000,1000);digging.terrain.ensureAround(0,0);
+assert.equal(digging.terrain.getCell(digCell.x,digCell.z,digId),null,'Mined holes persist after streaming');
+console.log('sky mining: final layer, underside opening, collision removal, lower plane preservation and persistent holes OK');

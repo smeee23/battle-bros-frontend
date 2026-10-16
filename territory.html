@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102018">
+  <title>BattleBros · Territory</title>
+  <style>
+    :root{color-scheme:dark;--bg:#102018;--card:#1a2d22;--edge:#365643;--text:#f3f4e9;--muted:#b6c6b7;--accent:#c8ee83;--danger:#ffb3a7}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#274332,var(--bg) 65%);color:var(--text);font:16px/1.5 system-ui,sans-serif;min-height:100vh}
+    main{width:min(1180px,94vw);margin:34px auto}header{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap;margin-bottom:26px}
+    h1,h2,h3,p{margin-top:0}h1{font-size:clamp(30px,5vw,48px);line-height:1.08;margin-bottom:8px}h2{font-size:22px;margin-bottom:12px}h3{margin-bottom:6px}.muted{color:var(--muted);font-size:14px}.card{background:linear-gradient(140deg,#203829,#182a20);border:1px solid var(--edge);border-radius:18px;padding:20px;box-shadow:0 18px 55px #07120b55}
+    .bar,.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.bar{justify-content:space-between}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,315px),1fr));gap:16px;margin:18px 0 30px}
+    button,input,select{font:inherit;border-radius:10px;border:1px solid #67816b;background:#122219;color:var(--text);padding:10px 13px}button{cursor:pointer;font-weight:650;background:var(--accent);color:#1a2a1c;border:0}button.secondary{background:#314b38;color:var(--text);border:1px solid #5f7d66}button.danger{background:#713f39;color:#fff}button:disabled{opacity:.55;cursor:wait}input{width:118px}.wide{width:100%}label{display:grid;gap:4px;color:var(--muted);font-size:13px}.pill{display:inline-block;border:1px solid #6a896e;border-radius:30px;padding:2px 9px;color:var(--accent);font-size:12px}.stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:14px;margin:12px 0}.status{min-height:26px;color:var(--accent);white-space:pre-wrap}.error{color:var(--danger)}.location{min-height:210px}a{color:var(--accent)}code{overflow-wrap:anywhere}
+    @media(max-width:520px){main{margin:20px auto}.card{padding:16px}header{align-items:flex-start}}
+  </style>
+</head>
+<body>
+<main>
+  <header><div><p class="pill">BATTLEBROS · TERRITORY</p><h1>Locations</h1><p class="muted">Player-driven territory control · confirmed public state</p></div><div class="row"><button id="connect">Connect wallet</button><a href="index.html">Return to the world</a></div></header>
+  <section class="card"><div class="bar"><div><h2>Territory state</h2><p class="muted" id="snapshot">Loading published state…</p></div><button class="secondary" id="refresh">Refresh</button></div><div id="status" class="status" role="status" aria-live="polite"></div><div id="management" class="row" hidden></div></section>
+  <div class="bar" style="margin-top:28px"><h2>Battle locations</h2><span class="muted" id="population"></span></div>
+  <section id="locations" class="grid" aria-live="polite"></section>
+  <section class="card"><h2>Recent territory activity</h2><div id="history" class="muted">No published activity loaded.</div></section>
+</main>
+<script src="runtime-config.js"></script>
+<script type="module" src="territory.js"></script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+import ABI from './assets/territory-abi.json' with {type:'json'};
+
+const $=id=>document.getElementById(id), cfg=window.__battleBrosPublicData??{}, params=new URLSearchParams(location.search);
+const status=$('status');let manifestUrl=params.get('manifestUrl')||cfg.manifestUrl,manifest,doc,account=null;
+const u=x=>BigInt(x??0), short=x=>x?`${x.slice(0,6)}…${x.slice(-4)}`:'—', fmt=(x,d=18)=>{
+  const n=u(x),unit=10n**BigInt(d),whole=n/unit,frac=(n%unit).toString().padStart(d,'0').slice(0,4).replace(/0+$/,'');
+  return frac?`${whole}.${frac}`:String(whole);
+};
+function setStatus(message,error=false){status.textContent=message;status.classList.toggle('error',error);}
+async function getJson(url,label){const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error(`${label}: HTTP ${r.status}`);return r.json();}
+function contract(key){const value=doc.contracts[key];if(!/^0x[0-9a-fA-F]{40}$/.test(value||''))throw new Error(`Missing ${key} contract address in the published state.`);return value;}
+function encodeValue(type,value){
+  if(type.endsWith(']')){const n=Number(type.slice(type.lastIndexOf('[')+1,-1));if(!Array.isArray(value)||value.length!==n)throw new Error(`Invalid ${type}`);return value.map(v=>encodeValue(type.slice(0,type.lastIndexOf('[')),v)).join('');}
+  if(type==='address')return value.toLowerCase().replace(/^0x/,'').padStart(64,'0');
+  if(type==='bool')return value?'1'.padStart(64,'0'):'0'.repeat(64);
+  if(/^uint(\d+)?$/.test(type)){const n=u(value);if(n<0n||n>=1n<<256n)throw new Error('Integer out of range');return n.toString(16).padStart(64,'0');}
+  throw new Error(`Unsupported transaction input ${type}`);
+}
+export function encode(abiName,fnName,args){
+ const fn=ABI[abiName].find(x=>x.name===fnName&&x.inputs.length===args.length);if(!fn)throw new Error(`Missing ${abiName}.${fnName} ABI`);
+ const size=t=>t.endsWith(']')?Number(t.slice(t.lastIndexOf('[')+1,-1))*32:32;
+ let offset=fn.inputs.reduce((n,x)=>n+size(x.type),0),tail='';
+ const head=fn.inputs.map((x,i)=>{if(x.type!=='string')return encodeValue(x.type,args[i]);
+   const bytes=new TextEncoder().encode(args[i]);if(!bytes.length||bytes.length>128)throw Error('Name must be 1–128 UTF-8 bytes');
+   const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+   const part=encodeValue('uint256',bytes.length)+hex.padEnd(Math.ceil(bytes.length/32)*64,'0');
+   const pointer=encodeValue('uint256',offset);offset+=part.length/2;tail+=part;return pointer;
+ }).join('');return fn.selector+head+tail;
+}
+async function transact(key,name,args,value='0x0'){
+  if(!account)throw new Error('Connect your wallet first.');
+  const chain=await window.ethereum.request({method:'eth_chainId'});
+  if(BigInt(chain)!==u(doc.chainId))throw new Error(`Switch wallet to chain ${doc.chainId} before submitting.`);
+  const data=encode(key,name,args),to=contract(({TerritoryCombat:'combat',TerritoryBro:'bros',NeedsOracle:'needs',StETH:'stETH'})[key]);
+  const tx={from:account,to,data,...(value!=='0x0'?{value}: {})};
+  await window.ethereum.request({method:'eth_call',params:[tx,'latest']});
+  const hash=await window.ethereum.request({method:'eth_sendTransaction',params:[tx]});
+  setStatus(`Transaction submitted: ${hash}`);
+  for(let i=0;i<90;i++){
+    const receipt=await window.ethereum.request({method:'eth_getTransactionReceipt',params:[hash]});
+    if(receipt){if(receipt.status==='0x0')throw new Error(`Transaction reverted: ${hash}`);setStatus('Transaction confirmed. Refreshing the public index…');await new Promise(r=>setTimeout(r,1200));await refresh();return hash;}
+    await new Promise(r=>setTimeout(r,1500));
+  }
+  setStatus(`Transaction is still pending: ${hash}`);return hash;
+}
+async function connect(){
+  if(!window.ethereum)throw new Error('No injected wallet was found.');
+  const [address]=await window.ethereum.request({method:'eth_requestAccounts'});account=address;
+  $('connect').textContent=short(account);await refresh();
+}
+function broLabel(b){return b.name ? `${b.name} (#${b.tokenId})` : `#${b.tokenId}`;}
+function broBy(id){return doc.battleBros.find(b=>String(b.tokenId)===String(id));}
+function ownerIds(){return account?doc.battleBros.filter(b=>b.active&&b.owner?.toLowerCase()===account.toLowerCase()):[];}
+function labelLevels(loc){return loc.maxLevel==='0' ? (loc.minLevel==='1'?'Open · Any level':`Level ${loc.minLevel}+`) : `Levels ${loc.minLevel}–${loc.maxLevel}`;}
+function make(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;}
+function makeSelect(items,value){const s=document.createElement('select');for(const x of items){const o=document.createElement('option');o.value=x.value;o.textContent=x.label;s.append(o);}if(value!==undefined)s.value=String(value);return s;}
+function button(text,fn,cls=''){const b=make('button',cls,text);b.addEventListener('click',async()=>{b.disabled=true;try{await fn();}catch(e){setStatus(e.shortMessage||e.message||String(e),true);}finally{b.disabled=false;}});return b;}
+function render(){
+  $('snapshot').textContent=`Block ${doc.snapshot.blockNumber} · ${new Date(Number(doc.snapshot.timestamp)*1000).toLocaleString()} · ${doc.needs.activeTokenIds.length} BattleBros with an active need`;
+  $('population').textContent=`${doc.locations.length} locations · ${doc.battleBros.filter(b=>b.active).length} active BattleBros`;
+  const own=ownerIds(), management=$('management');management.replaceChildren();management.hidden=!account;
+  if(account){
+    management.append(button('Request today’s needs seed',()=>transact('NeedsOracle','requestNeeds',[]),'secondary'));
+    management.append(button('Mint with 1 ETH',()=>transact('TerritoryBro','mintWithETH',[],'0x'+(10n**18n).toString(16))));
+    management.append(button('Approve 1 stETH',()=>transact('StETH','approve',[contract('vault'),10n**18n]),'secondary'),button('Mint with 1 stETH',()=>transact('TerritoryBro','mintWithStETH',[])));
+    if(own.some(b=>b.hatchedAt==='0')){const unhatched=makeSelect(own.filter(b=>b.hatchedAt==='0').map(b=>({value:b.tokenId,label:`Unhatched #${b.tokenId}`})));
+      const name=document.createElement('input');name.placeholder='BattleBro name';name.setAttribute('aria-label','BattleBro name');management.append(name);
+      management.append(unhatched,button('Hatch with balanced weights',()=>transact('TerritoryBro','hatch',[unhatched.value,0,[3334,3333,3333],[3334,3333,3333],name.value]),'secondary'));}
+    for(const b of own.filter(b=>b.hatchedAt==='0'))management.append(button(`Withdraw unhatched #${b.tokenId}`,()=>transact('TerritoryBro','withdrawAll',[b.tokenId]),'danger'));
+    const hatchedBros=own.filter(b=>b.hatchedAt!=='0');
+    if(hatchedBros.length){const select=makeSelect(hatchedBros.map(b=>({value:b.tokenId,label:`${broLabel(b)} · Level ${b.level}`})));
+      const chosen=()=>broBy(select.value);management.append(select);
+      const care=button('Care',()=>transact('TerritoryBro','care',[select.value]),'secondary');
+      const sync=button('Sync needs',()=>transact('TerritoryBro','syncNeeds',[select.value,32]),'secondary');
+      const settle=button('Settle training',()=>transact('TerritoryBro','settle',[select.value]),'secondary');
+      const vacate=button('Vacate',()=>transact('TerritoryCombat','vacate',[select.value]),'secondary');
+      const departure=button('Request departure after pending challenge',()=>transact('TerritoryCombat','requestDeparture',[select.value]),'secondary');
+      management.append(care,sync,settle,vacate,departure);
+      const weights=document.createElement('input');weights.value='3334,3333,3333';weights.setAttribute('aria-label','Three comma-separated training weights totaling 10000');weights.placeholder='3334,3333,3333';
+      const defenseWeights=document.createElement('input');defenseWeights.value='2000,6000,2000';defenseWeights.setAttribute('aria-label','Three comma-separated defense weights totaling 10000');defenseWeights.placeholder='2000,6000,2000';
+      const parseWeights=input=>{const values=input.value.split(',').map(x=>Number(x.trim()));if(values.length!==3||values.some(x=>!Number.isInteger(x)||x<0||x>10000)||values.reduce((a,x)=>a+x,0)!==10000)throw new Error('Weights must be three integers totaling 10000.');return values;};
+      management.append(weights,button('Set training weights',()=>transact('TerritoryBro','setWeights',[select.value,parseWeights(weights),false]),'secondary'),defenseWeights,button('Set defense weights',()=>transact('TerritoryBro','setWeights',[select.value,parseWeights(defenseWeights),true]),'secondary'));
+      const withdraw=button('Withdraw & burn',()=>transact('TerritoryBro','withdrawAll',[select.value]),'danger');
+      const syncSelected=()=>{const b=chosen();care.disabled=!b?.need.active;vacate.disabled=!b||b.locationId===null||b.pendingChallengeId!==null;departure.disabled=!b||b.locationId===null||b.pendingChallengeId===null;withdraw.disabled=!b||b.locationId!==null||b.pendingChallengeId!==null;};select.addEventListener('change',syncSelected);syncSelected();management.append(withdraw);
+    }
+  }
+  const root=$('locations');root.replaceChildren();
+  for(const loc of [...doc.locations].sort((a,b)=>Number(a.locationId)-Number(b.locationId))){
+    const card=make('article','card location'),id=String(loc.locationId),occupied=u(loc.occupant)!==0n,def=occupied?broBy(loc.occupant):null;
+    card.append(make('span','pill',labelLevels(loc)),make('h3','',`Location ${id}`));
+    const stats=make('div','stats');
+    for(const [k,v] of [['Status',loc.pendingChallengeId!=='0'?'Challenge pending':occupied?'Occupied':'Vacant'],['Defender',def?`${broLabel(def)} · Level ${def.level}`:'—'],['Started',loc.occupiedAt!=='0'?new Date(Number(loc.occupiedAt)*1000).toLocaleString():'—'],['Pot',`${fmt(loc.potShares)} stETH shares`]]){stats.append(make('span','muted',k),make('span','',v));}
+    card.append(stats);
+    if(def){const weights=make('p','muted',`Defense weights · Attack ${fmt(def.defense[0],2)}% · Defend ${fmt(def.defense[1],2)}% · Counter ${fmt(def.defense[2],2)}%`);
+      const reserves=make('p','muted',`Projected reserves · ${def.projectedReserves.join(' / ')} · capacity ${def.capacity}`);card.append(weights,reserves);
+    }
+    const controls=make('div','row');
+    const available=own.filter(b=>b.hatchedAt!=='0'&&!b.locationId&&b.pendingChallengeId===null&&!b.need.active&&u(b.level)>=u(loc.minLevel)&&(loc.maxLevel==='0'||u(b.level)<=u(loc.maxLevel)));
+    const claimable=available.filter(b=>b.tokenId!==loc.reclaimBlockedTokenId&&b.owner?.toLowerCase()!==loc.reclaimBlockedOwner?.toLowerCase());
+    if(!occupied&&loc.enabled&&claimable.length){const token=makeSelect(claimable.map(b=>({value:b.tokenId,label:`Claim with ${broLabel(b)} · Lv ${b.level}`})));
+      controls.append(token,button('Claim',()=>transact('TerritoryCombat','claim',[id,token.value,loc.nonce,broBy(token.value).defense])));
+    } else if(occupied&&account&&def?.owner?.toLowerCase()!==account.toLowerCase()&&loc.pendingChallengeId==='0'&&!loc.departing&&available.length){
+      const token=makeSelect(available.map(b=>({value:b.tokenId,label:`Attack with ${broLabel(b)} · Lv ${b.level}`})));
+      const action=makeSelect([{value:'0',label:'ATTACK'},{value:'1',label:'DEFEND'},{value:'2',label:'COUNTER'}]);
+      const amount=document.createElement('input');amount.type='number';amount.min='1';amount.step='1';amount.value=String(Math.ceil(Number(available[0].capacity)/10));amount.setAttribute('aria-label','Combat power to commit');
+      const attacker=()=>broBy(token.value), refreshAmount=()=>{const b=attacker(),reserve=b?.projectedReserves[Number(action.value)]??'0';amount.max=String(Math.min(Number(b?.capacity??0),Number(reserve)));amount.value=String(Math.ceil(Number(b?.capacity??0)/10));};token.addEventListener('change',refreshAmount);action.addEventListener('change',refreshAmount);refreshAmount();
+      controls.append(token,action,amount,button('Challenge',()=>transact('TerritoryCombat','challenge',[id,token.value,action.value,amount.value,loc.nonce,def.defenseNonce,Math.floor(Date.now()/1000)+300,broBy(token.value).defense])));
+    }
+    if(loc.pendingChallengeId!=='0'&&account){const challenge=doc.challenges.find(c=>String(c.challengeId)===String(loc.pendingChallengeId));
+      if(challenge){if(challenge.status==='PENDING'&&challenge.randomnessFulfilled)controls.append(button('Resolve challenge',()=>transact('TerritoryCombat','resolve',[challenge.challengeId]),'secondary'));
+        else if(challenge.status==='PENDING'&&Number(doc.snapshot.timestamp)>=Number(challenge.deadline))controls.append(button('Expire challenge',()=>transact('TerritoryCombat','expire',[challenge.challengeId]),'secondary'));
+        else if(challenge.status==='PENDING')controls.append(make('span','muted','Waiting for VRF fulfillment…'));}
+    }
+    card.append(controls);root.append(card);
+  }
+  const history=$('history');const rows=doc.history.filter(e=>/Challenge(Resolved|Expired)|OccupancyChanged|Need(sSeedAccepted|Assigned)|CareProvided/.test(e.name)).slice(-40).reverse();
+  history.replaceChildren(...(rows.length?rows.map(e=>{const p=make('p','',`${new Date(Number(e.timestamp)*1000).toLocaleString()} · ${e.name} · block ${e.blockNumber}`);return p;}):[make('p','muted','No territory activity has been indexed yet.') ]));
+}
+async function refresh(){
+  if(!manifestUrl){setStatus('Configure the v2 territory manifest URL in runtime-config.js or pass ?manifestUrl=…',true);return;}
+  try{manifest=await getJson(manifestUrl,'Manifest');if(manifest.schemaVersion!==2)throw new Error('This URL points to a v1 round manifest. Configure a territory v2 deployment manifest.');
+    const root=new URL('.',new URL(manifestUrl,location.href)),url=new URL(manifest.paths.gameState,root);doc=await getJson(url,'Territory state');
+    if(doc.schemaVersion!==2||doc.projectionVersion!==3||manifest.projectionVersion!==3||doc.chainId!==manifest.chainId||doc.deploymentId!==manifest.deploymentId||doc.contracts.combat.toLowerCase()!==manifest.deploymentId.toLowerCase()||JSON.stringify(doc.snapshot)!==JSON.stringify(manifest.snapshot))throw new Error('Manifest and territory snapshot do not match.');
+    render();setStatus(`Showing confirmed block ${doc.snapshot.blockNumber}. Transactions are checked against the live contract before submission.`);
+  }catch(e){setStatus(e.message||String(e),true);}
+}
+$('connect').addEventListener('click',()=>connect().catch(e=>setStatus(e.message,true)));
+$('refresh').addEventListener('click',()=>refresh());
+window.ethereum?.on?.('accountsChanged',accounts=>{account=accounts[0]??null;$('connect').textContent=account?short(account):'Connect wallet';refresh();});
+window.ethereum?.on?.('chainChanged',()=>refresh());refresh();

@@ -1,37 +1,76 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "manifest.schema.json",
-  "title": "BattleBros snapshot manifest",
+  "title": "BattleBros territory manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "chainId", "battleManagerAddress", "latestFinalizedRound", "finalizedRounds", "snapshot", "publishedAt", "paths"],
+  "required": [
+    "schemaVersion",
+    "chainId",
+    "deploymentId",
+    "generation",
+    "snapshot",
+    "paths",
+    "contentHash",
+    "projectionVersion"
+  ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 1 },
-    "chainId": { "$ref": "definitions.schema.json#/definitions/uintString" },
-    "battleManagerAddress": { "$ref": "definitions.schema.json#/definitions/address" },
-    "latestFinalizedRound": { "$ref": "definitions.schema.json#/definitions/uintString" },
-    "finalizedRounds": {
-      "description": "Immutable published snapshot identities ordered by roundId ascending.",
-      "type": "array",
-      "items": {
-        "type": "object", "additionalProperties": false,
-        "required": ["roundId", "snapshot", "publishedAt"],
-        "properties": {
-          "roundId": { "$ref": "definitions.schema.json#/definitions/uintString" },
-          "snapshot": { "$ref": "definitions.schema.json#/definitions/snapshot" },
-          "publishedAt": { "type": "string", "format": "date-time" }
+    "schemaVersion": {
+      "const": 2
+    },
+    "projectionVersion": {
+      "const": 3
+    },
+    "chainId": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "deploymentId": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$"
+    },
+    "generation": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blockNumber",
+        "blockHash",
+        "timestamp"
+      ],
+      "properties": {
+        "blockNumber": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "blockHash": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{64}$"
+        },
+        "timestamp": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
         }
       }
     },
-    "snapshot": { "$ref": "definitions.schema.json#/definitions/snapshot" },
-    "publishedAt": { "type": "string", "format": "date-time" },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "paths": {
-      "type": "object", "additionalProperties": false,
-      "required": ["currentGameState", "rounds", "battleBros"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gameState"
+      ],
       "properties": {
-        "currentGameState": { "description": "Stable path to the independently updated confirmed-current document; it is not inside an immutable historical snapshot.", "type": "string", "minLength": 1 },
-        "rounds": { "type": "string", "pattern": "\\{roundId\\}" },
-        "battleBros": { "type": "string", "pattern": "\\{tokenId\\}" }
+        "gameState": {
+          "type": "string",
+          "pattern": "^snapshots/[a-zA-Z0-9/-]+\\.json$"
+        }
       }
     }
   }

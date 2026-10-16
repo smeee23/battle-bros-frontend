@@ -16,7 +16,7 @@ const ctx=vm.createContext({THREE,scene,xrWorldRoot:home,worldGroup:home,GRID:50
  applyDistanceMistSettings(){},leaveExcavation(){},stopExplorationCompanion(){},startExplorationCompanion(){},
  worldToCellCoord:v=>Math.floor(v+25),tilePos:(x,z)=>({x:x-24.5,z:z-24.5}),
  getWorldCell:()=>({terrain:'stone',terrainFloors:3}),setCell(){},trainingFacilityTerrainCell:()=>false,
- setCameraMode:value=>{mode=value;fp.active=false;}});
+ setCameraMode:value=>{mode=value;if(ctx.exitFP)ctx.exitFP();else {ctx.api.explorationTerrain.deactivate();fp.active=false;}}});
 vm.runInContext(section('  function stargateLayout(', '  function generateProceduralWorld(')
  +section('  // ---------- exploration terrain ----------','  // ---------- frontend excavation ----------')
  +'\nfunction fpGroundYAt(x,z){return activeFPTerrain().groundYAt(x,z,.6);}\nthis.api={homeFPTerrain,explorationTerrain,fpJourney};',ctx);
@@ -27,8 +27,8 @@ assert(!ctx.api.homeFPTerrain.canExcavate(48,1),'Portal steps are protected');
 ctx.switchFPWorld(true);
 assert(ctx.explorationActive);assert(!home.visible);assert.equal(fp.pos.x,0);
 ctx.escapeFP();
-assert(!ctx.explorationActive);assert(home.visible);assert(fp.active);assert.equal(fp.yaw,.3);
-ctx.escapeFP();assert(fp.active,'Pointer-lock and key events cannot exit twice');
+assert(!ctx.explorationActive);assert(home.visible);assert(!fp.active);assert.equal(mode,'perspective');
+ctx.escapeFP();assert(!fp.active,'Pointer-lock and key events leave first person exited');
 time=500;ctx.escapeFP();assert.equal(mode,'perspective','Leaving first-person home returns to perspective');
 fp.active=true;
 const layout=ctx.stargateLayout(),p=ctx.tilePos(layout.x,layout.z);
@@ -37,18 +37,26 @@ const place=(depth,across=0)=>fp.pos.set(p.x+sin*depth+cos*across,1.8,p.z+cos*de
 place(.1,4);ctx.tickFPJourney(.016);place(-.1,4);ctx.tickFPJourney(.016);
 assert.equal(ctx.api.fpJourney.warp,0,'Crossing beside the ring does not teleport');
 ctx.api.fpJourney.previous=null;
+// The widened volume catches off-center approaches before the exact plane.
+place(1.2,1.4);ctx.tickFPJourney(.016);place(.45,1.4);ctx.tickFPJourney(.016);
+assert(ctx.api.fpJourney.warp>0,'Off-center entry triggers before crossing the ring plane');
+ctx.cancelFPWarp();ctx.api.fpJourney.previous=null;
+place(-1.2,1.4);ctx.tickFPJourney(.016);place(-.45,1.4);ctx.tickFPJourney(.016);
+assert(ctx.api.fpJourney.warp>0,'Entry works from the back as well');
+ctx.cancelFPWarp();ctx.api.fpJourney.previous=null;
+place(2);ctx.tickFPJourney(.016);place(-2);ctx.tickFPJourney(.016);
+assert(ctx.api.fpJourney.warp>0,'Fast steps through the entire volume still trigger');
+ctx.cancelFPWarp();ctx.api.fpJourney.previous=null;
 place(.1);ctx.tickFPJourney(.016);place(-.1);ctx.tickFPJourney(.016);
 assert(ctx.api.fpJourney.warp>0,'Walking through aperture starts warp');
 assert(!ctx.explorationActive,'Warp begins on home');
 ctx.tickFPJourney(.7);assert(ctx.explorationActive,'World switches during warp');
 assert.equal(ctx.fpKeys.size,0,'No held movement carries through');
 ctx.tickFPJourney(.7);assert.equal(ctx.api.fpJourney.warp,0);assert(ctx.api.fpJourney.overlay.hidden);
-time=1000;ctx.escapeFP();assert(!ctx.explorationActive);assert(fp.active);
-const depth=(fp.pos.x-p.x)*sin+(fp.pos.z-p.z)*cos;
-assert(Math.abs(depth-1.4)<1e-9,'Return is safely in front of portal');
+time=1000;ctx.escapeFP();assert(!ctx.explorationActive);assert(!fp.active);
 ctx.tickFPJourney(.016);assert.equal(ctx.api.fpJourney.warp,0,'Return does not retrigger');
 assert(html.includes('Walk (first-person home)') && html.includes('Walk (first-person other)'));
-console.log('portal travel: home provider, boundaries, aperture crossing, warp, safe return and two-stage Escape OK');
+console.log('portal travel: home provider, boundaries, aperture crossing, warp, safe return and direct Escape to perspective OK');
 // Exercise the real entry/exit functions, including direct testing-mode switches.
 Object.assign(ctx,{FP_FOV:55,FP_NEAR:.02,PERS_FOV_DEFAULT:50,PERS_NEAR_DEFAULT:.1,
  persCam:{updateProjectionMatrix(){}},renderer:{domElement:{}},excavation:{equipped:'hands'},
@@ -89,3 +97,19 @@ assert(Math.abs(fp.yaw-(beforeLook-.044))<1e-12,'Mouse-look responds immediately
 pressHome();assert(fp.active && !ctx.explorationActive,'H at home does not exit first person');
 ctx.exitFP();pressHome();assert(!fp.active,'H outside first person does not enter it');
 console.log('portal travel: H preserves capture, restores home, cancels warp and immediately accepts mouse-look OK');
+
+// Both native pointer unlock and Escape leave every walking world, even mid-warp.
+for(const other of [false,true]) {
+  for(const nativeUnlock of [false,true]) {
+    ctx.enterFP({world:other?'other':'home'});
+    ctx.api.fpJourney.warp=.3;
+    ctx.document.pointerLockElement=ctx.renderer.domElement;
+    ctx.document.exitPointerLock=()=>{ctx.document.pointerLockElement=null;inputHandlers.pointerlockchange();};
+    if(nativeUnlock) {ctx.document.pointerLockElement=null;inputHandlers.pointerlockchange();}
+    else inputHandlers.keydown({key:'Escape',repeat:false});
+    assert(!fp.active && !ctx.explorationActive && home.visible,'Escape restores building world');
+    assert.equal(mode,'perspective');
+    assert.equal(ctx.document.pointerLockElement,null,'Exit releases capture');
+    assert.equal(ctx.api.fpJourney.warp,0,'Exit cancels portal travel');
+  }
+}

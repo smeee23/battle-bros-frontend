@@ -6,7 +6,7 @@ const html = fs.readFileSync('index.html', 'utf8');
 const source = html.slice(html.indexOf('  function moveFPAcrossTerrain('), html.indexOf('  function enterFP('));
 function setup(height, limit = 0.4) {
   const fp = {pos: {x: 0.5, z: 0.5, y: height(0,0) + 0.6}, grounded: true};
-  const context = vm.createContext({fp, FP_EYE_H:0.6, activeFPTerrain:()=>({}), FP_MAX_HEIGHT_DIFFERENCE: limit, FP_WALL_CLEARANCE: 0.08,
+  const context = vm.createContext({fp, FP_EYE_H:0.6,fpEyeHeight:()=>.6, activeFPTerrain:()=>({}), FP_MAX_HEIGHT_DIFFERENCE: limit, FP_WALL_CLEARANCE: 0.08,
     fpGroundYAt: (x,z) => height(Math.floor(x), Math.floor(z)) + 0.6});
   vm.runInContext(source, context);
   return {fp, move: context.moveFPAcrossTerrain};
