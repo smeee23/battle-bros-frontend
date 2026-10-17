@@ -131,3 +131,15 @@ assert(swing?.raised,'Explicit higher arc clears an intervening obstacle');
 checkPlan(m,{turn:{plans:[]},swings:[swing]});
 assert(api.evaluateLavaTerrainStep(33,32,m).plan?.rough,'Higher landing uses mobility-first clamber');
 clean(m);
+
+// A truly trapped home actor now has a last-resort supported escape.
+terrain(()=>0);m=actor(4);
+api.setBlocked(['31,32','33,32','32,31','32,33']);
+m.state='IDLE';m.blockedAttempts=4;
+const trapped=m.root.position.clone();
+for(let i=0;i<180;i++)api.recoverHomeBattleBro(m,.05);
+assert(m.root.position.distanceTo(trapped)>1,'Repeated failures cannot leave a home actor permanently motionless');
+assert(Number.isFinite(m.root.position.y)&&m.blockedAttempts===0);
+assert(m.leftAnchor.distanceTo(m.root.position)<3&&m.rightAnchor.distanceTo(m.root.position)<3,'Recovery carries the support contacts with the rig');
+clean(m);api.setBlocked([]);
+console.log('home recovery: prolonged enclosure escapes to a clear supported area');

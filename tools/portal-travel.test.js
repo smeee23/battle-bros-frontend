@@ -13,7 +13,7 @@ const ctx=vm.createContext({THREE,scene,xrWorldRoot:home,worldGroup:home,GRID:50
  document:{createElement:()=>({style:{},setAttribute(){},getContext:()=>draw}),body:{appendChild(){}}},
  terrainRiseForLevel:n=>(n-1)*.2,terrainLevelForCell:c=>c?.terrainFloors||1,
  terrainVoxelMaterials:()=>({base:new THREE.MeshBasicMaterial()}),terrainRiserMaterial:()=>new THREE.MeshBasicMaterial(),
- applyDistanceMistSettings(){},leaveExcavation(){},stopExplorationCompanion(){},startExplorationCompanion(){},
+ applyDistanceMistSettings(){},leaveExcavation(){},resetTransportCube(){},
  worldToCellCoord:v=>Math.floor(v+25),tilePos:(x,z)=>({x:x-24.5,z:z-24.5}),
  getWorldCell:()=>({terrain:'stone',terrainFloors:3}),setCell(){},trainingFacilityTerrainCell:()=>false,
  setCameraMode:value=>{mode=value;if(ctx.exitFP)ctx.exitFP();else {ctx.api.explorationTerrain.deactivate();fp.active=false;}}});

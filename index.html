@@ -4587,7 +4587,7 @@
     <button id="fp-tools-toggle" type="button" aria-controls="fp-tool-menu" aria-expanded="false">Q · Walking tools</button>
   </div>
   <div id="excavation-hud" hidden>
-    <strong>Axe equipped · 10% gem chance per broken layer</strong>
+    <strong id="fp-equipped-tool-label">Axe equipped · 10% gem chance per broken layer</strong>
     <div id="excavation-status" role="status">Aim at raised terrain and click to dig.</div>
   </div>
   <div class="battlebro-sidebar" id="battlebro-sidebar">
@@ -5621,6 +5621,13 @@
   <script src="runtime-config.js"></script>
   <script src="vendor/three/three.r128.min.js"></script>
   <script src="vendor/three/GLTFLoader.r128.js"></script>
+  <script src="assets/longneck-animation.js"></script>
+  <script src="assets/juggernaut-animation.js"></script>
+  <script src="assets/monster-animation.js"></script>
+  <script src="assets/specter-animation.js"></script>
+  <script src="assets/battlebro-jump.js"></script>
+  <script src="assets/transport-cube.js"></script>
+  <script src="assets/battlebro-terrain.js"></script>
   <script src="vendor/tiny-crowd-layer.js"></script>
   <script>
   /* =====================================================================
@@ -7326,7 +7333,7 @@
       state.controls[role].value=baseBattleBroPrototype.userData.colors?.[role]||'default';
       state.controls[role].updateSwatch?.();
     }
-    refreshTrainingDisplay();stopExplorationCompanion();fpKeys.clear();leaveExcavation();
+    refreshTrainingDisplay();resetTransportCube(false);fpKeys.clear();leaveExcavation();
     fpToolMenu.hidden=true;
     document.body.classList.add('training-appearance-active');
     document.getElementById('training-appearance-controls').hidden=false;
@@ -7349,7 +7356,7 @@
     document.getElementById('training-appearance-controls').hidden=true;
     const sidebar=document.getElementById('battlebro-sidebar');sidebar.classList.toggle('is-collapsed',state.saved.collapsed);
     document.getElementById('battlebro-sidebar-toggle').setAttribute('aria-expanded',String(!state.saved.collapsed));
-    if(resume&&fp.active){startExplorationCompanion();tickFP(0);
+    if(resume&&fp.active){resetTransportCube(false);tickFP(0);
       try{renderer.domElement.requestPointerLock?.()?.catch?.(()=>{});}catch(_){} }
   }
   function tickTrainingAppearance(dt,t) {
@@ -13199,7 +13206,7 @@
     const mover = root.userData.lavaMovement || root.userData.specterMovement || root.userData.minotaurMovement;
     // Shared entry point: direct actions must also wait for both supports.
     if (mover && ((!['IDLE','IDLE_HOVER'].includes(mover.state)) || mover.turn || mover.smash || mover.juggernautJog || mover.gallopSettle)) return false;
-    if (!root.parent || root.userData.terrainConsume || root.userData.rockThrow || !target?.isActive() || !controller?.debris.length
+    if (!root.parent || root.userData.characterJumping || root.userData.terrainConsume || root.userData.rockThrow || !target?.isActive() || !controller?.debris.length
       || root.userData.upperArmMotion?.arms.some(arm=>arm.weight<1)) return false;
     tickBattleBroOrbitField(root, 0);
     const size = item => {
@@ -15069,6 +15076,15 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     });
     return root;
   }
+  // Authored local transforms only; world contacts and controller state are never saved.
+  function rememberBattleBroTransportPose(root){
+    const poses=[];
+    root.traverse(node=>{if(node!==root)poses.push({node,position:node.position.clone(),
+      quaternion:node.quaternion.clone(),scale:node.scale.clone()});});
+    root.userData.transportRestPose=poses;
+    root.userData.transportRestScale=root.scale.clone();
+    return root;
+  }
   function createBattleBroCharacter({character='monsters',form,variant,colors}={}) {
     if(!BATTLEBRO_CHARACTER_FORMS[character]?.includes(form))return null;
     let root;
@@ -15079,6 +15095,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     if(root&&['mushroom','gem'].includes(variant))addRockBattleBroDecorations(root,variant,ROCK_BATTLEBRO_M[variant]);
     if(root&&variant==='rainbow')applyBattleBroRainbow(root,character);
     if(root&&variant==='tiger')applyBattleBroTiger(root,character);
+    if(root)rememberBattleBroTransportPose(root);
     return root&&colors?applyBattleBroColors(root,colors):root;
   }
 
@@ -15154,7 +15171,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   function tryScenerySmash(mover, stuck = false, terrainTarget = null) {
     if (typeof cellMeshes === 'undefined') return false;
     const longneck = !!mover.root.userData.rig?.neckPivot;
-    if (mover.smash || (!terrainTarget && !(longneck && stuck) && (mover.smashCooldown || 0) > 0) || mover.root.userData.previewHome
+    if (mover.smash || (!terrainTarget && !(stuck && (longneck || mover.stationaryFor>=3 || mover.smashFailedSearches>=2)) && (mover.smashCooldown || 0) > 0) || mover.root.userData.previewHome
       || mover.root.userData.terrainConsume || mover.root.userData.rockThrow) return false;
     if (!stuck && Math.random() >= (longneck ? LONGNECK_ROAMING_HEAD_SMASH_CHANCE : .12)) return false;
     const headSmash = longneck && !stuck && !terrainTarget;
@@ -15227,17 +15244,8 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     mover.idleRemaining=Math.max(mover.idleRemaining||0,1.1);
   }
 
-  function tickScenerySmash(mover,t,dt) {
-    mover.smashCooldown=Math.max(0,(mover.smashCooldown||0)-dt);
-    const a=mover.smash;
-    if(!a) return false;
-    if(!mover.root.parent || neighborInspectionState.active || (!a.impacted &&
-      (getWorldCell(a.x,a.z)!==a.cell || (!a.terrainSmash && cellMeshes[a.key]?.object!==a.object)))) {
-      finishScenerySmash(mover);return true;
-    }
-    a.elapsed+=Math.min(dt,.05);
-    const p=Math.min(1,a.elapsed/2.2), parts=a.parts;
-    for(const pose of a.poses) {pose.node.position.copy(pose.position);pose.node.rotation.copy(pose.rotation);}
+  function poseBattleBroSceneryStrike(mover,a,p) {
+    const parts=a.parts;
     const ease=v=>{v=Math.max(0,Math.min(1,v));return v*v*(3-2*v);};
     const turn=ease(p/(a.style==='kick'?.48:.32));
     mover.root.rotation.y=a.poses[0].rotation.y+battleBroYawDelta(a.yaw-a.poses[0].rotation.y)*turn;
@@ -15293,6 +15301,20 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     const lunge=hit*(a.style==='specterRock'?0:a.style==='headbutt'?.42:a.style==='bite'?.24:.16);
     mover.root.position.x+=Math.sin(a.yaw)*lunge;
     mover.root.position.z+=Math.cos(a.yaw)*lunge;
+    return {ease,hit};
+  }
+  function tickScenerySmash(mover,t,dt) {
+    mover.smashCooldown=Math.max(0,(mover.smashCooldown||0)-dt);
+    const a=mover.smash;
+    if(!a) return false;
+    if(!mover.root.parent || neighborInspectionState.active || (!a.impacted &&
+      (getWorldCell(a.x,a.z)!==a.cell || (!a.terrainSmash && cellMeshes[a.key]?.object!==a.object)))) {
+      finishScenerySmash(mover);return true;
+    }
+    a.elapsed+=Math.min(dt,.05);
+    const p=Math.min(1,a.elapsed/2.2), parts=a.parts;
+    for(const pose of a.poses) {pose.node.position.copy(pose.position);pose.node.rotation.copy(pose.rotation);}
+    const {ease,hit}=poseBattleBroSceneryStrike(mover,a,p);
     if(p>=.64 && !a.impacted) {
       a.impacted=true;
       // The scenery is a local visual world. Never route this through resource accounting.
@@ -15610,7 +15632,9 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     };
     const anchors = mover.anchors || [mover.leftAnchor, mover.rightAnchor];
     anchors.forEach((anchor, i) => {
-      const safe = safeLavaContact(mover, anchor, root.rotation.y, i, root.position.y);
+      const safe = mover.animationNavigation
+        ? mover.animationNavigation.contact(mover,anchor,root.rotation.y,i)
+        : safeLavaContact(mover, anchor, root.rotation.y, i, root.position.y);
       if (safe) anchor.copy(safe);
     });
   }
@@ -15766,6 +15790,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   }
 
   function chooseLavaContactSwing(mover, start, desired, index, yaw, lift, startYaw = yaw, other = start, otherYaw = yaw, spread = 0) {
+    if(mover.animationNavigation)return mover.animationNavigation.swing(mover,start,desired,index,yaw,lift,startYaw);
     if (mover.clamberPlanning) return planLavaClamberContact(mover,start,desired,index,yaw,lift,startYaw);
     const candidates = lavaContactCandidates(mover, desired, yaw, index, start.y);
     if (spread) candidates.sort((a,b) => (a.distance - spread * a.point.distanceTo(other))
@@ -15889,151 +15914,93 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     { step: 1, duration: 1.12 },
   ];
 
-  function beginLavaTurn(mover, currentDirection, targetDirection) {
-    const form = lavaMovementForm(mover.root) || 4;
-    const profile = LAVA_TURN_MORPHOLOGY[form < 4 ? 'juvenile' : form === 4 ? 'mature' : 'advanced'];
-    const tuning = LAVA_TURN_FORM_TUNING[form];
-    const delta = battleBroYawDelta(targetDirection - currentDirection);
-    const steps = Math.max(1, Math.ceil(Math.abs(delta) / (profile.step * tuning.step)));
-    const anchors = mover.anchors || [mover.leftAnchor, mover.rightAnchor];
-    const terrainTurn = mover.terrainContacts ? (mover.terrainPlan?.rough
-      ? withLavaClamber(mover, () => planLavaTerrainTurn(mover, targetDirection), mover.terrainPlan.clamberLimit)
-      : planLavaTerrainTurn(mover, targetDirection)) : null;
-    if (mover.terrainContacts && !terrainTurn) {
-      mover.state = LAVA_MOVE_STATE.IDLE;
-      mover.targetCellX = mover.cellX; mover.targetCellZ = mover.cellZ;
-      mover.terrainPlan = null; mover.recoveryExit = null;
-      mover.pauseRemaining = 1.5;
-      return false;
-    }
-    mover.turn = {
-      terrainTurn,
-      profile, anchors, steps, index: 0, progress: 0,
-      duration: profile.duration * tuning.duration,
-      yaw: currentDirection, delta: delta / steps,
-      side: delta < 0 ? 0 : 1, phase: 'SHIFT',
-      center: mover.root.position.clone(),
-      starts: anchors.map(anchor => anchor.clone()),
-      goals: anchors.map(anchor => anchor.clone()),
-      local: new THREE.Vector3(), direction: new THREE.Vector3(), bend: new THREE.Vector3(),
-      elbow: new THREE.Vector3(), rest: new THREE.Vector3(), quaternion: new THREE.Quaternion(),
-      contactYaw: [currentDirection, currentDirection],
-    };
-    mover.state = 'TURNING';
-    prepareLavaTurnStep(mover);
-    return true;
+  let sharedMonsterAnimationSystem=null;
+  function monsterAnimationSystem(){
+    return sharedMonsterAnimationSystem||(sharedMonsterAnimationSystem=createMonsterAnimationSystem(THREE,{
+      Math,smoothBattleBroStep,LAVA_MOVE_STATE,locomotion:juggernautAnimationSystem,
+    }));
+  }
+  function ensureMonsterAnimation(mover){
+    return mover.monsterAnimation||(mover.monsterAnimation=monsterAnimationSystem().create(mover));
+  }
+  function ensureSupportAnimation(mover){
+    return mover.root.userData.characterFamily==='monsters'?ensureMonsterAnimation(mover):ensureJuggernautAnimation(mover);
   }
 
-  function prepareLavaTurnStep(mover) {
-    const turn = mover.turn;
-    const form = lavaMovementForm(mover.root);
-    const lateral = (form === 1 ? NEWBORN_SPACING.limbX
-      : form === 2 ? DEVELOPING_GAIT.limbX : form === 3 ? ADOLESCENT_GAIT.limbX : LAVA_HAND_LATERAL)*lavaSupportScale(mover.root);
-    const forward = (form < 4 ? 0.06 : LAVA_HAND_FORWARD)*lavaSupportScale(mover.root);
-    const yaw = turn.yaw + turn.delta;
-    for (let i = 0; i < 2; i++) {
-      turn.starts[i].copy(turn.anchors[i]);
-      const x = (i ? 1 : -1) * lateral;
-      turn.goals[i].set(turn.center.x + Math.cos(yaw) * x + Math.sin(yaw) * forward,
-        turn.center.y, turn.center.z - Math.sin(yaw) * x + Math.cos(yaw) * forward);
-      if (turn.terrainTurn?.plans[turn.index]) turn.goals[i].copy(turn.terrainTurn.plans[turn.index][i].end);
-    }
+  let sharedJuggernautAnimationSystem=null;
+  function juggernautAnimationSystem(){
+    return sharedJuggernautAnimationSystem||(sharedJuggernautAnimationSystem=createJuggernautAnimationSystem(THREE,{
+      Math,
+      lavaMovementForm,
+      lavaSupportScale,
+      battleBroYawDelta,
+      LAVA_TURN_MORPHOLOGY,
+      LAVA_TURN_FORM_TUNING,
+      NEWBORN_SPACING,
+      DEVELOPING_GAIT,
+      ADOLESCENT_GAIT,
+      NEWBORN_GAIT,
+      LAVA_HAND_LATERAL,
+      LAVA_HAND_FORWARD,
+      LAVA_WRIST_ABOVE_GROUND,
+      LAVA_UPPER_ARM_LENGTH,
+      LAVA_FOREARM_LENGTH,
+      LAVA_MOVE_STATE,
+      withLavaClamber,
+      planLavaTerrainTurn,
+      smoothBattleBroStep,
+      smoothJuggernautStep,
+      sampleLavaContactSwing,
+      tickAdvancedTurn,
+      usesBipedSupportGait,
+      setLavaHandAnchor,
+      beginJuggernautRun,
+      beginJuggernautStride,
+      enterLavaMoveState,
+      tickJuggernautRun,
+      tickJuggernautStride,
+      settleLavaMonsterMove,
+      tickGreaterBalance,
+      tickAdvancedIdle,
+      tickApexIdle,
+      tickUpperArmMotion,
+      tickLooseRockAttachments,
+      tickBattleBroExpression,
+      poseDevelopingArms,
+      chooseTarget:chooseLavaWalkTarget,
+      selectRoute:m=>m.animationNavigation?m.animationNavigation.selectRoute(m):selectLavaWalkRoute(m),
+      groundHeight:battleBroGroundHeight,
+      poseMonsterLayer:(m,t)=>monsterAnimationSystem().layer(m,t),
+      resetMonster:m=>monsterAnimationSystem().reset(m),
+      resetContacts:m=>{
+        const anchors=m.anchors||[m.leftAnchor,m.rightAnchor];
+        if(m.anchors){m.root.updateMatrixWorld(true);m.parts.limbs.forEach((limb,i)=>limb.getWorldPosition(anchors[i]));}
+        else anchors.forEach((a,i)=>setLavaHandAnchor(a,m.root.position.x,m.root.position.z,m.root.rotation.y,i?1:-1,m.root.position.y,lavaSupportScale(m.root)));
+        anchors.forEach((a,i)=>{
+          const safe=m.animationNavigation?m.animationNavigation.contact(m,a,m.root.rotation.y,i):safeLavaContact(m,a,m.root.rotation.y,i,m.root.position.y);
+          if(safe)a.copy(safe);else a.y=m.root.position.y;
+        });
+      },
+    }));
+  }
+  function ensureJuggernautAnimation(mover){
+    return mover.juggernautAnimation||(mover.juggernautAnimation=juggernautAnimationSystem().create(mover));
   }
 
-  function tickLavaTurn(mover, dt) {
-    if (!mover.turn && !beginLavaTurn(mover, mover.root.rotation.y, mover.desiredYaw)) return false;
-    const turn = mover.turn, profile = turn.profile;
-    if (Math.abs(turn.delta) < 1e-6) return true;
-    turn.progress = Math.min(1, turn.progress + Math.max(0, Math.min(dt, 0.05)) / turn.duration);
-    const p = turn.progress, side = turn.side, support = 1 - side;
-    const reach = smoothBattleBroStep((p - 0.16) / 0.26);
-    const pull = smoothBattleBroStep((p - 0.42) / 0.27);
-    const adjust = smoothBattleBroStep((p - 0.69) / 0.23);
-    turn.phase = p < 0.16 ? 'SHIFT' : p < 0.42 ? 'REACH' : p < 0.69 ? 'PULL' : p < 0.92 ? 'ADJUST' : 'SETTLE';
-    turn.anchors[side].lerpVectors(turn.starts[side], turn.goals[side], reach);
-    turn.anchors[side].y += Math.sin(Math.PI * reach) * profile.lift;
-    turn.anchors[support].lerpVectors(turn.starts[support], turn.goals[support], adjust);
-    turn.anchors[support].y += Math.sin(Math.PI * adjust) * profile.lift * 0.8;
-    turn.contactYaw[side] = turn.yaw + turn.delta * reach;
-    turn.contactYaw[support] = turn.yaw + turn.delta * adjust;
-    const swings = turn.terrainTurn?.plans[turn.index];
-    if (swings) {
-      turn.contactYaw[side] = turn.yaw + turn.delta * sampleLavaContactSwing(turn.anchors[side], swings[side], reach);
-      turn.contactYaw[support] = turn.yaw + turn.delta * sampleLavaContactSwing(turn.anchors[support], swings[support], adjust);
-    }
-    // Orientation changes only after the reaching support has landed. Both
-    // contacts stay in world space while the body pulls between them.
-    mover.root.rotation.y = turn.yaw + turn.delta * pull;
-    const load = smoothBattleBroStep(p / 0.16) * (1 - smoothBattleBroStep((p - 0.92) / 0.08));
-    const weight = (side ? -1 : 1) * (1 - 2 * pull) * load;
-    mover.parts.rig.position.x = profile.sway * weight;
-    mover.parts.rig.position.y = -profile.sway * load;
-    const body = mover.parts.torso || mover.parts.rig;
-    body.rotation.z = -profile.lean * weight;
-    if (mover.root.userData.characterFamily === 'monsters') {
-      tickAdvancedTurn(mover);
-    }
-    if (p < 1) return false;
-    turn.yaw += turn.delta;
-    turn.index++;
-    turn.side = support;
-    turn.progress = 0;
-    if (turn.index < turn.steps) {
-      prepareLavaTurnStep(mover);
-      return false;
-    }
-    return true;
-  }
+  function beginLavaTurn(...args) { return juggernautAnimationSystem().beginLavaTurn(...args); }
+
+  function prepareLavaTurnStep(...args) { return juggernautAnimationSystem().prepareLavaTurnStep(...args); }
+
+  function tickLavaTurn(...args) { return juggernautAnimationSystem().tickLavaTurn(...args); }
 
   // Keep every Monster's continuous upper-body anticipation over the original
   // planted stepping. Compensate for root yaw so each support pause does not
   // interrupt the hip, chest, and head headings.
-  function tickAdvancedTurn(mover) {
-    const turn = mover.turn;
-    const angle = turn.delta * turn.steps;
-    const p = (turn.index + turn.progress) / turn.steps;
-    const hips = smoothBattleBroStep((p - 0.10) / 0.80);
-    const chest = smoothBattleBroStep((p - 0.04) / 0.76);
-    const head = smoothBattleBroStep(p / 0.46);
-    const startYaw = turn.yaw - turn.delta * turn.index;
-    mover.parts.torso.rotation.y = startYaw + angle * hips - mover.root.rotation.y;
-    const pose = mover.upperTurn || (mover.upperTurn = {});
-    pose.chest = angle * (chest - hips);
-    pose.head = angle * (head - chest);
-    // The companion head notices slightly later and makes a smaller, slower glance.
-    pose.head2 = angle * (smoothBattleBroStep((p - 0.01) / 0.54) - chest) * 0.72;
-    pose.head2Pitch = Math.sin(Math.PI * p) ** 2 * 0.045;
-    pose.lean = -Math.sign(angle) * Math.sin(Math.PI * p) ** 2 * 0.045;
-  }
+  function tickAdvancedTurn(...args){return monsterAnimationSystem().tickAdvancedTurn(...args);}
 
   // Reuse the existing 3D support solve for terrain-corrected Lava contacts.
   // Other variants retain their planar gait. Scratch objects are reused.
-  function solveLavaTurnArm(mover, arm, anchor, index, turn = mover.turn) {
-    const target = turn.local.copy(anchor);
-    target.y += mover.terrainContacts ? mover.terrainContacts[index].sole : LAVA_WRIST_ABOVE_GROUND;
-    mover.parts.torso.worldToLocal(target);
-    const a = arm.elbow.position.length(), b = arm.hand.position.length();
-    // The decorated shoulder rests slightly beyond full extension. Compress
-    // its floating joint enough to reach the floor instead of sliding a fist.
-    arm.shoulder.position.y = index ? mover.rightShoulderBaseY : mover.leftShoulderBaseY;
-    const horizontalSq = (target.x - arm.shoulder.position.x) ** 2 + (target.z - arm.shoulder.position.z) ** 2;
-    arm.shoulder.position.y = Math.min(arm.shoulder.position.y,
-      target.y + Math.sqrt(Math.max(0, (a + b - 0.002) ** 2 - horizontalSq)));
-    target.sub(arm.shoulder.position);
-    const distance = Math.max(0.01, Math.min(a + b - 0.001, target.length()));
-    const direction = turn.direction.copy(target).normalize();
-    const along = (a * a - b * b + distance * distance) / (2 * distance);
-    const bend = turn.bend.set(0, 0, -1).addScaledVector(direction, direction.z).normalize();
-    const elbow = turn.elbow.copy(direction).multiplyScalar(along)
-      .addScaledVector(bend, Math.sqrt(Math.max(0, a * a - along * along)));
-    arm.shoulder.quaternion.setFromUnitVectors(turn.rest.copy(arm.elbow.position).normalize(), turn.bend.copy(elbow).normalize());
-    target.copy(direction).multiplyScalar(distance).sub(elbow)
-      .applyQuaternion(turn.quaternion.copy(arm.shoulder.quaternion).invert()).normalize();
-    arm.elbow.quaternion.setFromUnitVectors(turn.rest.copy(arm.hand.position).normalize(), target);
-    arm.elbow.updateWorldMatrix(true, false);
-    arm.elbow.getWorldQuaternion(turn.quaternion).invert();
-    arm.hand.quaternion.setFromAxisAngle(turn.rest.set(0, 1, 0), turn.contactYaw[index]).premultiply(turn.quaternion);
-  }
+  function solveLavaTurnArm(...args) { return juggernautAnimationSystem().solveLavaTurnArm(...args); }
 
   function evaluateLavaTerrainStep(cellX, cellZ, mover, heading) {
     mover.terrainFailure = null; mover.terrainPhase = 'destination';
@@ -16073,34 +16040,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     );
   }
 
-  function solveLavaArmToAnchor(mover, arm, anchor) {
-    if (mover.terrainContacts) {
-      const index = arm === mover.parts.leftArm ? 0 : 1;
-      mover.terrainIK.contactYaw[index] = mover.root.rotation.y;
-      return solveLavaTurnArm(mover, arm, anchor, index, mover.terrainIK);
-    }
-    const target = mover.ikTarget.copy(anchor);
-    target.y += LAVA_WRIST_ABOVE_GROUND;
-    mover.parts.torso.worldToLocal(target);
-    const dy = target.y - arm.shoulder.position.y;
-    const dz = target.z - arm.shoulder.position.z;
-    const reach = Math.max(0.08, Math.min(LAVA_UPPER_ARM_LENGTH + LAVA_FOREARM_LENGTH - 0.015, Math.hypot(dy, dz)));
-    const elbowCos = Math.max(-1, Math.min(1,
-      (reach * reach - LAVA_UPPER_ARM_LENGTH * LAVA_UPPER_ARM_LENGTH - LAVA_FOREARM_LENGTH * LAVA_FOREARM_LENGTH)
-        / (2 * LAVA_UPPER_ARM_LENGTH * LAVA_FOREARM_LENGTH),
-    ));
-    const elbowAngle = Math.acos(elbowCos);
-    const targetAngle = Math.atan2(-dz, -dy);
-    const shoulderAngle = targetAngle - Math.atan2(
-      LAVA_FOREARM_LENGTH * Math.sin(elbowAngle),
-      LAVA_UPPER_ARM_LENGTH + LAVA_FOREARM_LENGTH * Math.cos(elbowAngle),
-    );
-    arm.shoulder.rotation.set(shoulderAngle, 0, 0);
-    arm.elbow.rotation.set(elbowAngle, 0, 0);
-    arm.hand.rotation.y = 0;
-    arm.hand.rotation.x = -(shoulderAngle + elbowAngle + mover.parts.torso.rotation.x);
-    arm.hand.rotation.z = -mover.parts.torso.rotation.z;
-  }
+  function solveLavaArmToAnchor(...args) { return juggernautAnimationSystem().solveLavaArmToAnchor(...args); }
 
   function emitLavaHandPlant(mover, side) {
     const anchor = side < 0 ? mover.leftAnchor : mover.rightAnchor;
@@ -16135,6 +16075,11 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   // Forms IV–VII use one continuous two-contact cycle on ordinary movement.
   // Navigation supplies the destination and safe contact endpoints; this
   // layer only coordinates the articulated reach, plant, and body travel.
+  // Shared home/follower gait poses. Navigation owns destinations and collisions.
+  function poseBattleBroSupportWalk(...args) { return juggernautAnimationSystem().poseBattleBroSupportWalk(...args); }
+  function poseBattleBroSupportRun(...args) { return juggernautAnimationSystem().poseBattleBroSupportRun(...args); }
+  function poseBattleBroJuvenileLoad(...args) { return juggernautAnimationSystem().poseBattleBroJuvenileLoad(...args); }
+  // End shared home/follower gait poses.
   function beginJuggernautStride(mover) {
     const distance=Math.hypot(mover.targetX-mover.startX,mover.targetZ-mover.startZ);
     const form=Math.max(4,mover.root.userData.form||4);
@@ -16148,31 +16093,8 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   function tickJuggernautStride(mover,dt) {
     const stride=mover.juggernautStride,parts=mover.parts;
     stride.elapsed=Math.min(stride.duration,stride.elapsed+Math.max(0,Math.min(dt,.05)));
-    const p=stride.elapsed/stride.duration,first=p<.5;
-    const u=first?p*2:(p-.5)*2;
-    const reach=smoothJuggernautStep(u/.58);
-    const swing=first?mover.rightAnchor:mover.leftAnchor;
-    const start=first?stride.rightStart:stride.leftStart;
-    const goal=first?mover.rightGoal:mover.leftGoal;
-    if(first)mover.leftAnchor.copy(stride.leftStart);else mover.rightAnchor.copy(mover.rightGoal);
-    swing.lerpVectors(start,goal,reach);
-    swing.y+=Math.sin(Math.PI*reach)*stride.lift;
-
-    // Transfer the body after the reaching support lands. In particular, do
-    // not drag the body ahead while the trailing support is still swinging.
-    const travel=(first?0:.5)+.5*smoothJuggernautStep((u-.58)/.42);
-    mover.root.position.x=THREE.MathUtils.lerp(mover.startX,mover.targetX,travel);
-    mover.root.position.z=THREE.MathUtils.lerp(mover.startZ,mover.targetZ,travel);
-    mover.root.position.y=THREE.MathUtils.lerp(mover.startY,mover.targetY,travel);
-    if(stride.impactYaw!==undefined)mover.root.rotation.y=stride.startYaw
-      +battleBroYawDelta(stride.impactYaw-stride.startYaw)*smoothJuggernautStep(Math.min(1,p/.72));
-    const rhythm=Math.sin(Math.PI*2*p),rise=Math.sin(Math.PI*2*p)**2;
-    parts.rig.position.x=-rhythm*.022;
-    parts.rig.position.y=rise*.018;
-    parts.torso.rotation.set(0,0,rhythm*.016);
-    parts.head.position.y=mover.headBaseY-rise*.008;
-    parts.head.rotation.x=-rise*.008;
-    mover.progress=p;
+    const p=stride.elapsed/stride.duration;
+    poseBattleBroSupportWalk(mover,p,stride);
     if(mover.juggernautImpact&&!mover.juggernautImpact.impacted&&p>=.62){
       const impact=mover.juggernautImpact;
       if(impact.cell===getWorldCell(impact.x,impact.z)){
@@ -16215,6 +16137,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   }
 
   function juggernautRunTargetValid(mover){
+    if(mover.animationNavigation)return mover.animationNavigation.runTargetValid?.(mover)===true;
     const cell=longneckSprintCell(mover,mover.targetCellX,mover.targetCellZ,mover.cellX,mover.cellZ);
     const impact=mover.juggernautImpact;
     return !!cell && !(cell.occupied && (!impact||impact.impacted))
@@ -16239,49 +16162,8 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     }
     if(!juggernautRunTargetValid(mover)){stopJuggernautJog(mover);return true;}
     run.elapsed=Math.min(run.duration,run.elapsed+step);
-    const p=run.elapsed/run.duration,scale=run.scale;
-    const takeoff=.60,landing=.84;
-    const swing=smoothJuggernautStep(p/landing);
-    const support=anchors[run.support],recovery=anchors[run.landing];
-    recovery.lerpVectors(run.starts[run.landing],run.goal,swing);
-    recovery.y+=Math.sin(Math.PI*Math.min(1,p/landing))*.38*scale;
-    support.copy(run.starts[run.support]);
-    if(p>takeoff){
-      const fold=smoothJuggernautStep((p-takeoff)/(1-takeoff));
-      const forwardX=Math.sin(mover.desiredYaw),forwardZ=Math.cos(mover.desiredYaw);
-      const side=run.support?1:-1;
-      const endX=mover.targetX-forwardX*.38*scale+Math.cos(mover.desiredYaw)*side*LAVA_HAND_LATERAL*scale;
-      const endZ=mover.targetZ-forwardZ*.38*scale-Math.sin(mover.desiredYaw)*side*LAVA_HAND_LATERAL*scale;
-      support.x=THREE.MathUtils.lerp(support.x,endX,fold);
-      support.z=THREE.MathUtils.lerp(support.z,endZ,fold);
-      support.y=THREE.MathUtils.lerp(support.y,mover.targetY+.24*scale,
-        Math.sin(Math.PI*.5*(p-takeoff)/(1-takeoff)));
-    }
-    // Compression -> planted extension -> ballistic arc -> landing absorption.
-    let bounce;
-    const launchVelocity=4*.08/(landing-takeoff);
-    if(p<.16)bounce=-.09*smoothJuggernautStep(p/.16);
-    else if(p<takeoff){
-      const u=(p-.16)/(takeoff-.16);
-      // Match upward velocity at takeoff instead of pausing at full extension.
-      bounce=-.09+.22*(3*u*u-2*u*u*u)+launchVelocity*(takeoff-.16)*(u*u*u-u*u);
-    }else if(p<landing){
-      const flight=(p-takeoff)/(landing-takeoff);bounce=.13+.08*4*flight*(1-flight);
-    }else{
-      const u=(p-landing)/(1-landing);
-      // Absorb the incoming flight velocity continuously into the next load.
-      bounce=.13*(2*u*u*u-3*u*u+1)-launchVelocity*(1-landing)*(u*u*u-2*u*u+u);
-    }
-    const travel=p-.025*Math.sin(2*Math.PI*p);
-    mover.root.position.set(THREE.MathUtils.lerp(mover.startX,mover.targetX,travel),
-      THREE.MathUtils.lerp(mover.startY,mover.targetY,travel)+bounce*scale,
-      THREE.MathUtils.lerp(mover.startZ,mover.targetZ,travel));
-    const lean=run.first?smoothJuggernautStep(p/.22):1;
-    parts.rig.position.set(0,0,0);
-    parts.torso.rotation.set(.055*lean,0,0);
-    run.phase=p<.16?'LOAD':p<takeoff?'PUSH':p<landing?'FLIGHT':'LAND';
-    run.contact[run.support]=p<=takeoff;run.contact[run.landing]=p>=landing;
-    mover.progress=p;
+    const p=run.elapsed/run.duration,scale=run.scale,landing=.84,support=anchors[run.support];
+    poseBattleBroSupportRun(mover,p,run);
     if(p>=landing&&!run.landed){
       run.landed=true;emitLavaHandPlant(mover,run.landing?1:-1);
       const impact=mover.juggernautImpact;
@@ -16314,6 +16196,48 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
 
   const LAVA_LOCAL_DIRECTIONS = Object.freeze([...BATTLEBRO_DIRECTIONS, [1, 1], [1, -1], [-1, 1], [-1, -1]]);
 
+  function recoverHomeBattleBro(mover,dt) {
+    const root=mover.root;
+    const blocked=(mover.blockedAttempts||0)>=2 || (mover.smashFailedSearches||0)>=2;
+    if(!root?.parent || root.userData.previewHome || (typeof neighborInspectionState!=='undefined'&&neighborInspectionState.active)
+      || !blocked || !['IDLE','IDLE_HOVER'].includes(mover.state) || mover.smash
+      || root.userData.terrainConsume || root.userData.rockThrow) {mover.homeRecoveryTime=0;return false;}
+    mover.homeRecoveryTime=(mover.homeRecoveryTime||0)+dt;
+    if(mover.homeRecoveryTime<8)return false;
+    mover.homeRecoveryTime=6;
+    const actors=[...lavaMonsterMovers,...minotaurMovers,...specterMovers];
+    const originY=battleBroGroundHeight(mover.cellX,mover.cellZ);
+    for(let radius=2;radius<=4;radius++)for(const [dx,dz] of LAVA_LOCAL_DIRECTIONS) {
+      const x=mover.cellX+dx*radius,z=mover.cellZ+dz*radius;
+      if(x<1||z<1||x>=GRID-1||z>=GRID-1 || trainingFacilityOccupiesCell(x,z)
+        || (typeof stargateOccupiesCell==='function'&&stargateOccupiesCell(x,z)))continue;
+      const y=battleBroGroundHeight(x,z),point=tilePos(x,z);
+      if(Math.abs(y-originY)>.45 || actors.some(a=>a!==mover&&a.root?.parent
+        &&Math.hypot(a.root.position.x-point.x,a.root.position.z-point.z)<2.5))continue;
+      let valid=true;
+      for(let ox=-1;ox<=1;ox++)for(let oz=-1;oz<=1;oz++) {
+        const c=getWorldCell(x+ox,z+oz);
+        if(!c || c.kind || c.extras?.length || ['water','lava'].includes(c.terrain)
+          || Math.abs(battleBroGroundHeight(x+ox,z+oz)-y)>.01
+          || trainingFacilityOccupiesCell(x+ox,z+oz))valid=false;
+      }
+      if(!valid)continue;
+      const delta=new THREE.Vector3(point.x-root.position.x,y-originY,point.z-root.position.z);
+      const anchors=mover.anchors||[mover.leftAnchor,mover.rightAnchor];
+      const contacts=anchors.map((a,i)=>a && (mover.terrainContacts
+        ?safeLavaContact(mover,a.clone().add(delta),root.rotation.y,i,y):a.clone().add(delta)));
+      if(anchors.some((a,i)=>a&&!contacts[i]))continue;
+      root.position.add(delta);anchors.forEach((a,i)=>{if(a)a.copy(contacts[i]);});
+      Object.assign(mover,{cellX:x,cellZ:z,targetCellX:x,targetCellZ:z,startX:point.x,targetX:point.x,
+        startZ:point.z,targetZ:point.z,startY:root.position.y,targetY:root.position.y,baseY:root.position.y,
+        progress:0,blockedAttempts:0,smashFailedSearches:0,stationaryFor:0,homeRecoveryTime:0,
+        pauseRemaining:.1,idleRemaining:.1,terrainPlan:null,turn:null,recoveryExit:null});
+      if(mover.longneckFootRest)resetLongneckFeet(mover);
+      tickLooseRockAttachments(root,0,0);
+      return true;
+    }
+    return false;
+  }
   function tickLavaTraversalProgress(mover, dt) {
     if (!mover.terrainContacts) return;
     const step = Math.max(0, Math.min(dt, 0.05));
@@ -16459,11 +16383,12 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     }
     mover.blockedAttempts = (mover.blockedAttempts || 0) + 1;
     mover.recoveryState = 'WAITING';
+    if(mover.blockedAttempts>=2 && tryScenerySmash(mover,true))return null;
     // Long planted gait/turn phases and deliberate attack pauses cannot enter
     // recovery. Both repeated full searches and sustained lack of progress count.
     if (!mover.terrainContacts || mover.blockedAttempts < 2 || (mover.stationaryFor || 0) < 3
       || now < (mover.recoveryAfter || 0)) { tryBlockedTerrainSmash(mover); showLavaTraversalDebug(mover); return null; }
-    mover.recoveryAfter = now + 10;
+    mover.recoveryAfter = now + 2;
     const retreats = LAVA_LOCAL_DIRECTIONS.filter(([dx, dz]) => dx * Math.sin(yaw) + dz * Math.cos(yaw) < 0.35)
       .slice().sort((a, b) => {
         const score = ([dx, dz]) => (mover.lastSafeCell?.x === mover.cellX + dx && mover.lastSafeCell?.z === mover.cellZ + dz ? -4 : 0)
@@ -16561,17 +16486,18 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   };
 
   function chooseLavaWalkTarget(mover) {
-    const route = selectJuggernautJogRoute(mover)
-      ||selectJuggernautImpactRoute(mover)||selectLavaWalkRoute(mover);
+    const route = mover.animationNavigation ? mover.animationNavigation.selectRoute(mover)
+      : selectJuggernautJogRoute(mover)||selectJuggernautImpactRoute(mover)||selectLavaWalkRoute(mover);
     if (route) {
       const cellX = route.x, cellZ = route.z;
       mover.terrainPlan = route.plan;
       mover.startX = mover.root.position.x;
       mover.startZ = mover.root.position.z;
       mover.startY = mover.terrainContacts ? mover.root.position.y : battleBroGroundHeight(mover.cellX, mover.cellZ);
-      mover.targetX = cellX - GRID / 2 + 0.5;
-      mover.targetZ = cellZ - GRID / 2 + 0.5;
-      mover.targetY = battleBroGroundHeight(cellX, cellZ);
+      const destination=mover.animationNavigation?.point(cellX,cellZ);
+      mover.targetX = destination ? destination.x : cellX - GRID / 2 + 0.5;
+      mover.targetZ = destination ? destination.z : cellZ - GRID / 2 + 0.5;
+      mover.targetY = destination ? destination.y : battleBroGroundHeight(cellX, cellZ);
       mover.targetCellX = cellX;
       mover.targetCellZ = cellZ;
       mover.heightDelta = mover.targetY - mover.startY;
@@ -16611,11 +16537,12 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     return false;
   }
 
-  function registerLavaMonsterMover(root, cellX, cellZ) {
-    if (lavaMovementForm(root) >= 1 && lavaMovementForm(root) <= 3) return registerNewbornMover(root, cellX, cellZ);
+  function registerLavaMonsterMover(root, cellX, cellZ, animationNavigation = null) {
+    if (lavaMovementForm(root) >= 1 && lavaMovementForm(root) <= 3) return registerNewbornMover(root, cellX, cellZ, animationNavigation);
     const parts = root.userData.locomotionRig || root.userData.rig;
-    const groundY = battleBroGroundHeight(cellX, cellZ);
+    const groundY = animationNavigation ? root.position.y : battleBroGroundHeight(cellX, cellZ);
     const mover = {
+      animationNavigation,
       root, parts, state: LAVA_MOVE_STATE.IDLE, progress: 0,
       cellX, cellZ, targetCellX: cellX, targetCellZ: cellZ,
       startX: root.position.x, startZ: root.position.z, startY: groundY,
@@ -16649,7 +16576,8 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       mover.clearance = root.userData.previewClearance;
       root.userData.advancedMovement = mover;
     }
-    lavaMonsterMovers.add(mover);
+    if(!animationNavigation)lavaMonsterMovers.add(mover);
+    if(['juggernaut','monsters'].includes(root.userData.characterFamily))ensureSupportAnimation(mover);
     return mover;
   }
 
@@ -16668,6 +16596,47 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     mover.pauseRemaining = mover.recoveryExit ? 0.35 : 1.4 + Math.random() * 2.8;
   }
 
+  const BATTLEBRO_JUMP_SETTINGS=Object.freeze({prepare:.32,land:.38});
+  function battleBroFamily(root){
+    return root.userData.kind==='battlebro-longneck-prototype'?'longneck'
+      :root.userData.kind==='battlebro-floating-rock-prototype'?'specter'
+      :root.userData.characterFamily||(root.userData.form<=4?'juggernaut':'monsters');
+  }
+  function tickHomeBattleBroJump(mover,t,dt){
+    const root=mover.root;
+    if(!root?.parent||root.userData.previewHome)return false;
+    mover.homeJumpWait ??= 20+(root.userData.form||1)*1.7+(root.userData.idlePhase||0)%5;
+    mover.homeJumpWait-=dt;
+    if(!mover.homeJump){
+      if(mover.homeJumpWait>0||!['IDLE','IDLE_HOVER'].includes(mover.state)||mover.smash
+        ||root.userData.rockThrow||root.userData.terrainConsume||mover.sprint||mover.turn)return false;
+      const radius=Math.max(.4,root.scale.x*.8),ground=minotaurGroundHeight(mover.cellX,mover.cellZ);
+      for(const [dx,dz] of [[0,0],[-radius,0],[radius,0],[0,-radius],[0,radius]]){
+        const x=Math.round(root.position.x+dx+GRID/2-.5),z=Math.round(root.position.z+dz+GRID/2-.5);
+        const cell=getWorldCell(x,z);
+        if(!cell||cell.kind||cell.extras?.length||['water','lava'].includes(cell.terrain)
+          ||Math.abs(minotaurGroundHeight(x,z)-ground)>.05){mover.homeJumpWait=3;return false;}
+      }
+      const character=battleBroFamily(root);
+      mover.homeJumpState=mover.state;
+      mover.homeJump=createBattleBroJump(THREE,root,{...BATTLEBRO_JUMP_SETTINGS,character,
+        gravity:typeof FP_GRAVITY==='number'?FP_GRAVITY:.6,velocity:typeof FP_JUMP_V0==='number'?FP_JUMP_V0:2.9,
+        groundY:()=>minotaurGroundHeight(mover.cellX,mover.cellZ)+(character==='specter'?SPECTER_HOVER_CLEARANCE:0),
+        longneck:character==='longneck'?ensureLongneckAnimation(mover):null,
+        solveSupport:solveLavaTurnArm,poseJuvenile:poseDevelopingArms});
+      mover.state='JUMPING';
+    }
+    restoreTelekineticBody(root);
+    if(!mover.homeJump.tick(dt,t)){
+      mover.state=mover.homeJumpState;mover.homeJumpState=null;
+      mover.homeJump=null;mover.homeJumpWait=24+(root.userData.form||1)*2;
+      mover.pauseRemaining=Math.max(mover.pauseRemaining||0,1);mover.idleRemaining=Math.max(mover.idleRemaining||0,1);
+      mover.stationaryFor=0;mover.navigationProgress=null;
+    }
+    tickBattleBroWorldExpression(root,t);tickBattleBroExpression(root,dt);tickLooseRockAttachments(root,t,dt,mover);
+    return true;
+  }
+
   function tickLavaMonsterMovers(t, dt) {
     tickBattleBroExpressionDemo(dt);
     for (const mover of lavaMonsterMovers) {
@@ -16678,6 +16647,11 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
         continue;
       }
       if (mover.root.userData.terrainConsume) { tickTerrainConsume(mover.root.userData.terrainConsume,t,dt); continue; }
+      if(tickHomeBattleBroJump(mover,t,dt)){
+        if(mover.juggernautAnimation||mover.monsterAnimation){ensureSupportAnimation(mover).interrupt();mover.grounded=!mover.homeJump||['prepare','landing'].includes(mover.homeJump.phase);}
+        continue;
+      }
+      recoverHomeBattleBro(mover,dt);
       tickBipedSceneryContacts(mover,dt);
       mover.juggernautJogCooldown=Math.max(0,(mover.juggernautJogCooldown||0)-dt);
       tickLavaTraversalProgress(mover, dt);
@@ -16687,191 +16661,17 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
         const pending=mover.pendingScenerySmash;mover.pendingScenerySmash=null;
         if(tryScenerySmash(mover,true,pending.target))continue;
       }
-      if (lavaMovementForm(mover.root) >= 1 && lavaMovementForm(mover.root) <= 3) {
-        tickNewbornMover(mover, t, dt);
-        tickBattleBroExpression(mover.root, dt);
-        continue;
+      if(['juggernaut','monsters'].includes(mover.root.userData.characterFamily)){
+        const animation=ensureSupportAnimation(mover);
+        const proposal=animation.prepare({},dt,t);
+        mover.root.position.copy(proposal.position);mover.root.rotation.y=proposal.yaw;
+        animation.commit({grounded:true},t,dt);
+      }else if(lavaMovementForm(mover.root)>=1 && lavaMovementForm(mover.root)<=3){
+        tickNewbornMover(mover,t,dt);tickBattleBroExpression(mover.root,dt);
+      }else{
+        juggernautAnimationSystem().advance(mover,t,dt);
+        juggernautAnimationSystem().finish(mover,t,dt);
       }
-      const parts = mover.parts;
-      const state = mover.state;
-      const bipedGait=usesBipedSupportGait(mover.root);
-      let phaseDuration = state === LAVA_MOVE_STATE.TURNING ? 0.7
-        : (state === LAVA_MOVE_STATE.REACH_RIGHT || state === LAVA_MOVE_STATE.REACH_LEFT ? 0.72
-          : (state === LAVA_MOVE_STATE.PULL_RIGHT || state === LAVA_MOVE_STATE.PULL_LEFT ? 0.92
-            : (state === LAVA_MOVE_STATE.PLANT_RIGHT || state === LAVA_MOVE_STATE.PLANT_LEFT ? 0.24 : 0.42)));
-
-      if (lavaMovementForm(mover.root) === 5) {
-        phaseDuration *= state === LAVA_MOVE_STATE.PULL_LEFT ? 1.20
-          : state === LAVA_MOVE_STATE.PULL_RIGHT ? 1.07 : 1.08;
-      }
-
-      if (state === LAVA_MOVE_STATE.IDLE) {
-        const groundY = mover.terrainContacts ? (mover.leftAnchor.y + mover.rightAnchor.y) * 0.5 : battleBroGroundHeight(mover.cellX, mover.cellZ);
-        mover.root.position.y += (groundY - mover.root.position.y) * Math.min(1, dt * 6);
-        parts.rig.position.y = Math.sin(t * 1.7) * 0.006;
-        parts.torso.rotation.z = Math.sin(t * 0.65) * 0.005;
-        const throwing=mover.root.userData.rockThrow;
-        const holdStance=throwing && (bipedGait || ['NOTICE','WINDUP','RELEASE'].includes(throwing.state));
-        if (!holdStance) {
-          mover.pauseRemaining -= dt;
-          if (mover.pauseRemaining <= 0) chooseLavaWalkTarget(mover);
-        }
-      } else if (state === LAVA_MOVE_STATE.TURNING && !mover.terrainContacts) {
-        // Other material variants retain their existing orientation behavior.
-        const yawDelta = battleBroYawDelta(mover.desiredYaw - mover.root.rotation.y);
-        mover.root.rotation.y += yawDelta * Math.min(1, dt * 3.2);
-        parts.torso.rotation.z = Math.max(-0.045, Math.min(0.045, -yawDelta * 0.07));
-        const groundY = battleBroGroundHeight(mover.cellX, mover.cellZ);
-        setLavaHandAnchor(mover.leftAnchor, mover.root.position.x, mover.root.position.z, mover.root.rotation.y, -1, groundY,lavaSupportScale(mover.root));
-        setLavaHandAnchor(mover.rightAnchor, mover.root.position.x, mover.root.position.z, mover.root.rotation.y, 1, groundY,lavaSupportScale(mover.root));
-        if (Math.abs(yawDelta) < 0.035) {
-          mover.root.rotation.y = mover.desiredYaw;
-          setLavaHandAnchor(mover.leftAnchor, mover.startX, mover.startZ, mover.desiredYaw, -1, mover.startY,lavaSupportScale(mover.root));
-          setLavaHandAnchor(mover.rightAnchor, mover.startX, mover.startZ, mover.desiredYaw, 1, mover.startY,lavaSupportScale(mover.root));
-          if(bipedGait){if(mover.juggernautJog)beginJuggernautRun(mover);else beginJuggernautStride(mover);}
-          else enterLavaMoveState(mover, LAVA_MOVE_STATE.SHIFT_LEFT);
-        }
-      } else if (state === LAVA_MOVE_STATE.TURNING) {
-        if (tickLavaTurn(mover, dt)) {
-          if(mover.pendingScenerySmash){
-            mover.state=LAVA_MOVE_STATE.IDLE;mover.progress=0;
-            parts.rig.position.set(0,0,0);parts.torso.rotation.set(0,0,0);
-          }else if(bipedGait){if(mover.juggernautJog)beginJuggernautRun(mover);else beginJuggernautStride(mover);}
-          else enterLavaMoveState(mover, LAVA_MOVE_STATE.SHIFT_LEFT);
-        }
-      } else if(state===LAVA_MOVE_STATE.JUGGERNAUT_RUN){
-        tickJuggernautRun(mover,dt);
-      } else if(state===LAVA_MOVE_STATE.JUGGERNAUT_STRIDE){
-        tickJuggernautStride(mover,dt);
-      } else {
-        mover.progress = Math.min(1, mover.progress + dt / phaseDuration);
-        const gaitEase=usesBipedSupportGait(mover.root)?smoothJuggernautStep:smoothBattleBroStep;
-        const p = gaitEase(mover.progress);
-        let nextState = null;
-
-        if (state === LAVA_MOVE_STATE.SHIFT_LEFT) {
-          parts.torso.rotation.z = p * 0.065;
-          parts.rig.position.x = -p * 0.035;
-          parts.rig.position.y = (-0.14 + (mover.terrainContacts ? 0 : Math.min(0, mover.targetY - mover.root.position.y))) * p;
-          if (mover.progress >= 1) nextState = LAVA_MOVE_STATE.REACH_RIGHT;
-        } else if (state === LAVA_MOVE_STATE.REACH_RIGHT) {
-          mover.rightAnchor.lerpVectors(mover.reachStart, mover.rightGoal, p);
-          mover.rightAnchor.y += Math.sin(mover.progress * Math.PI) * 0.16;
-          if (mover.terrainPlan) sampleLavaContactSwing(mover.rightAnchor, mover.terrainPlan.swings[0], p);
-          parts.torso.rotation.z = 0.065 - p * 0.025;
-          parts.torso.rotation.y = -p * 0.055;
-          parts.rig.position.y = -0.14 + (mover.terrainContacts ? 0 : Math.min(0, mover.targetY - mover.root.position.y));
-          if (mover.progress >= 1) nextState = LAVA_MOVE_STATE.PLANT_RIGHT;
-        } else if (state === LAVA_MOVE_STATE.PLANT_RIGHT) {
-          parts.rightArm.shoulder.position.y = mover.rightShoulderBaseY - Math.sin(mover.progress * Math.PI) * 0.045;
-          parts.rig.position.y = -0.14 + (mover.terrainContacts ? 0 : Math.min(0, mover.targetY - mover.root.position.y))
-            - Math.sin(mover.progress * Math.PI) * 0.035;
-          if (mover.progress >= 1) nextState = LAVA_MOVE_STATE.PULL_RIGHT;
-        } else if (state === LAVA_MOVE_STATE.PULL_RIGHT) {
-          const pull = gaitEase((mover.progress - 0.14) / 0.86);
-          mover.root.position.x = mover.pullStartX + (mover.pullEndX - mover.pullStartX) * pull;
-          mover.root.position.z = mover.pullStartZ + (mover.pullEndZ - mover.pullStartZ) * pull;
-          mover.root.position.y = mover.pullStartY + (mover.pullEndY - mover.pullStartY) * pull - Math.sin(pull * Math.PI) * 0.035;
-          parts.torso.rotation.z = 0.04 - pull * 0.075;
-          parts.torso.rotation.y = -0.055 + pull * 0.09;
-          parts.rig.position.x = -0.035 + pull * 0.060;
-          parts.rig.position.y = mover.pullRigStartY * (1 - pull);
-          if (mover.progress >= 1) nextState = LAVA_MOVE_STATE.SHIFT_RIGHT;
-        } else if (state === LAVA_MOVE_STATE.SHIFT_RIGHT) {
-          parts.torso.rotation.z = -0.035 - p * 0.030;
-          parts.rig.position.x = 0.025 + p * 0.015;
-          parts.rig.position.y = (-0.14 + (mover.terrainContacts ? 0 : Math.min(0, mover.targetY - mover.root.position.y))) * p;
-          if (mover.progress >= 1) nextState = LAVA_MOVE_STATE.REACH_LEFT;
-        } else if (state === LAVA_MOVE_STATE.REACH_LEFT) {
-          mover.leftAnchor.lerpVectors(mover.reachStart, mover.leftGoal, p);
-          mover.leftAnchor.y += Math.sin(mover.progress * Math.PI) * 0.16;
-          if (mover.terrainPlan) sampleLavaContactSwing(mover.leftAnchor, mover.terrainPlan.swings[1], p);
-          parts.torso.rotation.z = -0.065 + p * 0.025;
-          parts.torso.rotation.y = 0.055 * p;
-          parts.rig.position.y = -0.14 + (mover.terrainContacts ? 0 : Math.min(0, mover.targetY - mover.root.position.y));
-          if (mover.progress >= 1) nextState = LAVA_MOVE_STATE.PLANT_LEFT;
-        } else if (state === LAVA_MOVE_STATE.PLANT_LEFT) {
-          parts.leftArm.shoulder.position.y = mover.leftShoulderBaseY - Math.sin(mover.progress * Math.PI) * 0.045;
-          parts.rig.position.y = -0.14 + (mover.terrainContacts ? 0 : Math.min(0, mover.targetY - mover.root.position.y))
-            - Math.sin(mover.progress * Math.PI) * 0.035;
-          if (mover.progress >= 1) nextState = LAVA_MOVE_STATE.PULL_LEFT;
-        } else if (state === LAVA_MOVE_STATE.PULL_LEFT) {
-          const pull = gaitEase((mover.progress - 0.14) / 0.86);
-          mover.root.position.x = mover.pullStartX + (mover.pullEndX - mover.pullStartX) * pull;
-          mover.root.position.z = mover.pullStartZ + (mover.pullEndZ - mover.pullStartZ) * pull;
-          mover.root.position.y = mover.pullStartY + (mover.pullEndY - mover.pullStartY) * pull - Math.sin(pull * Math.PI) * 0.035;
-          parts.torso.rotation.z = -0.04 + pull * 0.04;
-          parts.torso.rotation.y = 0.055 * (1 - pull);
-          parts.rig.position.x = 0.04 * (1 - pull);
-          parts.rig.position.y = mover.pullRigStartY * (1 - pull);
-          if (mover.progress >= 1) nextState = LAVA_MOVE_STATE.SETTLE;
-        } else if (state === LAVA_MOVE_STATE.SETTLE) {
-          parts.rig.position.y = -Math.sin(mover.progress * Math.PI) * 0.028;
-          parts.rig.position.x *= 1 - p;
-          parts.torso.rotation.z *= 1 - p;
-          parts.torso.rotation.y *= 1 - p;
-          if (mover.progress >= 1) settleLavaMonsterMove(mover);
-        }
-        if (nextState) enterLavaMoveState(mover, nextState);
-      }
-
-      mover.root.updateMatrixWorld(true);
-      if (mover.turn) {
-        solveLavaTurnArm(mover, parts.leftArm, mover.leftAnchor, 0);
-        solveLavaTurnArm(mover, parts.rightArm, mover.rightAnchor, 1);
-        if (mover.state !== LAVA_MOVE_STATE.TURNING) {
-          mover.turnHandoff = mover.terrainContacts ? null : {
-            elapsed: 0,
-            rotations: [parts.leftArm, parts.rightArm].map(arm =>
-              [arm.shoulder.quaternion.clone(), arm.elbow.quaternion.clone(), arm.hand.quaternion.clone()]),
-            heights: [parts.leftArm.shoulder.position.y, parts.rightArm.shoulder.position.y],
-          };
-          mover.turn = null;
-        }
-      } else {
-        solveLavaArmToAnchor(mover, parts.leftArm, mover.leftAnchor);
-        solveLavaArmToAnchor(mover, parts.rightArm, mover.rightAnchor);
-        if (mover.turnHandoff) {
-          const handoff = mover.turnHandoff;
-          handoff.elapsed += Math.max(0, Math.min(dt, 0.05));
-          const blend = smoothBattleBroStep(handoff.elapsed / 0.24);
-          [parts.leftArm, parts.rightArm].forEach((arm, i) => {
-            [arm.shoulder, arm.elbow, arm.hand].forEach((joint, j) =>
-              joint.quaternion.slerp(handoff.rotations[i][j], 1 - blend));
-            arm.shoulder.position.y = handoff.heights[i] +
-              ((i ? mover.rightShoulderBaseY : mover.leftShoulderBaseY) - handoff.heights[i]) * blend;
-          });
-          if (blend === 1) mover.turnHandoff = null;
-        }
-      }
-      const bodyBob = parts.rig.position.y;
-      parts.head.position.y = mover.headBaseY - bodyBob * 0.55;
-      parts.head.rotation.x = -parts.torso.rotation.x * 0.35;
-      if (lavaMovementForm(mover.root) === 5) tickGreaterBalance(mover.root, t, mover);
-      if (mover.root.userData.characterFamily === 'monsters' && mover.root.userData.form === 6) tickAdvancedIdle(mover.root, t);
-      if (mover.root.userData.characterFamily === 'monsters' && mover.root.userData.form === 7) tickApexIdle(mover.root, t);
-      if (mover.root.userData.characterFamily === 'monsters' && mover.upperTurn) {
-        const upper = mover.root.userData.rig;
-        const pose = mover.upperTurn;
-        // Apply after idle so anticipation survives its neutral pose writes.
-        upper.torso.rotation.y = pose.chest;
-        upper.torso.rotation.z += pose.lean;
-        upper.head.rotation.y += pose.head;
-        upper.head.rotation.z -= pose.lean * 0.6;
-        if(upper.head2){
-          upper.head2.rotation.y += pose.head2;
-          upper.head2.rotation.x += pose.head2Pitch;
-          upper.head2.rotation.z -= pose.lean * 0.45;
-        }
-        if (!mover.turn) mover.upperTurn = null;
-      }
-      tickUpperArmMotion(mover.root, t, dt, mover);
-      tickLooseRockAttachments(mover.root, t, dt, mover);
-      const blinkCycle = (t + 0.7) % 4.8;
-      const eyeScale = blinkCycle > 4.57 ? Math.max(0.12, Math.abs(blinkCycle - 4.685) / 0.115) : 1;
-      parts.leftEye.scale.y = eyeScale;
-      parts.rightEye.scale.y = eyeScale;
-      tickBattleBroExpression(mover.root, dt);
     }
   }
 
@@ -16999,77 +16799,20 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     return true;
   }
 
-  function tickMonsterSecondHead(root, t) {
-    const parts=root.userData.rig,phase=t+root.userData.looseRocks.phase;
-    const sway=Math.sin(phase*.72)*.018;
-    if(parts.head2){
-      parts.head2.rotation.set(.06+Math.sin(phase*.43)*.035,
-        Math.sin(phase*.37+1.7)*.18,sway*.6);
-      const secondBlink=(phase+1.3)%4.8;
-      parts.secondFace.leftEye.scale.y=parts.secondFace.rightEye.scale.y=secondBlink>4.57
-        ?Math.max(.12,Math.abs(secondBlink-4.685)/.115):1;
-    }
-  }
+  function tickMonsterSecondHead(...args){return monsterAnimationSystem().tickMonsterSecondHead(...args);}
 
-  function tickAdvancedIdle(root, t) {
-    tickMonsterSecondHead(root, t);
-    const parts = root.userData.rig;
-    const phase = t + root.userData.looseRocks.phase;
-    const sway = Math.sin(phase * 0.65) * 0.012;
-    parts.torso.rotation.set(-0.06, 0, sway);
-    parts.torso.position.y = -1.28 + Math.sin(phase * 0.85) * 0.012;
-    parts.head.rotation.z = -sway * 0.7;
-    parts.head.rotation.y = Math.sin(phase * 0.31) * 0.025;
-    const blink = phase % 4.8;
-    parts.leftEye.scale.y = parts.rightEye.scale.y = blink > 4.57
-      ? Math.max(0.12, Math.abs(blink - 4.685) / 0.115) : 1;
-  }
+  function tickAdvancedIdle(...args){return monsterAnimationSystem().tickAdvancedIdle(...args);}
 
-  function tickGreaterBalance(root, t, mover = null) {
-    const parts = root.userData.rig;
-    const phase = t + root.userData.looseRocks.phase;
-    const moving = mover && mover.state !== LAVA_MOVE_STATE.IDLE;
-    const sway = Math.sin(phase * 0.72) * (moving ? 0.036 : 0.018);
-    // A smooth lean-and-recover only during a short part of a 19-second cycle.
-    const cycle = phase % 19;
-    const catchLean = cycle > 15 && cycle < 18
-      ? Math.sin((cycle - 15) * Math.PI / 3) ** 2 * 0.055 : 0;
-    parts.torso.rotation.y = 0;
-    parts.torso.rotation.z = -0.055 + sway - catchLean;
-    parts.torso.rotation.x = -0.06 + Math.sin(phase * 0.51) * 0.018;
-    parts.torso.position.x = -0.08 + Math.sin(phase * 0.72) * 0.045;
-    parts.torso.position.y = -1.28 + Math.sin(phase * 1.44) * 0.015;
-    parts.head.rotation.z = -sway * 0.8 + catchLean * 0.9;
-    parts.head.rotation.y = 0;
-    parts.head.rotation.x = 0.06;
-    parts.head.position.x = 0.34 - sway * 0.65;
-    tickMonsterSecondHead(root, t);
-    const blink = phase % 4.8;
-    parts.leftEye.scale.y = parts.rightEye.scale.y = blink > 4.57
-      ? Math.max(0.12, Math.abs(blink - 4.685) / 0.115) : 1;
-  }
+  function tickGreaterBalance(...args){return monsterAnimationSystem().tickGreaterBalance(...args);}
 
   // Upper-body idle layered over the inherited Form IV locomotion.
-  function tickApexIdle(root, t) {
-    tickMonsterSecondHead(root, t);
-    const parts = root.userData.rig;
-    const phase = t + root.userData.looseRocks.phase;
-    parts.torso.rotation.x = -0.06;
-    parts.torso.rotation.z = 0;
-    parts.head.rotation.z = 0;
-    parts.torso.position.y = -1.28 + Math.sin(phase * 0.85) * 0.024;
-    parts.head.rotation.y = Math.sin(phase * 0.31) * 0.035;
-    // One revolution every 24 seconds, around the mount's tilted local Y axis.
-    parts.shoulderWeaponSpin.rotation.y = (t * Math.PI / 12) % (Math.PI * 2);
-    const blink = (phase + 0.7) % 4.8;
-    parts.leftEye.scale.y = parts.rightEye.scale.y = blink > 4.57 ? Math.max(0.12, Math.abs(blink - 4.685) / 0.115) : 1;
-  }
+  function tickApexIdle(...args){return monsterAnimationSystem().tickApexIdle(...args);}
 
   // Form I uses four short alternating plants/pulls per tile, without arm IK.
   const NEWBORN_GAIT = Object.freeze({ reach: 0.48, pull: 0.78, lift: 0.12, sway: 0.075 });
 
-  function registerNewbornMover(root, cellX, cellZ) {
-    const mover = { root, parts: root.userData.rig, cellX, cellZ,
+  function registerNewbornMover(root, cellX, cellZ, animationNavigation = null) {
+    const mover = { animationNavigation, root, parts: root.userData.rig, cellX, cellZ,
       targetCellX: cellX, targetCellZ: cellZ, state: 'IDLE', progress: 0,
       pauseRemaining: 3, stepIndex: 0, sideIndex: 0,
       anchors: [new THREE.Vector3(), new THREE.Vector3()],
@@ -17083,7 +16826,8 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     }
     else if (root.userData.form === 2) root.userData.developingMovement = mover;
     else root.userData.newbornMovement = mover;
-    lavaMonsterMovers.add(mover);
+    if(!animationNavigation)lavaMonsterMovers.add(mover);
+    if(['juggernaut','monsters'].includes(root.userData.characterFamily))ensureSupportAnimation(mover);
     return mover;
   }
 
@@ -17093,104 +16837,19 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   const ADOLESCENT_GAIT = Object.freeze({ reach: 0.60, plant: 0.18, pull: 0.82, lift: 0.17, sway: 0.045,
     headY: 1.20, limbX: 0.51, stride: 0.5, steps: 2, pullDelay: 0.04, lean: 0.055 });
 
-  function tickNewbornMover(mover, t, dt) {
-    const { root, parts } = mover;
-    const adolescent = root.userData.form === 3;
-    const developing = root.userData.form === 2 || adolescent;
-    const gait = adolescent ? ADOLESCENT_GAIT : developing ? DEVELOPING_GAIT : NEWBORN_GAIT;
-    const limbX = developing ? gait.limbX : NEWBORN_SPACING.limbX;
-    const stride = developing ? gait.stride : 0.25;
-    dt = Math.max(0, Math.min(dt, 0.05));
-    if (mover.state === 'IDLE') {
-      if (!mover.root.userData.rockThrow || !['NOTICE','WINDUP','RELEASE'].includes(mover.root.userData.rockThrow.state)) mover.pauseRemaining -= dt;
-      if (mover.pauseRemaining <= 0) {
-        const route = selectLavaWalkRoute(mover);
-        if (route) {
-          mover.terrainPlan = route.plan;
-          mover.targetCellX = route.x; mover.targetCellZ = route.z;
-          mover.startX = root.position.x; mover.startZ = root.position.z;
-          mover.dx = route.x - mover.cellX; mover.dz = route.z - mover.cellZ; mover.desiredYaw = route.yaw;
-          mover.turn = null;
-          mover.state = route.reverse ? 'REACH' : 'TURNING'; mover.progress = 0; mover.stepIndex = 0;
-          if (route.reverse) mover.reachStart.copy(mover.anchors[mover.sideIndex]);
-        }
-        mover.pauseRemaining = 2.5;
-      }
-    } else if (mover.state === 'TURNING') {
-      if (tickLavaTurn(mover, dt)) {
-        if(mover.pendingScenerySmash){mover.state='IDLE';mover.progress=0;parts.rig.position.set(0,0,0);}
-        else {mover.state = 'REACH'; mover.progress = 0;mover.reachStart.copy(mover.anchors[mover.sideIndex]);}
-      }
-    } else if (adolescent && mover.state === 'PLANT') {
-      mover.progress = Math.min(1, mover.progress + dt / gait.plant);
-      parts.rig.position.y = -Math.sin(Math.PI * mover.progress) * 0.025;
-      if (mover.progress >= 1) { mover.state = 'PULL'; mover.progress = 0; }
-    } else {
-      const reach = mover.state === 'REACH';
-      mover.progress = Math.min(1, mover.progress + dt / ((reach ? gait.reach : gait.pull) * (developing && mover.sideIndex ? (adolescent ? 1.04 : 1.10) : 1)));
-      const gaitEase=root.userData.characterFamily==='juggernaut'?smoothJuggernautStep:smoothBattleBroStep;
-      const p = gaitEase(mover.progress);
-      const side = mover.sideIndex ? 1 : -1;
-      const distance = (mover.stepIndex + 1) * stride;
-      if (reach) {
-        mover.goal.set(mover.startX + mover.dx * distance + Math.cos(mover.desiredYaw) * side * limbX,
-          root.position.y, mover.startZ + mover.dz * distance - Math.sin(mover.desiredYaw) * side * limbX);
-        mover.anchors[mover.sideIndex].lerpVectors(mover.reachStart, mover.goal, p);
-        mover.anchors[mover.sideIndex].y += Math.sin(p * Math.PI) * gait.lift;
-        if (mover.terrainPlan) sampleLavaContactSwing(mover.anchors[mover.sideIndex], mover.terrainPlan.swings[mover.stepIndex], p);
-      } else {
-        // Delayed, short tug with the planted rocks fixed in world space.
-        const delay = developing ? gait.pullDelay : 0.18;
-        const pull = gaitEase((mover.progress - delay) / (developing ? 1 - delay : 0.82));
-        const travel = (mover.stepIndex + pull) * stride;
-        root.position.x = mover.startX + mover.dx * travel;
-        root.position.z = mover.startZ + mover.dz * travel;
-        if (mover.terrainPlan) root.position.y = THREE.MathUtils.lerp(mover.pullStartY, mover.terrainPlan.swings[mover.stepIndex].bodyY, pull);
-      }
-      const weight = Math.sin(Math.PI * p);
-      parts.rig.position.x = -side * weight * gait.sway;
-      parts.rig.position.y = -weight * (reach ? 0.015 : 0.055);
-      parts.rig.rotation.z = side * weight * (developing ? gait.lean : 0.10);
-      if (mover.progress >= 1) {
-        mover.progress = 0;
-        if (reach) { mover.pullStartY = root.position.y; mover.state = adolescent ? 'PLANT' : 'PULL'; }
-        else {
-          mover.stepIndex++; mover.sideIndex = 1 - mover.sideIndex;
-          mover.reachStart.copy(mover.anchors[mover.sideIndex]);
-          mover.state = mover.stepIndex < (developing ? gait.steps : 4) ? 'REACH' : 'IDLE';
-          if (mover.state === 'IDLE') {
-            mover.cellX = mover.targetCellX; mover.cellZ = mover.targetCellZ;
-            mover.pauseRemaining = mover.recoveryExit ? 0.35 : 2.5 + Math.random() * 2;
-          }
-        }
-      }
-    }
-    root.updateMatrixWorld(true);
-    parts.limbs.forEach((limb, i) => {
-      mover.scratch.copy(mover.anchors[i]);
-      if (mover.terrainContacts) mover.scratch.y += mover.terrainContacts[i].sole;
-      limb.position.copy(root.worldToLocal(mover.scratch));
-    });
-    if (mover.turn) {
-      parts.limbs.forEach((limb, i) => { limb.rotation.y = mover.turn.contactYaw[i] - root.rotation.y; });
-      if (mover.state !== 'TURNING') mover.turn = null;
-    }
-    parts.head.position.y = (developing ? gait.headY : NEWBORN_SPACING.headY) + Math.sin(t * 1.3) * 0.018;
-    parts.head.rotation.y = Math.sin(t * 0.6) * 0.025;
-    const blink = (t + 0.7) % 4.8;
-    parts.leftEye.scale.y = parts.rightEye.scale.y = blink > 4.57 ? Math.max(0.12, Math.abs(blink - 4.685) / 0.115) : 1;
-    if (developing) poseDevelopingArms(root);
-    // Give adolescent stones restrained load separation and compression.
-    if (adolescent) {
-      mover.floatLoad.progress = mover.progress;
-      mover.floatLoad.state = mover.state + (mover.sideIndex ? '_RIGHT' : '_LEFT');
-    }
-    tickLooseRockAttachments(root, t, dt, mover.turn ? mover : adolescent ? mover.floatLoad : null);
+  function tickNewbornMover(mover,t,dt){
+    const core=juggernautAnimationSystem();core.advanceJuvenile(mover,t,dt);core.finishJuvenile(mover,t,dt);
   }
 
   function tickBattleBroArenaActor(actor,time,dt) {
     const root=actor.root,rig=root.userData.rig,form=root.userData.form;
     restoreTelekineticBody(root);
+    if(rig.neckPivot){
+      const mover=actor.mover; mover.parts=rig;mover.state='IDLE';
+      const animation=ensureLongneckAnimation(mover);
+      animation.prepare({groundY:root.position.y},dt);animation.commit({grounded:true,actualSpeed:0},time,dt);
+      tickLooseRockAttachments(root,time,dt,mover);tickBattleBroExpression(root,dt);return;
+    }
     if(rig.spectralBody || rig.minotaurLegs) {
       rig.torso.rotation.z=Math.sin(time*.9)*.018;
       rig.head.rotation.y=Math.sin(time*.6)*.025;
@@ -17199,7 +16858,8 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       tickBattleBroExpression(root,dt);
       return;
     }
-    if(root.userData.characterFamily==='monsters' && form>=6)tickAdvancedIdle(root,time);
+    if(root.userData.characterFamily==='monsters' && form===7)tickApexIdle(root,time);
+    else if(root.userData.characterFamily==='monsters' && form===6)tickAdvancedIdle(root,time);
     else if(root.userData.characterFamily==='monsters' && form===5)tickGreaterBalance(root,time);
     else {rig.rig.rotation.z=Math.sin(time*.9)*.012;rig.head.rotation.y=Math.sin(time*.6)*.025;}
     tickUpperArmMotion(root,time,dt,actor.mover);
@@ -17777,74 +17437,10 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   }
 
   // Floating arms combine offset idle drift, movement lag and occasional gestures.
-  function tickFloatingRockArmGestures(root, t, dt) {
-    if(root.userData.rockThrow)return;
-    const state = root.userData.floatingArmGestures || (root.userData.floatingArmGestures = {
-      kind: null, elapsed: 0, wait: 2.5, next: 0, side: -1,
-      previousPosition: root.position.clone(), previousYaw: root.rotation.y, travel: 0, turn: 0,
-      arms: [root.userData.rig.leftArm, root.userData.rig.rightArm].map((arm, index) => ({
-        arm, side: index ? 1 : -1, y: arm.shoulder.position.y,
-        shoulderZ: arm.shoulder.rotation.z, elbowZ: arm.elbow.rotation.z,
-        wristX: arm.hand.rotation.x, shoulderX: arm.shoulder.rotation.x,
-        shoulderY: arm.shoulder.rotation.y, elbowX: arm.elbow.rotation.x,
-        elbowY: arm.elbow.rotation.y, wristY: arm.hand.rotation.y,
-      })),
-    });
-    const step = Math.max(0, Math.min(dt, .05));
-    const speed=step>0?Math.min(1,Math.hypot(root.position.x-state.previousPosition.x,
-      root.position.z-state.previousPosition.z)/step):0;
-    const yawSpeed=step>0?Math.max(-1,Math.min(1,battleBroYawDelta(root.rotation.y-state.previousYaw)/step)):0;
-    const follow=1-Math.exp(-step*3);
-    state.travel+=(speed-state.travel)*follow;state.turn+=(yawSpeed-state.turn)*follow;
-    state.previousPosition.copy(root.position);state.previousYaw=root.rotation.y;
-    if (!state.kind) {
-      state.wait -= step;
-      if (state.wait <= 0) {
-        const sequence=root.userData.form<3?['shrug','reach','stretch']:['singleClasp','reach','doubleClasp','sweep','shrug','stretch'];
-        state.kind=sequence[state.next++%sequence.length];
-        state.elapsed = 0;
-        if (['singleClasp','reach','sweep'].includes(state.kind)) state.side *= -1;
-      }
-    }
-    if (state.kind) state.elapsed += step;
-    const duration = state.kind === 'shrug' ? 2.6 : state.kind === 'sweep' ? 5.2 : 4.2;
-    const p = Math.min(1, state.elapsed / duration);
-    const envelope = (start, rise, fall, end) =>
-      smoothMinotaurStep((p-start)/(rise-start)) * (1-smoothMinotaurStep((p-fall)/(end-fall)));
-    const lift = state.kind ? envelope(0,.26,.72,1) : 0;
-    const clasp = ['singleClasp','doubleClasp','reach'].includes(state.kind) ? envelope(.28,.43,.55,.72) : 0;
-    for (const rest of state.arms) {
-      const { arm, side } = rest;
-      const active = !['singleClasp','reach','sweep'].includes(state.kind) || side === state.side;
-      const delayedP=Math.max(0,p-(side>0?.055:0));
-      const stagger=state.kind?smoothMinotaurStep(delayedP/.26)*(1-smoothMinotaurStep((p-.72)/.28)):0;
-      const amount = active ? (side>0?stagger:lift) : 0;
-      const phase=t*(side<0?.69:.53)+(root.userData.looseRocks?.phase||0)+side*1.7;
-      const reach=state.kind==='reach'?amount:0,sweep=state.kind==='sweep'?amount:0;
-      const stretch=state.kind==='stretch'?amount:0;
-      const shrug = state.kind === 'shrug';
-      arm.shoulder.position.y = rest.y + (shrug ? .18 : .035) * amount + Math.sin(phase)*.022;
-      arm.shoulder.rotation.x=rest.shoulderX+Math.sin(phase*.83)*.045-state.travel*.13-reach*.40-stretch*.16;
-      arm.shoulder.rotation.y=rest.shoulderY-state.turn*.20+Math.sin(phase*.61)*.045
-        +side*(sweep*.48*Math.sin(p*Math.PI)-reach*.12);
-      arm.shoulder.rotation.z = rest.shoulderZ + side * (shrug ? .16 : .72) * amount
-        + Math.sin(phase)*.035 + side*stretch*.18;
-      arm.elbow.rotation.z = rest.elbowZ + side * (shrug ? .12 : .48) * amount;
-      arm.elbow.rotation.x=rest.elbowX+Math.sin(phase-.5)*.06-reach*.22;
-      arm.elbow.rotation.y=rest.elbowY-state.turn*.12+side*sweep*.24;
-      arm.hand.rotation.x = rest.wristX - .18 * amount + Math.sin(phase-.9)*.07;
-      arm.hand.rotation.y=rest.wristY+Math.sin(phase*.73-.6)*.085+side*reach*.18;
-      arm.hand.rotation.z=Math.sin(phase-1.1)*.045+side*sweep*.15;
-      for (const jaw of arm.jaws) {
-        // Both tips turn inward; keep a small gap between the stone jaws.
-        jaw.joint.rotation.z = -jaw.side * .38 * (active ? clasp : 0);
-      }
-    }
-    if (state.kind && p >= 1) {
-      state.kind = null;
-      state.elapsed = 0;
-      state.wait = 3.8+(Math.sin(state.next*2.17)+1)*.7;
-    }
+  function tickFloatingRockArmGestures(...args){return specterAnimationSystem().gestures(...args);}
+
+  function ensureLongneckAnimation(mover) {
+    return mover.longneckAnimation || (mover.longneckAnimation = createLongneckAnimation(THREE,mover,{random:()=>Math.random()}));
   }
 
   const MINOTAUR_MOVE_STATE = Object.freeze({
@@ -17995,7 +17591,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       mover.smashFailedSearches = 0;
       return true;
     }
-    mover.pauseRemaining = 0.8 + Math.random() * 1.6;
+    mover.pauseRemaining = .5;
     mover.smashFailedSearches = (mover.smashFailedSearches || 0) + 1;
     if (mover.root.userData.rig?.neckPivot && tryScenerySmash(mover, true)) return true;
     return tryMinotaurTerrainSmash(mover);
@@ -18025,25 +17621,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       headBaseY: parts.head.position.y,
       idlePhase: root.userData.idlePhase || 0,
     };
-    if (parts.neckPivot) {
-      mover.neckBaseX = parts.neckPivot.rotation.x;
-      mover.jawBaseX = parts.jaw.rotation.x;
-      mover.lookRemaining = 1.5 + Math.random()*2;
-      mover.lookDirection = 0;
-    }
-    if (parts.neckPivot) {
-      mover.longneckFootRest = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight']
-        .map(name => parts.minotaurLegs[name].position.clone());
-      mover.longneckFootScratch = new THREE.Vector3();
-      mover.longneckGallopTarget = new THREE.Vector3();
-      mover.gallopRest = {
-        pivotX: parts.rearingPivot.rotation.x,
-        bodyScaleX: parts.animalBody.scale.x, bodyZ: parts.animalBody.position.z,
-        bodyRoll: parts.animalBody.rotation.z,
-        chestY: parts.torso.position.y, chestZ: parts.torso.position.z,
-        headZ: parts.head.position.z,
-      };
-    }
+    if (parts.neckPivot) ensureLongneckAnimation(mover);
     root.userData.minotaurMovement = mover;
     minotaurMovers.add(mover);
     return mover;
@@ -18060,136 +17638,17 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
 
   // Longnecks track world-space contacts, with a soft reach limit to keep
   // their short legs beneath the body. Diagonal pairs alternate support and swing.
-  const LONGNECK_FOOT_FORE_AFT_REACH = 0.11;
-  const LONGNECK_FOOT_SIDE_REACH = 0.065;
   function beginLongneckFootMotion(mover, turning) {
-    const root = mover.root, names = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'];
-    root.updateMatrixWorld(true);
-    const delta = turning ? battleBroYawDelta(mover.desiredYaw - root.rotation.y) : 0;
-    if (turning) mover.longneckTurnYaw = root.rotation.y;
-    const cos = Math.cos(delta), sin = Math.sin(delta);
-    mover.longneckFootMotion = names.map((name, i) => {
-      const leg = mover.parts.minotaurLegs[name];
-      const start = leg.getWorldPosition(new THREE.Vector3());
-      const goal = start.clone();
-      if (turning) {
-        const dx = start.x - root.position.x, dz = start.z - root.position.z;
-        goal.x = root.position.x + cos * dx + sin * dz;
-        goal.z = root.position.z - sin * dx + cos * dz;
-      } else {
-        goal.x += mover.targetX - mover.startX;
-        goal.y += mover.targetY - mover.startY;
-        goal.z += mover.targetZ - mover.startZ;
-      }
-      return { leg, rest: mover.longneckFootRest[i], start, goal, pair: i === 0 || i === 3 ? 0 : 1 };
-    });
+    return ensureLongneckAnimation(mover).beginFeet(turning);
   }
 
   function poseLongneckFeet(mover, progress) {
-    const motion = mover.longneckFootMotion;
-    if (!motion) return;
-    mover.root.updateMatrixWorld(true);
-    for (const foot of motion) {
-      const start = foot.pair ? 0.52 : 0.05;
-      const swing = smoothMinotaurStep((progress - start) / 0.42);
-      const point = mover.longneckFootScratch.copy(foot.start).lerp(foot.goal, swing);
-      point.y += Math.sin(Math.PI * swing) * (0.085 + Math.abs(foot.goal.y - foot.start.y) * 0.3);
-      foot.leg.position.copy(foot.leg.parent.worldToLocal(point));
-      // This stylized rig has short legs. Soften the world-space plant when
-      // its hip would travel beyond the body, especially during quarter turns.
-      const dx = foot.leg.position.x - foot.rest.x;
-      const dz = foot.leg.position.z - foot.rest.z;
-      foot.leg.position.x = foot.rest.x + LONGNECK_FOOT_FORE_AFT_REACH * Math.tanh(dx / LONGNECK_FOOT_FORE_AFT_REACH);
-      foot.leg.position.z = foot.rest.z + LONGNECK_FOOT_SIDE_REACH * Math.tanh(dz / LONGNECK_FOOT_SIDE_REACH);
-    }
+    return ensureLongneckAnimation(mover).poseFeet(progress);
   }
 
   function resetLongneckFeet(mover) {
-    if (!mover.longneckFootRest) return;
-    ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'].forEach((name, i) => {
-      const leg = mover.parts.minotaurLegs[name];
-      leg.position.copy(mover.longneckFootRest[i]);
-      leg.rotation.x = 0;
-      leg.userData.lowerPivot.rotation.x = 0;
-    });
-    mover.longneckFootMotion = null;
-  }
-
-  function settleLongneckGallop(mover, dt) {
-    const parts = mover.parts, rest = mover.gallopRest, settle = Math.min(1, dt*7);
-    parts.rearingPivot.rotation.x += (rest.pivotX-parts.rearingPivot.rotation.x)*settle;
-    parts.animalBody.scale.x += (rest.bodyScaleX-parts.animalBody.scale.x)*settle;
-    parts.animalBody.position.z += (rest.bodyZ-parts.animalBody.position.z)*settle;
-    parts.animalBody.rotation.z += (rest.bodyRoll-parts.animalBody.rotation.z)*settle;
-    parts.torso.position.y += (rest.chestY-parts.torso.position.y)*settle;
-    parts.torso.position.z += (rest.chestZ-parts.torso.position.z)*settle;
-    parts.head.position.z += (rest.headZ-parts.head.position.z)*settle;
-  }
-
-  // One bound per tile. The rear supports launch the body, both pairs release
-  // for suspension, and the fore supports catch the landing. World anchors
-  // hold each support foot still while the body's pivots move over it.
-  function poseLongneckGallop(mover) {
-    const sprint = mover.sprint, parts = mover.parts, root = mover.root;
-    const p = ((sprint.total - sprint.remaining + mover.progress) % 1 + 1) % 1;
-    const pulse = (a, b, c, d) => smoothMinotaurStep((p-a)/(b-a))
-      * (1-smoothMinotaurStep((p-c)/(d-c)));
-    const gather = Math.max(1-smoothMinotaurStep((p-.05)/.14), smoothMinotaurStep((p-.83)/.14));
-    const push = pulse(.12,.23,.30,.42);
-    const flight = pulse(.33,.42,.56,.65);
-    const catchWeight = pulse(.65,.73,.82,.92);
-    const rest = mover.gallopRest;
-
-    root.position.y = mover.startY - gather*.035 + push*.035 + flight*.11 - catchWeight*.045;
-    parts.rearingPivot.rotation.x = rest.pivotX + push*.065 + flight*.025 - catchWeight*.055;
-    // The body is one mesh, so a small longitudinal squash and pitch supply
-    // the missing spine and pelvis articulation without changing its geometry.
-    parts.animalBody.scale.x = rest.bodyScaleX*(1-gather*.055+push*.065+flight*.025);
-    parts.animalBody.position.z = rest.bodyZ - gather*.045 + push*.075 + flight*.035;
-    parts.animalBody.rotation.z = rest.bodyRoll + push*.055 - catchWeight*.04;
-    parts.torso.position.y = rest.chestY + push*.09 + flight*.055 - catchWeight*.07;
-    parts.torso.position.z = rest.chestZ - gather*.035 + push*.085 + flight*.045;
-    parts.torso.rotation.x = push*-.105 + flight*-.055 + catchWeight*.11;
-    parts.torso.rotation.z = Math.sin(p*Math.PI*2)*.008;
-    parts.head.position.y = mover.headBaseY - push*.035 + catchWeight*.025;
-    parts.head.position.z = rest.headZ + push*.035 - catchWeight*.025;
-    parts.head.rotation.x = -parts.torso.rotation.x*.48 + flight*.035 - catchWeight*.025;
-    parts.leftArm.shoulder.rotation.x = -push*.095 + catchWeight*.055;
-    parts.rightArm.shoulder.rotation.x = -push*.095 + catchWeight*.055;
-
-    root.updateMatrixWorld(true);
-    ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'].forEach((name, i) => {
-      const leg = parts.minotaurLegs[name];
-      if (!sprint.feet[name]) sprint.feet[name] = { planted:false,
-        anchor:new THREE.Vector3(), swingStart:leg.getWorldPosition(new THREE.Vector3()) };
-      const foot = sprint.feet[name];
-      const front = i < 2;
-      const contact = front ? p >= .66 && p < .91 : p >= .06 && p < .34;
-      if (contact && !foot.planted) {
-        leg.getWorldPosition(foot.anchor);
-        foot.planted = true;
-      } else if (!contact && foot.planted) {
-        leg.getWorldPosition(foot.swingStart);
-        foot.planted = false;
-      }
-      const point = mover.longneckFootScratch;
-      if (foot.planted) point.copy(foot.anchor);
-      else {
-        const u = front ? (p >= .91 ? (p-.91)/.75 : (p+.09)/.75)
-          : (p >= .34 ? (p-.34)/.72 : (p+.66)/.72);
-        const target = leg.parent.localToWorld(mover.longneckGallopTarget.copy(mover.longneckFootRest[i]));
-        target.x += sprint.dx*(front ? .055 : -.035);
-        target.z += sprint.dz*(front ? .055 : -.035);
-        point.copy(foot.swingStart).lerp(target,smoothMinotaurStep(u));
-        point.y += Math.sin(Math.PI*u)*.11;
-      }
-      leg.position.copy(leg.parent.worldToLocal(point));
-      const offset = leg.position.x-mover.longneckFootRest[i].x;
-      const reach = foot.planted ? .18 : LONGNECK_FOOT_FORE_AFT_REACH;
-      leg.position.x = mover.longneckFootRest[i].x + Math.max(-reach,Math.min(reach,offset));
-      leg.rotation.x = foot.planted ? 0 : (front ? -.14 : .16)*Math.sin(Math.PI*p);
-      leg.userData.lowerPivot.rotation.x = foot.planted ? 0 : (front ? .18 : -.22)*Math.sin(Math.PI*p);
-    });
+    if(!mover.parts.neckPivot)return;
+    return ensureLongneckAnimation(mover).resetFeet();
   }
 
   function smoothMinotaurStep(value) {
@@ -18198,24 +17657,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   }
 
   function tickLongneckHead(mover, t, dt) {
-    const parts = mover.parts;
-    if (!parts.neckPivot || mover.root.userData.rockThrow) return;
-    const idle = mover.state === MINOTAUR_MOVE_STATE.IDLE;
-    if (idle) {
-      mover.lookRemaining -= dt;
-      if (mover.lookRemaining <= 0) {
-        mover.lookDirection = [-1, 0, 1][Math.floor(Math.random()*3)];
-        mover.lookRemaining = 2.2 + Math.random()*2.6;
-      }
-    }
-    const look = idle ? mover.lookDirection : 0;
-    const neckTarget = look*.17, headTarget = look*.12;
-    parts.neckPivot.rotation.y += (neckTarget-parts.neckPivot.rotation.y)*Math.min(1,dt*2.5);
-    parts.head.rotation.y += (headTarget-parts.head.rotation.y)*Math.min(1,dt*3.5);
-    const chew = (t+mover.idlePhase)%5.4;
-    const open = idle && chew>3.15 && chew<4.35
-      ? Math.sin((chew-3.15)/1.2*Math.PI)*.27 : 0;
-    parts.jaw.rotation.x += (mover.jawBaseX+open-parts.jaw.rotation.x)*Math.min(1,dt*7);
+    return ensureLongneckAnimation(mover).head(t,dt);
   }
 
   function minotaurRearSupportSampleIsSafe(mover, rearDistance, lateralDistance, referenceHeight) {
@@ -18250,10 +17692,12 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     mover.progress = 0;
     mover.targetCellX = mover.cellX;
     mover.targetCellZ = mover.cellZ;
-    setMinotaurLegWorldOffset(mover, 0, 0, 0, 0);
+    if(mover.parts.neckPivot)ensureLongneckAnimation(mover).resetFeet();
+    else setMinotaurLegWorldOffset(mover, 0, 0, 0, 0);
   }
 
   function resetMinotaurRearingPose(mover) {
+    if(mover.parts.neckPivot){ensureLongneckAnimation(mover).restorePose();return;}
     const parts = mover.parts;
     const legs = parts.minotaurLegs;
     parts.rearingPivot.rotation.set(0, 0, 0);
@@ -18277,6 +17721,16 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   }
 
   function tickMinotaurRearing(mover, dt) {
+    if(!mover.parts.neckPivot)return tickLegacyMinotaurRearing(mover,dt);
+    const animation=ensureLongneckAnimation(mover);
+    animation.prepare({},dt);animation.commit({grounded:true},0,dt);
+    if(mover.progress>=1){
+      resetMinotaurRearingPose(mover);animation.reset();
+      mover.pauseRemaining=1+Math.random()*1.4;mover.rearingCooldown=14+Math.random()*22;
+    }
+  }
+
+  function tickLegacyMinotaurRearing(mover, dt) {
     const parts = mover.parts;
     const legs = parts.minotaurLegs;
     mover.progress = Math.min(1, mover.progress + dt / 4.2);
@@ -18361,7 +17815,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       mover.pauseRemaining = 1.4 + Math.random() * 1.2;
       return;
     }
-    resetLongneckFeet(mover);
+    if(mover.parts.neckPivot){ensureLongneckAnimation(mover).finishStep();return;}
     setMinotaurLegWorldOffset(mover, 0, 0, 0, 0);
     mover.parts.torso.rotation.x = 0;
     mover.parts.torso.rotation.z = 0;
@@ -18373,6 +17827,46 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
 
   function tickMinotaurMovers(t, dt) {
     for (const mover of minotaurMovers) {
+      if(!mover.parts.neckPivot){tickLegacyMinotaur(mover,t,dt);continue;}
+      const root=mover.root,animation=ensureLongneckAnimation(mover);
+      restoreTelekineticBody(root);
+      if(tickScenerySmash(mover,t,dt)){animation.interrupt();continue;}
+      if(!root||!root.parent){minotaurMovers.delete(mover);continue;}
+      if(tickHomeBattleBroJump(mover,t,dt))continue;
+      recoverHomeBattleBro(mover,dt);
+      mover.rearingCooldown-=dt;mover.sprintCooldown=Math.max(0,(mover.sprintCooldown||0)-dt);
+      const state=mover.state;
+      const proposal=animation.prepare({groundY:minotaurGroundHeight(mover.cellX,mover.cellZ)},dt);
+      root.position.copy(proposal.position);root.rotation.y=proposal.yaw;
+      animation.commit({accepted:1,grounded:true},t,dt);
+      if(state===MINOTAUR_MOVE_STATE.IDLE){
+        if(!root.userData.rockThrow&&!mover.gallopSettle&&mover.rearingCooldown<=0&&canMinotaurRear(mover))beginMinotaurRear(mover);
+        else if(!root.userData.rockThrow){
+          if(mover.rearingCooldown<=0)mover.rearingCooldown=1.5+Math.random()*2;
+          mover.pauseRemaining-=dt;if(mover.pauseRemaining<=0)chooseMinotaurWalkTarget(mover);
+        }
+      }else if(state===MINOTAUR_MOVE_STATE.TURNING&&mover.progress>=1){
+        mover.progress=0;animation.resetFeet();
+        mover.state=Math.abs(mover.heightDelta)<.01?(mover.sprint?'GALLOPING':'WALKING_FLAT'):mover.heightDelta>0?'STEPPING_UP':'STEPPING_DOWN';
+        if(!mover.sprint)animation.beginFeet(false);
+      }else if(state===MINOTAUR_MOVE_STATE.REARING&&mover.progress>=1){
+        resetMinotaurRearingPose(mover);animation.reset();
+        mover.pauseRemaining=1+Math.random()*1.4;mover.rearingCooldown=14+Math.random()*22;
+      }else if(state===MINOTAUR_MOVE_STATE.SPRINT_BRAKE&&mover.progress>=1){
+        animation.reset();mover.pauseRemaining=1.1;
+      }else if(['GALLOPING','WALKING_FLAT','STEPPING_UP','STEPPING_DOWN'].includes(state)){
+        if(mover.sprintTarget&&mover.progress>=.42){
+          if(!trampleLongneckSprintTarget(mover)){brakeLongneckSprint(mover);continue;}
+          mover.sprintTarget=null;
+        }
+        if(mover.progress>=1)finishMinotaurMove(mover);
+      }
+      tickLooseRockAttachments(root,t,dt,mover);tickBattleBroExpression(root,dt);
+    }
+  }
+
+  function tickLegacyMinotaur(actor, t, dt) {
+    for (const mover of [actor]) {
       const root = mover.root;
       if(root)restoreTelekineticBody(root);
       if (tickScenerySmash(mover,t,dt)) continue;
@@ -18381,6 +17875,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
         continue;
       }
       const parts = mover.parts;
+      recoverHomeBattleBro(mover,dt);
       const phase = t * 2.15 + mover.idlePhase;
       const breath = Math.sin(phase);
       mover.rearingCooldown -= dt;
@@ -18389,39 +17884,10 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       if (mover.state === MINOTAUR_MOVE_STATE.IDLE) {
         const groundY = minotaurGroundHeight(mover.cellX, mover.cellZ);
         root.position.y += (groundY - root.position.y) * Math.min(1, dt * 7);
-        if (mover.gallopSettle) {
-          const settle = Math.min(1, dt * 7);
-          settleLongneckGallop(mover, dt);
-          ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'].forEach((name, i) => {
-            const leg = parts.minotaurLegs[name];
-            leg.position.lerp(mover.longneckFootRest[i], settle);
-            leg.rotation.x *= 1 - settle;
-            leg.userData.lowerPivot.rotation.x *= 1 - settle;
-          });
-          parts.torso.rotation.x *= 1 - settle;
-          parts.head.rotation.x *= 1 - settle;
-          parts.leftArm.shoulder.rotation.x *= 1 - settle;
-          parts.rightArm.shoulder.rotation.x *= 1 - settle;
-          if (Math.abs(parts.animalBody.scale.x-mover.gallopRest.bodyScaleX)<.001
-            && ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'].every((name, i) =>
-              parts.minotaurLegs[name].position.distanceTo(mover.longneckFootRest[i]) < 0.001))
-            mover.gallopSettle = false;
-        }
         const idleRigY = 0.018 + breath * 0.008;
         const idleTorsoZ = Math.sin(t * 0.8 + mover.idlePhase) * 0.006;
         const idleHeadY = mover.headBaseY - breath * 0.003;
-        if (mover.longneckFootRest) {
-          const settle = Math.min(1, dt * 5);
-          parts.rig.position.y += (idleRigY - parts.rig.position.y) * settle;
-          parts.torso.rotation.z += (idleTorsoZ - parts.torso.rotation.z) * settle;
-          parts.head.position.y += (idleHeadY - parts.head.position.y) * settle;
-        } else {
-          parts.rig.position.y = idleRigY;
-          parts.torso.rotation.z = idleTorsoZ;
-          parts.head.position.y = idleHeadY;
-        }
-        if (mover.longneckFootRest && !parts.neckPivot)
-          parts.head.rotation.y *= Math.max(0, 1 - dt * 3);
+        parts.rig.position.y=idleRigY;parts.torso.rotation.z=idleTorsoZ;parts.head.position.y=idleHeadY;
         if (!root.userData.rockThrow && !mover.gallopSettle && mover.rearingCooldown <= 0 && canMinotaurRear(mover)) {
           beginMinotaurRear(mover);
         } else if(!root.userData.rockThrow) {
@@ -18431,56 +17897,17 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
         }
       } else if (mover.state === MINOTAUR_MOVE_STATE.REARING) {
         tickMinotaurRearing(mover, dt);
-      } else if (mover.state === MINOTAUR_MOVE_STATE.SPRINT_BRAKE) {
-        mover.progress = Math.min(1, mover.progress + dt / .38);
-        const settle = smoothMinotaurStep(mover.progress);
-        root.position.x = mover.brakeStartX + (mover.startX - mover.brakeStartX) * settle;
-        root.position.z = mover.brakeStartZ + (mover.startZ - mover.brakeStartZ) * settle;
-        parts.rig.position.y += (.018 - parts.rig.position.y) * Math.min(1, dt * 8);
-        settleLongneckGallop(mover, dt);
-        if (mover.progress >= 1) {
-          mover.state = MINOTAUR_MOVE_STATE.IDLE;
-          mover.progress = 0; mover.pauseRemaining = 1.1;
-        }
       } else if (mover.state === MINOTAUR_MOVE_STATE.TURNING) {
-        if (mover.longneckFootRest) {
-          mover.progress = Math.min(1, mover.progress + dt / (mover.sprint ? .72 : 1.15));
-          const delta = battleBroYawDelta(mover.desiredYaw - mover.longneckTurnYaw);
-          const previousYaw = root.rotation.y;
-          root.rotation.y = mover.longneckTurnYaw + delta * smoothMinotaurStep(mover.progress);
-          parts.torso.rotation.z = -Math.sin(Math.PI * mover.progress) * Math.sign(delta) * 0.025;
-          const yawRate = battleBroYawDelta(root.rotation.y - previousYaw) / Math.max(dt, 0.001);
-          const headTarget = Math.max(-0.16, Math.min(0.16, -yawRate * 0.12));
-          parts.head.rotation.y += (headTarget - parts.head.rotation.y) * Math.min(1, dt * 5);
-          poseLongneckFeet(mover, mover.progress);
-        } else {
           const yawDelta = battleBroYawDelta(mover.desiredYaw - root.rotation.y);
           root.rotation.y += yawDelta * Math.min(1, dt * 4.5);
           parts.torso.rotation.z = Math.max(-0.04, Math.min(0.04, -yawDelta * 0.08));
-        }
-        if (mover.longneckFootRest ? mover.progress >= 1
-          : Math.abs(battleBroYawDelta(mover.desiredYaw - root.rotation.y)) < 0.035) {
+        if (Math.abs(battleBroYawDelta(mover.desiredYaw - root.rotation.y)) < 0.035) {
           root.rotation.y = mover.desiredYaw;
           mover.progress = 0;
-          resetLongneckFeet(mover);
           mover.state = Math.abs(mover.heightDelta) < 0.01
             ? (mover.sprint ? MINOTAUR_MOVE_STATE.GALLOPING : MINOTAUR_MOVE_STATE.WALKING_FLAT)
             : (mover.heightDelta > 0 ? MINOTAUR_MOVE_STATE.STEPPING_UP : MINOTAUR_MOVE_STATE.STEPPING_DOWN);
-          if (mover.longneckFootRest && !mover.sprint) beginLongneckFootMotion(mover, false);
         }
-      } else if (mover.state === MINOTAUR_MOVE_STATE.GALLOPING) {
-        const duration = 0.43;
-        mover.progress = Math.min(1, mover.progress + dt / duration);
-        const progress = mover.progress;
-        // Keep root speed and hoof phase continuous across tile boundaries.
-        root.position.x = mover.startX + (mover.targetX - mover.startX) * progress;
-        root.position.z = mover.startZ + (mover.targetZ - mover.startZ) * progress;
-        poseLongneckGallop(mover);
-        if (mover.sprintTarget && progress >= .42) {
-          if (!trampleLongneckSprintTarget(mover)) { brakeLongneckSprint(mover); continue; }
-          mover.sprintTarget = null;
-        }
-        if (progress >= 1) finishMinotaurMove(mover);
       } else {
         const isFlat = mover.state === MINOTAUR_MOVE_STATE.WALKING_FLAT;
         const duration = mover.sprint ? .58 : isFlat ? 1.35 : 1.70;
@@ -18495,7 +17922,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
         if (isFlat) {
           bob = Math.sin(progress * Math.PI * 4) * 0.025;
           bodyY = mover.startY + bob;
-          if (!mover.longneckFootRest) {
+          if (true) {
             const diagonalPhase = Math.sin(progress * Math.PI * 4);
             const pairALift = Math.max(0, diagonalPhase) * 0.075;
             const pairBLift = Math.max(0, -diagonalPhase) * 0.075;
@@ -18507,11 +17934,9 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
           const weightTransfer = smoothMinotaurStep((progress - 0.28) / 0.46);
           bob = Math.sin(progress * Math.PI) * 0.018;
           bodyY = mover.startY + mover.heightDelta * weightTransfer + bob;
-          if (!mover.longneckFootRest) minotaurStepLegOffsets(mover, progress, bodyY);
+          if (true) minotaurStepLegOffsets(mover, progress, bodyY);
         }
         root.position.y = bodyY;
-        if (mover.longneckFootRest) parts.rig.position.y = 0.018;
-        if (mover.longneckFootRest) poseLongneckFeet(mover, progress);
         if (mover.sprint && mover.sprintTarget && progress >= .42) {
           if (!trampleLongneckSprintTarget(mover)) { brakeLongneckSprint(mover); continue; }
           mover.sprintTarget = null;
@@ -18528,16 +17953,13 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
         if (mover.sprint) parts.torso.rotation.x -= Math.sin(progress * Math.PI) * 0.07;
         parts.torso.rotation.z = Math.sin(walkingPhase) * 0.022;
         parts.rig.position.y = 0.018;
-        const headY = mover.headBaseY - bob * (mover.longneckFootRest ? 0.35 : 0.55);
-        if (mover.longneckFootRest) parts.head.position.y += (headY - parts.head.position.y) * Math.min(1, dt * 7);
-        else parts.head.position.y = headY;
+        const headY = mover.headBaseY - bob * 0.55;
+        parts.head.position.y = headY;
         parts.head.rotation.x = -parts.torso.rotation.x * 0.45;
-        if (mover.longneckFootRest) parts.head.rotation.y *= Math.max(0, 1 - dt * 3);
 
         if (progress >= 1) finishMinotaurMove(mover);
       }
 
-      tickLongneckHead(mover, t, dt);
       tickLooseRockAttachments(root, t, dt, mover);
       tickBattleBroExpression(root, dt);
       const blinkCycle = (t + mover.idlePhase) % 4.6;
@@ -18574,6 +17996,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   }
 
   function chooseSpecterDestination(mover) {
+    if(mover.animationNavigation)return mover.animationNavigation.chooseDestination(mover);
     if (tryScenerySmash(mover, (mover.smashFailedSearches || 0) >= 2)) return true;
     const first = Math.floor(Math.random() * MINOTAUR_DIRECTIONS.length);
     for (let i = 0; i < MINOTAUR_DIRECTIONS.length; i++) {
@@ -18601,17 +18024,29 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       mover.smashFailedSearches = 0;
       return true;
     }
-    mover.idleRemaining = 2.0 + Math.random() * 3.0;
+    mover.idleRemaining = .5;
     mover.smashFailedSearches = (mover.smashFailedSearches || 0) + 1;
     return false;
   }
 
-  function registerSpecterMover(root, cellX, cellZ, baseY) {
+  let sharedSpecterAnimationSystem=null;
+  function specterAnimationSystem(){
+    return sharedSpecterAnimationSystem||(sharedSpecterAnimationSystem=createSpecterAnimationSystem(THREE,{
+      smoothMinotaurStep,battleBroYawDelta,SPECTER_MOVE_STATE,SPECTER_MIN_CLEARANCE,
+      worldExpression:tickBattleBroWorldExpression,expression:tickBattleBroExpression,secondary:tickLooseRockAttachments,
+    }));
+  }
+  function ensureSpecterAnimation(mover){
+    return mover.specterAnimation||(mover.specterAnimation=specterAnimationSystem().create(mover));
+  }
+
+  function registerSpecterMover(root, cellX, cellZ, baseY, animationNavigation=null) {
     const pose = root.userData.specterPose;
     const mover = {
       root,
       parts: root.userData.rig,
       state: SPECTER_MOVE_STATE.IDLE_HOVER,
+      animationNavigation,
       progress: 0,
       phase: Math.random() * Math.PI * 2,
       idleRemaining: 3.5 + Math.random() * 5.5,
@@ -18637,10 +18072,11 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       rightShoulderZ: pose.rightShoulderZ,
     };
     root.userData.specterMovement = mover;
-    specterMovers.add(mover);
-    return mover;
+    if(!animationNavigation)specterMovers.add(mover);
+    ensureSpecterAnimation(mover);return mover;
   }
 
+  function poseSpecterLocomotion(...args){return specterAnimationSystem().pose(...args);}
   function tickSpecterMovers(t, dt) {
     for (const mover of specterMovers) {
       const specter = mover.root;
@@ -18651,111 +18087,19 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
         continue;
       }
       const parts = mover.parts;
-      const drift = Math.sin(t * 0.72 + mover.phase);
-      const slowSway = Math.sin(t * 0.43 + mover.phase * 0.7);
-      let robeYawTarget = 0;
-      let robeRollTarget = slowSway * 0.008;
-
-      if (mover.state === SPECTER_MOVE_STATE.IDLE_HOVER) {
-        specter.position.y = mover.baseY + drift * 0.025;
-        parts.rig.position.x = slowSway * 0.008;
-        parts.torso.rotation.x *= Math.max(0, 1 - dt * 4);
-        parts.torso.rotation.z = slowSway * 0.006;
-        if(!specter.userData.rockThrow) {
-          mover.idleRemaining -= dt;
-          if (mover.idleRemaining <= 0) chooseSpecterDestination(mover);
-        }
-      } else if (mover.state === SPECTER_MOVE_STATE.START_FLOAT) {
-        mover.progress = Math.min(1, mover.progress + dt / (mover.fastFloat ? .32 : .85));
-        const eased = smoothMinotaurStep(mover.progress);
-        specter.rotation.y = mover.startYaw + mover.yawTravel * eased;
-        specter.position.y = mover.startBaseY + drift * 0.018;
-        parts.rig.position.x = slowSway * 0.006;
-        parts.torso.rotation.x = -eased * 0.018;
-        robeYawTarget = -mover.yawTravel * (1 - eased) * 0.18;
-        robeRollTarget = Math.max(-0.025, Math.min(0.025, -mover.yawTravel * 0.025));
-        if (mover.progress >= 1) {
-          specter.rotation.y = mover.desiredYaw;
-          mover.progress = 0;
-          mover.state = SPECTER_MOVE_STATE.FLOATING;
-        }
-      } else if (mover.state === SPECTER_MOVE_STATE.FLOATING) {
-        mover.progress = Math.min(1, mover.progress + dt / mover.travelDuration);
-        const eased = smoothMinotaurStep(mover.progress);
-        const dx = mover.targetX - mover.startX;
-        const dz = mover.targetZ - mover.startZ;
-        const distance = Math.max(0.001, Math.hypot(dx, dz));
-        const curveOffset = Math.sin(eased * Math.PI) * mover.curve;
-        specter.position.x = mover.startX + dx * eased + (dz / distance) * curveOffset;
-        specter.position.z = mover.startZ + dz * eased - (dx / distance) * curveOffset;
-
-        const heightDelta = mover.targetBaseY - mover.startBaseY;
-        const heightProgress = heightDelta >= 0
-          ? smoothMinotaurStep(mover.progress / 0.60)
-          : smoothMinotaurStep((mover.progress - 0.40) / 0.60);
-        const intendedY = mover.startBaseY + heightDelta * heightProgress + drift * 0.012;
-        const currentCellX = Math.round(specter.position.x + GRID / 2 - 0.5);
-        const currentCellZ = Math.round(specter.position.z + GRID / 2 - 0.5);
-        const clearanceFloor = minotaurGroundHeight(currentCellX, currentCellZ) + SPECTER_MIN_CLEARANCE;
-        specter.position.y = Math.max(intendedY, clearanceFloor);
-
-        parts.rig.position.x = -curveOffset * 0.08;
-        parts.torso.rotation.x = mover.fastFloat ? -.20 : -Math.sin(mover.progress * Math.PI) * 0.025;
-        parts.torso.rotation.z = -curveOffset * 0.10;
-        robeYawTarget = curveOffset * -0.22;
-        robeRollTarget = curveOffset * -0.14;
-        if (mover.progress >= 1) {
-          mover.progress = 0;
-          mover.state = SPECTER_MOVE_STATE.SETTLING;
-        }
-      } else {
-        mover.progress = Math.min(1, mover.progress + dt / (mover.fastFloat ? .38 : .9));
-        const eased = smoothMinotaurStep(mover.progress);
-        specter.position.x = mover.targetX;
-        specter.position.z = mover.targetZ;
-        specter.position.y = mover.targetBaseY + Math.sin(eased * Math.PI) * 0.018 + drift * 0.012;
-        parts.rig.position.x *= Math.max(0, 1 - dt * 4.5);
-        parts.torso.rotation.x *= Math.max(0, 1 - dt * 4.5);
-        parts.torso.rotation.z *= Math.max(0, 1 - dt * 4.5);
-        if (mover.progress >= 1) {
-          mover.cellX = mover.targetCellX;
-          mover.cellZ = mover.targetCellZ;
-          mover.baseY = mover.targetBaseY;
-          mover.idleRemaining = 3.0 + Math.random() * 6.0;
-          mover.progress = 0;
-          mover.state = SPECTER_MOVE_STATE.IDLE_HOVER;
-        }
+      if(tickHomeBattleBroJump(mover,t,dt)){ensureSpecterAnimation(mover).interrupt();continue;}
+      recoverHomeBattleBro(mover,dt);
+      const animation=ensureSpecterAnimation(mover),wasIdle=mover.state===SPECTER_MOVE_STATE.IDLE_HOVER;
+      const proposal=animation.prepare({sampleGround:(x,z)=>minotaurGroundHeight(
+        Math.round(x+GRID/2-.5),Math.round(z+GRID/2-.5))},dt,t);
+      specter.position.copy(proposal.position);specter.rotation.y=proposal.yaw;
+      if(wasIdle&&!specter.userData.rockThrow){
+        mover.idleRemaining-=dt;if(mover.idleRemaining<=0)chooseSpecterDestination(mover);
       }
-
-      const robeFollow = Math.min(1, dt * 2.2);
-      mover.robeYaw += (robeYawTarget - mover.robeYaw) * robeFollow;
-      mover.robeRoll += (robeRollTarget - mover.robeRoll) * robeFollow;
-      parts.spectralBody.rotation.y = mover.robeYaw;
-      parts.spectralBody.rotation.z = mover.robeRoll;
-      const travelAmount = mover.state === SPECTER_MOVE_STATE.FLOATING ? Math.sin(mover.progress * Math.PI) : 0;
-      parts.leftArm.shoulder.rotation.x = -travelAmount * 0.025;
-      parts.rightArm.shoulder.rotation.x = -travelAmount * 0.025;
-      parts.leftArm.shoulder.rotation.z = mover.leftShoulderZ + drift * 0.009;
-      parts.rightArm.shoulder.rotation.z = mover.rightShoulderZ - drift * 0.009;
-      parts.leftArm.hand.rotation.z = Math.sin(t * 0.60 + mover.phase) * 0.012;
-      parts.rightArm.hand.rotation.z = -Math.sin(t * 0.60 + mover.phase) * 0.012;
-
-      tickFloatingRockArmGestures(specter, t, dt);
-      if(mover.fastFloat && mover.state===SPECTER_MOVE_STATE.FLOATING) {
-        // Alternating broad flipper strokes propel the fast hover.
-        const stroke=Math.sin(mover.progress * Math.PI * 5);
-        const envelope=Math.sin(mover.progress * Math.PI);
-        for(const [arm,side] of [[parts.leftArm,-1],[parts.rightArm,1]]) {
-          arm.shoulder.rotation.x=-.45+stroke*side*.65*envelope;
-          arm.shoulder.rotation.z=-side*(.35+.25*envelope);
-          arm.elbow.rotation.x=-.30+stroke*side*.38*envelope;
-          arm.hand.rotation.x=stroke*side*.22*envelope;
-        }
-        parts.torso.rotation.z=stroke*.055*envelope;
+      if(proposal.finished){
+        mover.cellX=mover.targetCellX;mover.cellZ=mover.targetCellZ;mover.idleRemaining=3+Math.random()*6;
       }
-      tickBattleBroWorldExpression(specter, t);
-      tickBattleBroExpression(specter, dt);
-      tickLooseRockAttachments(specter, t, dt, mover);
+      animation.commit({grounded:true},t,dt);
     }
   }
 
@@ -18865,11 +18209,11 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
 
   let baseBattleBroPrototype = null;
   function ensureBaseBattleBroPrototype() {
-    if (baseBattleBroPrototype && baseBattleBroPrototype.parent) return baseBattleBroPrototype;
+    if (baseBattleBroPrototype) return baseBattleBroPrototype;
     const gx = Math.floor(GRID / 2);
     const gz = Math.floor(GRID / 2);
     const p = tilePos(gx, gz);
-    baseBattleBroPrototype = createLavaMonsterBattleBro();
+    baseBattleBroPrototype = rememberBattleBroTransportPose(createLavaMonsterBattleBro());
     baseBattleBroPrototype.position.set(p.x, BUILDABLE_LAND_Y_OFFSET + TOP_H + terrainRiseAt(gx, gz), p.z);
     baseBattleBroPrototype.rotation.y = Math.PI * 0.25;
     baseBattleBroPrototype.userData.idlePhase = 0.7;
@@ -29008,6 +28352,7 @@ function neighborStarVector(edge, index) {
     const k = tool.kind;
     if (!k) return null;
     if (k === 'walking-axe') return makeExcavationAxe();
+    if (k === 'transport-cube') return createTransportCube.createModel(THREE,getBoxGeometry);
     if (k === 'voxel-build') return makeVoxelBuildStamp(tool.voxelBuildId);
     if (k === 'tree')      return makeVoxelTree();
     if (k === 'rock')      return makeVoxelRock({ n: false, s: false, e: false, w: false }, 1, 0, 0);
@@ -29049,7 +28394,7 @@ function neighborStarVector(edge, index) {
     return !!(tool && (tool.kind === 'house' || tool.kind === 'voxel-build' || isGenerationPlantKind(tool.kind)));
   }
 
-  function normalizeBuildingThumbObject(obj) {
+  function normalizeBuildingThumbObject(obj, thumbnailScale = 1) {
     if (!obj) return null;
     obj.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(obj);
@@ -29057,7 +28402,7 @@ function neighborStarVector(edge, index) {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const largest = Math.max(size.x, size.y, size.z, 0.001);
-    const scale = THUMB_BUILDING_TARGET_SPAN / largest;
+    const scale = THUMB_BUILDING_TARGET_SPAN * thumbnailScale / largest;
     obj.scale.multiplyScalar(scale);
     obj.updateMatrixWorld(true);
     const scaledBox = new THREE.Box3().setFromObject(obj);
@@ -29093,7 +28438,7 @@ function neighborStarVector(edge, index) {
     if (obj) {
       if (isTerraformTool(tool)) addTerraformGreenhouseBox(obj, 0, 1);
       obj.position.y = TOP_H;
-      if (isBuildingThumbTool(tool) || tool.thumbnailOnly) normalizeBuildingThumbObject(obj);
+      if (isBuildingThumbTool(tool) || tool.thumbnailOnly) normalizeBuildingThumbObject(obj, tool.thumbnailScale);
       scene.add(obj);
     } else if (isTerraformTool(tool)) {
       const box = new THREE.Group();
@@ -31098,6 +30443,7 @@ function neighborStarVector(edge, index) {
       root.position.set(site.x+body.ox,site.elevation||0,site.z+body.oz);group.add(root);islands.set(site.id,body);if(site.sky)skyBodies.add(body);
       return body;
     }
+    let retainedCharacterIsland=null;
     function ensureAround(wx,wz) {
       const sx=Math.round(wx/SPACING),sz=Math.round(wz/SPACING);
       if(sx===centerX&&sz===centerZ)return;
@@ -31111,6 +30457,8 @@ function neighborStarVector(edge, index) {
             if(firstWindow)buildIsland(site);else pending.push(site);
           }
         }
+      // Keep one deployed character's island alive outside the player window.
+      if(retainedCharacterIsland)wanted.add(retainedCharacterIsland);
       pending.sort((a,b)=>Math.hypot(a.x-wx,a.z-wz)-Math.hypot(b.x-wx,b.z-wz));
       // Ground under the player is immediate; distant arrivals are built one
       // per existing animation frame to avoid a whole-window streaming stall.
@@ -31185,20 +30533,21 @@ function neighborStarVector(edge, index) {
         b.ox+=n.x*press*ib/(ia+ib);b.oz+=n.z*press*ib/(ia+ib);
       }
     }
-    function tick(dt,player,eyeHeight,companion) {
+    function tick(dt,player,eyeHeight,deployedCharacter) {
+      retainedCharacterIsland=deployedCharacter?(sample(deployedCharacter.position.x,deployedCharacter.position.z,deployedCharacter.position.y+.02)?.body?.site.id||retainedCharacterIsland):null;
       ensureAround(player.pos.x,player.pos.z);
       while(pending.length&&islands.has(pending[0].id))pending.shift();
       if(pending.length)buildIsland(pending.shift());
       const standing=player.grounded?sample(player.pos.x,player.pos.z,player.pos.y-eyeHeight+.02):null;
       const support=standing&&Math.abs(surfaceY(standing)+eyeHeight-player.pos.y)<.3?standing.body:null;
-      const petSupport=companion?sample(companion.position.x,companion.position.z)?.body:null;
+      const deployedSupport=deployedCharacter?sample(deployedCharacter.position.x,deployedCharacter.position.z,deployedCharacter.position.y+.02)?.body:null;
       for(const b of islands.values()){b.dx=b.ox;b.dz=b.oz;}
       accumulator+=Math.min(.1,dt);
       while(accumulator>=STEP){simulate(STEP);accumulator-=STEP;}
       for(const b of islands.values()){b.dx=b.ox-b.dx;b.dz=b.oz-b.dz;b.root.position.set(b.site.x+b.ox,b.site.elevation||0,b.site.z+b.oz);}
       if(starfield)starfield.position.copy(player.pos);
       if(support){player.pos.x+=support.dx;player.pos.z+=support.dz;}
-      if(petSupport){companion.position.x+=petSupport.dx;companion.position.z+=petSupport.dz;}
+      if(deployedSupport&&!deployedCharacter.userData.transportActor?.motion){deployedCharacter.position.x+=deployedSupport.dx;deployedCharacter.position.z+=deployedSupport.dz;}
       const hit=sample(player.pos.x,player.pos.z,player.pos.y-eyeHeight+.02);
       if(player.grounded&&hit?.body&&!hit.body.site.sky&&edgeDistance(hit.body.site,hit.x+.5,hit.z+.5)>2)lastSafe={x:hit.x,z:hit.z};
       if(player.pos.y < -24) {
@@ -31256,7 +30605,7 @@ function neighborStarVector(edge, index) {
   const fpJourney = {home:null, previous:null, warp:0, transferred:false, overlay:null};
   function switchFPWorld(other) {
     leaveExcavation();
-    stopExplorationCompanion();
+    resetTransportCube();
     fpKeys.clear();
     if(other) {
       fpJourney.home={x:fp.pos.x,z:fp.pos.z,yaw:fp.yaw,pitch:fp.pitch};
@@ -31270,7 +30619,7 @@ function neighborStarVector(edge, index) {
     }
     fp.vy=0;fp.grounded=true;fp.terrainLift=0;fp.landingTime=0;fp.landingDip=0;
     fpJourney.previous=null;
-    startExplorationCompanion();
+    resetTransportCube();
   }
   function cancelFPWarp() {
     fpJourney.warp=0;
@@ -31404,6 +30753,8 @@ function neighborStarVector(edge, index) {
   function equipExcavationTool(tool) {
     if(!FP_TOOLS.some(option=>option.id===tool))return;
     excavation.equipped=tool; excavation.swing=null;
+    document.getElementById('fp-equipped-tool-label').textContent=tool==='transport-cube'
+      ?'Transport cube equipped':'Axe equipped · 10% gem chance per broken layer';
     if(tool==='axe' && fp.active && canMutateActiveColony() && !battleArenaView.active){
       createExcavationVisuals();excavation.active=true;excavationHud.hidden=false;
       excavation.axe.visible=true;
@@ -31412,7 +30763,7 @@ function neighborStarVector(edge, index) {
     for(const button of document.querySelectorAll('#fp-tool-menu button'))
       button.setAttribute('aria-pressed',String(button.dataset.tool===excavation.equipped));
   }
-  const FP_TOOLS=Object.freeze([{id:'hands',label:'None',key:'0'},{id:'axe',label:'Axe',key:'1',kind:'walking-axe',thumbnailOnly:true}]);
+  const FP_TOOLS=Object.freeze([{id:'hands',label:'None',key:'0'},{id:'axe',label:'Axe',key:'1',kind:'walking-axe',thumbnailOnly:true},{id:'transport-cube',label:'Transport cube',key:'2',kind:'transport-cube',thumbnailOnly:true,thumbnailScale:.7}]);
   const fpToolMenu=document.getElementById('fp-tool-menu');
   const fpToolsToggle=document.getElementById('fp-tools-toggle');
   for(const tool of FP_TOOLS){
@@ -31553,6 +30904,9 @@ function neighborStarVector(edge, index) {
     excavation.axe.position.copy(pose);excavation.axe.quaternion.copy(excavation.rotation);
   }
   renderer.domElement.addEventListener('pointerdown',e=>{
+    if(fp.active&&excavation.equipped==='transport-cube'&&fpToolMenu.hidden&&e.button===0){
+      e.preventDefault();e.stopImmediatePropagation();throwTransportCube();return;
+    }
     if(!excavation.active || !fpToolMenu.hidden || e.button!==0)return;
     e.preventDefault();e.stopImmediatePropagation();startExcavationSwing();
   },true);
@@ -31673,54 +31027,218 @@ function neighborStarVector(edge, index) {
     n=Math.imul(n^(n>>>13),1274126177);
     return ((n^(n>>>16))>>>0)/4294967296;
   }
-  function residentFlatCell(x,z) {
-    const cell=explorationTerrain.getCell(x,z);
+  function residentFlatCell(x,z,islandId) {
+    const cell=explorationTerrain.getCell(x,z,islandId);
     if(!cell || cell.terrainFloors>6)return false;
     for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++) {
-      const nearby=explorationTerrain.getCell(x+dx,z+dz);
+      const nearby=explorationTerrain.getCell(x+dx,z+dz,islandId);
       if(!nearby || nearby.islandId!==cell.islandId || nearby.terrainFloors!==cell.terrainFloors
         || nearby.kind || nearby.extras?.length || ['water','lava'].includes(nearby.terrain))return false;
     }
     return !!explorationTerrain.group.getObjectByName('floating-fragment-'+cell.islandId);
   }
+  function residentSupport(actor,x=actor.x,z=actor.z,yaw=actor.root.rotation.y){
+    const p=explorationTerrain.cellToWorld(x,z,actor.islandId),shape=battleBroTerrain.profile(actor.root);
+    // Bounded short-lived cache: terrain edits are rechecked without a full
+    // footprint scan on every animation frame. Routes still sweep immediately.
+    const key=x+','+z+','+Math.round(yaw*10),time=actor.terrainTime||0;
+    const cache=actor.supportSamples||(actor.supportSamples=new Map()),saved=cache.get(key);
+    if(saved&&time<saved.until)return saved.value;
+    const value=battleBroTerrain.stand(explorationTerrain,shape,p.x,p.z,yaw,
+      (actor.supportY??actor.root.position.y)+shape.step,actor.islandId);
+    if(cache.size>=8)cache.clear();cache.set(key,{until:time+.1,value});return value;
+  }
+  function residentBodyOccupied(root,x,y,z,exclude=null){
+    const shape=battleBroTerrain.profile(root),radius=Math.hypot(shape.halfWidth,shape.halfDepth);
+    const actors=[...explorationResidents.values()];
+    const deployed=typeof transportCube!=='undefined'?transportCube.root?.userData.transportActor:null;
+    if(deployed&&!actors.includes(deployed))actors.push(deployed);
+    return actors.some(other=>{
+      if(other===exclude||other.root===root)return false;
+      const p=other.root.position,size=battleBroTerrain.profile(other.root);
+      return y<p.y+size.height&&y+shape.height>p.y
+        &&Math.hypot(p.x-x,p.z-z)<radius+Math.hypot(size.halfWidth,size.halfDepth)+.15;
+    });
+  }
+  function residentRoute(actor,x,z){
+    const p=explorationTerrain.cellToWorld(x,z,actor.islandId),root=actor.root;
+    const shape=battleBroTerrain.profile(root),hover=actor.character==='specter'?SPECTER_HOVER_CLEARANCE:0;
+    const support=battleBroTerrain.route(explorationTerrain,shape,{x:root.position.x,z:root.position.z,
+      y:root.position.y-hover,yaw:root.rotation.y,islandId:actor.islandId},p);
+    return support&&!residentBodyOccupied(root,p.x,support.y+hover,p.z,actor)?support:null;
+  }
+  function residentHeight(actor,x,z){
+    const shape=battleBroTerrain.profile(actor.root);
+    return battleBroTerrain.point(explorationTerrain,x,z,(actor.supportY??actor.root.position.y)+shape.step)?.y;
+  }
+  // Resident navigation adapter only. All poses/phases/IK come from the home core.
+  function juggernautResidentNavigation(actor){
+    const point=(x,z)=>{const p=explorationTerrain.cellToWorld(x,z,actor.islandId);
+      return {...p,y:explorationTerrain.groundYAt(p.x,p.z,0,actor.supportY===undefined?undefined:actor.supportY+.1)};};
+    const contact=(m,desired,yaw,index)=>{
+      const e=lavaContactExtent(m,index,yaw),shape=battleBroTerrain.profile(m.root);
+      const patch=battleBroTerrain.support(explorationTerrain,desired.x+e.x,desired.z+e.z,
+        {...shape,halfWidth:e.hx,halfDepth:e.hz},0,m.root.position.y+shape.step,actor.islandId);
+      return patch?desired.clone().setY(patch.max):null;
+    };
+    return {point,contact,
+      swing(m,start,desired,index,yaw,lift,startYaw){
+        const end=contact(m,desired,yaw,index);if(!end)return null;
+        const probe=start.clone();let highest=Math.max(start.y,end.y);
+        for(let i=1;i<=8;i++){
+          probe.lerpVectors(start,end,i/8);
+          const sample=contact(m,probe,startYaw+battleBroYawDelta(yaw-startYaw)*i/8,index);
+          if(!sample)return null;highest=Math.max(highest,sample.y);
+        }
+        return {start:start.clone(),end,lift,raised:Math.abs(end.y-start.y)>.001||highest>Math.min(start.y,end.y)+.001,
+          clearance:highest+lift,adjustment:0};
+      },
+      selectRoute(m){
+        const motion=actor.motion,directions=[[1,0],[-1,0],[0,1],[0,-1]],offset=Math.floor(Math.random()*4);
+        for(let i=0;i<4;i++){
+          const [dx,dz]=directions[(offset+i)%4],x=m.cellX+dx,z=m.cellZ+dz;
+          if(Math.hypot(x-motion.homeX,z-motion.homeZ)>5||!residentRoute(actor,x,z))continue;
+          const yaw=Math.atan2(dx,dz),plan=planLavaTerrainMove(m,x,z,yaw);
+          if(plan)return {x,z,yaw,plan};
+        }
+        return null;
+      }
+    };
+  }
+  function tickJuggernautResidentMotion(actor,t,dt){return tickSupportResidentMotion(actor,t,dt);}
+  function tickSupportResidentMotion(actor,t,dt){
+    actor.terrainTime=t;
+    const root=actor.root,step=Math.max(0,Math.min(dt,.05));
+    if(!actor.motion&&actor.islandId===undefined){
+      // Base islands omit the ID in worldToCell; the selected terrain cell owns it.
+      // Keep the height-aware selector so sky-island releases resolve their support.
+      const cell=explorationTerrain.worldToCell(root.position.x,root.position.z,root.position.y+.1);
+      actor.islandId=explorationTerrain.getCell(cell.x,cell.z,cell.islandId)?.islandId;
+    }
+    const point=explorationTerrain.cellToWorld(actor.x,actor.z,actor.islandId);
+    if(!actor.motion){
+      actor.motion={mode:'idle',pause:1+actor.phase%3,homeX:actor.x,homeZ:actor.z,pointX:point.x,pointZ:point.z};
+      actor.mover=registerLavaMonsterMover(root,actor.x,actor.z,juggernautResidentNavigation(actor));
+      actor.mover.pauseRemaining=actor.motion.pause;
+    }
+    const mover=actor.mover,motion=actor.motion,animation=ensureSupportAnimation(mover);
+    const drift=new THREE.Vector3(point.x-motion.pointX,0,point.z-motion.pointZ);
+    root.position.add(drift);animation.carry(drift);motion.pointX=point.x;motion.pointZ=point.z;
+    if(motion.mode==='idle'&&motion.pause===0)mover.pauseRemaining=0;
+    if(mover.state!=='IDLE'&&!residentSupport(actor,mover.targetCellX,mover.targetCellZ,mover.desiredYaw)){
+      animation.reset();mover.pauseRemaining=2;
+      // Preserve the current position; discard the unsafe destination, not the Bro.
+      mover.targetCellX=mover.cellX;mover.targetCellZ=mover.cellZ;
+    }
+    if(root.userData.characterJumping){animation.interrupt();return;}
+    restoreTelekineticBody(root);tickBattleBroWorldExpression(root,t);
+    const proposal=animation.prepare({},step,t);
+    root.position.copy(proposal.position);root.rotation.y=proposal.yaw;
+    animation.commit({grounded:true},t,step);
+    if(mover.cellX!==actor.x||mover.cellZ!==actor.z){
+      actor.x=mover.cellX;actor.z=mover.cellZ;actor.supportY=root.position.y;
+      const end=explorationTerrain.cellToWorld(actor.x,actor.z,actor.islandId);
+      motion.pointX=end.x;motion.pointZ=end.z;
+    }
+    motion.mode=mover.state==='IDLE'?'idle':mover.state==='TURNING'?'turn':'walk';
+    motion.pause=mover.pauseRemaining;
+  }
+  function chooseSpecterResidentDestination(actor,mover){
+    const motion=actor.motion,directions=[[1,0],[-1,0],[0,1],[0,-1]],first=Math.floor(Math.random()*4);
+    for(let i=0;i<4;i++){
+      const [dx,dz]=directions[(first+i)%4],x=actor.x+dx,z=actor.z+dz;
+      if(Math.hypot(x-motion.homeX,z-motion.homeZ)>5)continue;
+      const support=residentRoute(actor,x,z);if(!support)continue;
+      const target=explorationTerrain.cellToWorld(x,z,actor.islandId),root=actor.root;
+      const yaw=Math.atan2(target.x-root.position.x,target.z-root.position.z);
+      Object.assign(mover,{startX:root.position.x,startZ:root.position.z,startBaseY:mover.baseY,
+        targetX:target.x,targetZ:target.z,targetBaseY:support.y+SPECTER_HOVER_CLEARANCE,
+        targetCellX:x,targetCellZ:z,startYaw:root.rotation.y,desiredYaw:yaw,
+        yawTravel:battleBroYawDelta(yaw-root.rotation.y),curve:0,
+        fastFloat:!!motion.fastFloat,travelDuration:motion.travelDuration||(motion.fastFloat?.9:2.4),
+        progress:0,state:SPECTER_MOVE_STATE.START_FLOAT});
+      return true;
+    }
+    mover.idleRemaining=.5;return false;
+  }
+  function tickSpecterResidentMotion(actor,t,dt){
+    actor.terrainTime=t;
+    const root=actor.root,step=Math.max(0,Math.min(dt,.05));
+    if(actor.islandId===undefined){
+      const c=explorationTerrain.worldToCell(root.position.x,root.position.z,root.position.y);
+      actor.islandId=explorationTerrain.getCell(c.x,c.z,c.islandId)?.islandId;
+    }
+    const point=explorationTerrain.cellToWorld(actor.x,actor.z,actor.islandId);
+    if(!actor.motion){
+      const ground=residentSupport(actor)?.y??actor.supportY??root.position.y-SPECTER_HOVER_CLEARANCE;
+      actor.motion={mode:'idle',pause:1+actor.phase%3,homeX:actor.x,homeZ:actor.z,pointX:point.x,pointZ:point.z};
+      actor.mover=registerSpecterMover(root,actor.x,actor.z,ground+SPECTER_HOVER_CLEARANCE,
+        {chooseDestination:m=>chooseSpecterResidentDestination(actor,m)});
+      actor.mover.phase=actor.phase;actor.mover.idleRemaining=actor.motion.pause;
+    }
+    const mover=actor.mover,motion=actor.motion,animation=ensureSpecterAnimation(mover);
+    const drift=new THREE.Vector3(point.x-motion.pointX,0,point.z-motion.pointZ);
+    root.position.add(drift);animation.carry(drift);motion.pointX=point.x;motion.pointZ=point.z;
+    if(root.userData.characterJumping){animation.interrupt();return;}
+    if(mover.state!==SPECTER_MOVE_STATE.IDLE_HOVER&&!residentSupport(actor,mover.targetCellX,mover.targetCellZ,mover.desiredYaw)){
+      animation.reset({baseY:root.position.y});mover.idleRemaining=1;
+    }
+    if(motion.mode==='idle'&&motion.pause===0)mover.idleRemaining=0;
+    const wasIdle=mover.state===SPECTER_MOVE_STATE.IDLE_HOVER;
+    restoreTelekineticBody(root);
+    const proposal=animation.prepare({sampleGround:(x,z)=>residentHeight(actor,x,z)},step,t);
+    root.position.copy(proposal.position);root.rotation.y=proposal.yaw;
+    if(wasIdle&&!root.userData.rockThrow){
+      mover.idleRemaining-=step;if(mover.idleRemaining<=0)chooseSpecterDestination(mover);
+    }
+    if(proposal.finished){
+      actor.x=mover.cellX=mover.targetCellX;actor.z=mover.cellZ=mover.targetCellZ;
+      actor.supportY=mover.baseY-SPECTER_HOVER_CLEARANCE;mover.idleRemaining=1.5+Math.random()*3;
+      const end=explorationTerrain.cellToWorld(actor.x,actor.z,actor.islandId);motion.pointX=end.x;motion.pointZ=end.z;
+    }
+    animation.commit({grounded:true},t,step);
+    motion.mode=mover.state===SPECTER_MOVE_STATE.IDLE_HOVER?'idle':mover.state===SPECTER_MOVE_STATE.START_FLOAT?'turn':'walk';
+    motion.pause=mover.idleRemaining;
+  }
   function tickExplorationResidentMotion(actor,t,dt) {
+    actor.terrainTime=t;
+    if(actor.character==='juggernaut')return tickJuggernautResidentMotion(actor,t,dt);
+    if(actor.character==='monsters')return tickSupportResidentMotion(actor,t,dt);
+    if(actor.character==='specter')return tickSpecterResidentMotion(actor,t,dt);
     const {root,mover}=actor,parts=mover.parts;
-    const step=Math.max(0,Math.min(dt,.05)),point=explorationTerrain.cellToWorld(actor.x,actor.z);
-    const ground=explorationTerrain.groundYAt(point.x,point.z);
+    if(actor.islandId===undefined){
+      const c=explorationTerrain.worldToCell(root.position.x,root.position.z,root.position.y+battleBroTerrain.profile(root).step);
+      actor.islandId=explorationTerrain.getCell(c.x,c.z,c.islandId)?.islandId;
+    }
+    const step=Math.max(0,Math.min(dt,.05)),point=explorationTerrain.cellToWorld(actor.x,actor.z,actor.islandId);
+    const ground=residentSupport(actor)?.y??actor.supportY??root.position.y;
     if(!actor.motion) {
       actor.motion={mode:'idle',pause:1+actor.phase%3,homeX:actor.x,homeZ:actor.z,
         pointX:point.x,pointZ:point.z,elapsed:0,gesture:5+actor.phase%7};
       mover.headBaseY=parts.head?.position.y||0;
       mover.idlePhase=actor.phase;mover.lookRemaining=1.5;mover.lookDirection=0;
       mover.jawBaseX=parts.jaw?.rotation.x||0;
-      if(parts.minotaurLegs) {
-        mover.longneckFootRest=['frontLeft','frontRight','rearLeft','rearRight']
-          .map(name=>parts.minotaurLegs[name].position.clone());
-        mover.longneckFootScratch=new THREE.Vector3();
-      }
-      if(parts.leftArm?.hand && parts.rightArm?.hand && actor.character!=='specter' && !parts.minotaurLegs) {
-        mover.leftAnchor=new THREE.Vector3();mover.rightAnchor=new THREE.Vector3();
-        mover.leftGoal=new THREE.Vector3();mover.rightGoal=new THREE.Vector3();
-      }
+      if(actor.character==='longneck')ensureLongneckAnimation(mover);
       actor.limbRest=parts.limbs?.map(limb=>limb.position.clone());
     }
     const motion=actor.motion;
-    if(motion.mode!=='idle' && !residentFlatCell(mover.targetCellX,mover.targetCellZ)) {
+    if(motion.mode!=='idle' && !residentSupport(actor,mover.targetCellX,mover.targetCellZ,mover.desiredYaw)) {
       motion.mode='idle';motion.pause=2;mover.state='IDLE';mover.juggernautStride=null;
       if(mover.longneckFootRest)resetLongneckFeet(mover);
       if(actor.limbRest)parts.limbs.forEach((limb,i)=>limb.position.copy(actor.limbRest[i]));
     }
     const driftX=point.x-motion.pointX,driftZ=point.z-motion.pointZ;
     motion.pointX=point.x;motion.pointZ=point.z;
+    if(actor.character==='longneck')ensureLongneckAnimation(mover).carry(new THREE.Vector3(driftX,0,driftZ));
     // Home gait contacts are world anchored: carry them with the floating island.
     if(motion.mode!=='idle') {
       root.position.x+=driftX;root.position.z+=driftZ;
-      for(const key of ['startX','targetX'])mover[key]+=driftX;
-      for(const key of ['startZ','targetZ'])mover[key]+=driftZ;
+      if(actor.character!=='longneck'){
+        for(const key of ['startX','targetX'])mover[key]+=driftX;
+        for(const key of ['startZ','targetZ'])mover[key]+=driftZ;
+      }
       for(const key of ['leftAnchor','rightAnchor','leftGoal','rightGoal'])
         if(mover[key]){mover[key].x+=driftX;mover[key].z+=driftZ;}
-      for(const foot of mover.longneckFootMotion||[])
-        for(const key of ['start','goal']){foot[key].x+=driftX;foot[key].z+=driftZ;}
       if(mover.juggernautStride)for(const key of ['leftStart','rightStart']) {
         mover.juggernautStride[key].x+=driftX;mover.juggernautStride[key].z+=driftZ;
       }
@@ -31733,86 +31251,39 @@ function neighborStarVector(edge, index) {
         const offset=Math.floor(Math.random()*4);
         for(let i=0;i<4;i++) {
           const [dx,dz]=directions[(offset+i)%4],x=actor.x+dx,z=actor.z+dz;
-          if(Math.hypot(x-motion.homeX,z-motion.homeZ)>5 || !residentFlatCell(x,z)
-            || explorationTerrain.getCell(x,z).terrainFloors!==explorationTerrain.getCell(actor.x,actor.z).terrainFloors)continue;
-          if([...explorationResidents.values()].some(other=>other!==actor&&Math.hypot(other.x-x,other.z-z)<6))continue;
-          const destination=explorationTerrain.cellToWorld(x,z);
+          if(Math.hypot(x-motion.homeX,z-motion.homeZ)>5)continue;
+          const support=residentRoute(actor,x,z);if(!support)continue;
+          const destination=explorationTerrain.cellToWorld(x,z,actor.islandId);
           Object.assign(mover,{startX:point.x,startZ:point.z,startY:root.position.y,
-            targetX:destination.x,targetZ:destination.z,targetY:root.position.y,
+            targetX:destination.x,targetZ:destination.z,targetY:support.y+(actor.character==='specter'?SPECTER_HOVER_CLEARANCE:0),
             targetCellX:x,targetCellZ:z,desiredYaw:Math.atan2(dx,dz),progress:0});
           motion.mode='turn';motion.elapsed=0;motion.startYaw=root.rotation.y;
           break;
         }
       }
     }
-    if(motion.mode==='turn') {
-      motion.elapsed+=step;
-      const p=Math.min(1,motion.elapsed/.8),ease=p*p*(3-2*p);
-      root.rotation.y=motion.startYaw+battleBroYawDelta(mover.desiredYaw-motion.startYaw)*ease;
-      if(p===1) {
-        motion.mode='walk';motion.elapsed=0;mover.state='WALKING_FLAT';
-        if(mover.longneckFootRest)beginLongneckFootMotion(mover,false);
-        else if(mover.leftAnchor) {
-          const scale=lavaSupportScale(root);
-          setLavaHandAnchor(mover.leftAnchor,mover.startX,mover.startZ,root.rotation.y,-1,ground,scale);
-          setLavaHandAnchor(mover.rightAnchor,mover.startX,mover.startZ,root.rotation.y,1,ground,scale);
-          setLavaHandAnchor(mover.leftGoal,mover.targetX,mover.targetZ,root.rotation.y,-1,ground,scale);
-          setLavaHandAnchor(mover.rightGoal,mover.targetX,mover.targetZ,root.rotation.y,1,ground,scale);
-          beginJuggernautStride(mover);
-        }
+    if(actor.character==='longneck') {
+      const animation=ensureLongneckAnimation(mover),active=motion.mode!=='idle';
+      const proposal=animation.prepareTravel({x:active?mover.targetX:root.position.x,
+        z:active?mover.targetZ:root.position.z,speed:active?1/1.35:0,running:false,
+        groundY:ground,targetY:active?mover.targetY:ground,supportId:actor.islandId,
+        sampleFootGround:(x,z)=>residentHeight(actor,x,z)},step);
+      // The resident planner has already validated the destination and flat path.
+      root.position.copy(proposal.position);root.rotation.y=proposal.yaw;
+      animation.commit({accepted:1,grounded:true},t,step);
+      if(active && mover.state!=='TURNING'
+        && Math.hypot(root.position.x-mover.targetX,root.position.z-mover.targetZ)<.005) {
+        actor.x=mover.targetCellX;actor.z=mover.targetCellZ;actor.supportY=mover.targetY;
+        const end=explorationTerrain.cellToWorld(actor.x,actor.z,actor.islandId);
+        motion.pointX=end.x;motion.pointZ=end.z;motion.mode='idle';motion.pause=1.5+Math.random()*3;
+        animation.reset();
       }
+      tickBattleBroWorldExpression(root,t);tickBattleBroExpression(root,step);
+      tickLooseRockAttachments(root,t,step,mover);
+      return;
     }
-    const walking=motion.mode==='walk';
-    if(walking) {
-      motion.elapsed+=step;
-      let finished=false;
-      if(mover.juggernautStride)finished=tickJuggernautStride(mover,step);
-      else {
-        const p=Math.min(1,motion.elapsed/2.4),ease=p*p*(3-2*p);
-        mover.progress=p;
-        root.position.x=mover.startX+(mover.targetX-mover.startX)*ease;
-        root.position.z=mover.startZ+(mover.targetZ-mover.startZ)*ease;
-        if(mover.longneckFootRest)poseLongneckFeet(mover,p);
-        else if(actor.limbRest)parts.limbs.forEach((limb,i)=>{
-          const wave=Math.sin(p*Math.PI*2+i*Math.PI),rest=actor.limbRest[i];
-          limb.position.z=rest.z+wave*.06;limb.position.y=rest.y+Math.max(0,wave)*.06;
-        });
-        finished=p===1;
-      }
-      if(finished) {
-        actor.x=mover.targetCellX;actor.z=mover.targetCellZ;
-        const end=explorationTerrain.cellToWorld(actor.x,actor.z);
-        motion.pointX=end.x;motion.pointZ=end.z;
-        motion.mode='idle';mover.state='IDLE';motion.pause=1.5+Math.random()*3;
-        if(mover.longneckFootRest)resetLongneckFeet(mover);
-        if(actor.limbRest)parts.limbs.forEach((limb,i)=>limb.position.copy(actor.limbRest[i]));
-      }
-    }
-    // Share home-base poses, support solves, head behavior and expressive animation.
-    if(!walking)tickBattleBroArenaActor(actor,t+actor.phase,step);
-    else {
-      if(mover.leftAnchor) {
-        root.updateMatrixWorld(true);
-        solveLavaArmToAnchor(mover,parts.leftArm,mover.leftAnchor);
-        solveLavaArmToAnchor(mover,parts.rightArm,mover.rightAnchor);
-      }
-      tickUpperArmMotion(root,t+actor.phase,step,mover);
-      tickLooseRockAttachments(root,t+actor.phase,step,mover);
-      tickBattleBroExpression(root,step);
-    }
-    if(parts.neckPivot)tickLongneckHead(mover,t+actor.phase,step);
-    if(actor.character==='specter') {
-      root.position.y=ground+SPECTER_HOVER_CLEARANCE+Math.sin(t*.72+actor.phase)*.025;
-      parts.torso.rotation.x+=((walking?-.06:0)-parts.torso.rotation.x)*Math.min(1,step*4);
-      if(walking)tickFloatingRockArmGestures(root,t+actor.phase,step);
-    }
-    motion.gesture-=step;
-    if(!walking && motion.gesture<=0) {
-      motion.gesture=7+Math.random()*8;
-      if(root.userData.upperArmMotion)triggerUpperArmClawGesture(root,Math.random()<.5?-1:1);
-    }
-    tickBattleBroWorldExpression(root,t+actor.phase);
   }
+
   function removeExplorationResident(id,actor) {
     const field=actor.root.userData.looseRocks?.orbitField;
     actor.root.parent?.remove(actor.root);
@@ -31826,8 +31297,9 @@ function neighborStarVector(edge, index) {
       explorationResidentScan=0;explorationResidentSearch=null;return;
     }
     for(const [id,actor] of explorationResidents) {
+      actor.terrainTime=t;
       const point=explorationTerrain.cellToWorld(actor.x,actor.z);
-      if(Math.hypot(point.x-fp.pos.x,point.z-fp.pos.z)>70 || !residentFlatCell(actor.x,actor.z)) {
+      if(Math.hypot(point.x-fp.pos.x,point.z-fp.pos.z)>70 || !residentSupport(actor)) {
         removeExplorationResident(id,actor);continue;
       }
       tickExplorationResidentMotion(actor,t,dt);
@@ -31862,7 +31334,7 @@ function neighborStarVector(edge, index) {
         const variants=['lava','ice','mushroom','gem'];
         const cores=['cyan','amber','violet','lime','pink','red'];
         const character=characters[Math.floor(residentHash(x,z,40)*characters.length)];
-        const form=Math.max(1,Math.min(7,(explorationCompanion.root?.userData.form||4)
+        const form=Math.max(1,Math.min(7,(transportCube.root?.userData.form||4)
           +Math.floor(residentHash(x,z,41)*3)-1));
         const core=cores[Math.floor(residentHash(x,z,42)*cores.length)];
         const root=createBattleBroCharacter({character,form,
@@ -31883,275 +31355,120 @@ function neighborStarVector(edge, index) {
     }
   }
 
-  // ---------- first-person companion ----------
-  // The selected Home Base character is the appearance source. Exploration
-  // owns a separate rig, so following never moves or edits the Home Base actor.
-  const explorationCompanion = {source:null,root:null,parts:null,character:null,phase:0,rests:null};
-  const COMPANION_FOLLOW = Object.freeze({tooClose:3,backAwayTo:4.2,followAt:6.2,settleAt:4.8,
-    urgentAt:9,runUntil:7,emergencyAt:20,reaction:0.45,targetDrift:2,stepHeight:0.45});
-  function companionPathClear(terrain,fromX,fromZ,toX,toZ) {
-    const distance=Math.hypot(toX-fromX,toZ-fromZ);
-    const steps=Math.max(1,Math.ceil(distance/.35));
-    let previousY=terrain.groundYAt(fromX,fromZ);
-    for(let i=1;i<=steps;i++) {
-      const x=fromX+(toX-fromX)*i/steps,z=fromZ+(toZ-fromZ)*i/steps;
-      const {x:cellX,z:cellZ}=terrain.worldToCell(x,z);
-      const cell=terrain.getCell(cellX,cellZ);
-      if(!cell || cell.kind || cell.extras?.length || ['water','lava'].includes(cell.terrain))return false;
-      const y=terrain.groundYAt(x,z);
-      if(Math.abs(y-previousY)>COMPANION_FOLLOW.stepHeight)return false;
-      previousY=y;
-    }
-    return true;
+  // ---------- transport cube ----------
+  // A single selected-character deployment. No follow targets or recovery teleports.
+  let transportCubeController=null;
+  const transportCube={get root(){return transportCubeController?.root||null;}};
+  function resetTransportCube(store=true){
+    // Initialize before travel, even if the cube has never been equipped.
+    ensureTransportCube().suspend(store);
   }
-  function chooseCompanionTarget(pet,mode,requirePath=true) {
-    const root=pet.root,terrain=activeFPTerrain();
-    const dx=root.position.x-fp.pos.x,dz=root.position.z-fp.pos.z;
-    const currentAngle=Math.hypot(dx,dz)>.01?Math.atan2(dz,dx):Math.PI/2-fp.yaw;
-    const behindAngle=Math.atan2(Math.cos(fp.yaw),Math.sin(fp.yaw));
-    const angle=mode==='retreat'?currentAngle:currentAngle+Math.atan2(
-      Math.sin(behindAngle-currentAngle),Math.cos(behindAngle-currentAngle))*.28;
-    const radius=mode==='retreat'?pet.preferredMin+.8
-      :pet.preferredMin+Math.random()*(pet.preferredMax-pet.preferredMin);
-    const lateral=(Math.random()-.5)*.65;
-    for(const offset of [lateral,lateral+.32,lateral-.32,lateral+.65,lateral-.65,1,-1]) {
-      const x=fp.pos.x+Math.cos(angle+offset)*radius;
-      const z=fp.pos.z+Math.sin(angle+offset)*radius;
-      if((!requirePath && companionPathClear(terrain,x,z,x,z))
-        || (requirePath && companionPathClear(terrain,root.position.x,root.position.z,x,z)))
-        return {x,z,playerX:fp.pos.x,playerZ:fp.pos.z};
+  function pauseTransportBattleBro(root){
+    for(const movers of [lavaMonsterMovers,minotaurMovers,specterMovers]){
+      for(const mover of movers)if(mover.root===root){
+        finishScenerySmash(mover);
+        movers.delete(mover);
+      }
     }
-    return null;
+    if(root.userData.terrainConsume)finishTerrainConsume(root.userData.terrainConsume);
+    restoreTelekineticBody(root);
+    const action=root.userData.rockThrow;
+    if(action){
+      action.rock.action=null;action.rock.node.visible=true;root.userData.rockThrow=null;
+      const trail=root.userData.looseRocks?.throwTrail;if(trail)trail.line.material.opacity=0;
+    }
+    // Drop entire location-dependent records. Registration reconstructs contacts
+    // from the new world position and full-sized rig, never the capture position.
+    for(const key of ['lavaMovement','newbornMovement','developingMovement','adolescentMovement',
+      'apexMovement','greaterMovement','advancedMovement','minotaurMovement','specterMovement',
+      'upperArmMotion','floatingArmGestures','rockThrowBodyBases'])delete root.userData[key];
+    delete root.userData.transportActor;
   }
-  function stopExplorationCompanion() {
-    const root=explorationCompanion.root;
-    if(root) {
-      const field=root.userData.looseRocks?.orbitField;
-      root.parent?.remove(root);
-      if(field)disposeGroup(field);
-      disposeGroup(root);
+  function prepareTransportBattleBro(root){
+    pauseTransportBattleBro(root);
+    for(const pose of root.userData.transportRestPose||[]){
+      pose.node.position.copy(pose.position);pose.node.quaternion.copy(pose.quaternion);pose.node.scale.copy(pose.scale);
     }
-    explorationCompanion.source=null;
-    explorationCompanion.root=null;
-    explorationCompanion.parts=null;
-    explorationCompanion.rests=null;
+    root.userData.characterJumping=false;
+    const rocks=root.userData.looseRocks;
+    if(rocks){delete rocks.previousYaw;for(const chunk of rocks.chunks){chunk.initialized=false;chunk.compression=0;}}
+    root.updateMatrixWorld(true);
   }
-  function startExplorationCompanion() {
-    stopExplorationCompanion();
-    // Home already contains the player's BattleBro. Only the other world
-    // needs a separate companion representation.
-    if(!fp.active || !explorationActive)return;
-    const source=baseBattleBroPrototype;
-    if(!source)return;
-    const character=source.userData.kind==='battlebro-longneck-prototype'?'longneck'
-      :source.userData.kind==='battlebro-floating-rock-prototype'?'specter'
-      :source.userData.characterFamily||(source.userData.form<=4?'juggernaut':'monsters');
-    const appearance={form:source.userData.form||4,variant:source.userData.visualVariant||'lava'};
-    const root=character==='longneck'?createLongNeckBattleBro(appearance)
-      :character==='specter'?createSpecterBattleBro(appearance)
-      :character==='monsters' && appearance.form<5?createLesserMonsterBattleBro(appearance)
-      :character==='juggernaut'?createJuggernautBattleBro(appearance)
-      :createRockBattleBro(appearance);
-    const behind=4.5;
-    root.position.set(fp.pos.x+Math.sin(fp.yaw)*behind,0,fp.pos.z+Math.cos(fp.yaw)*behind);
-    if(!Number.isFinite(activeFPTerrain().groundYAt(root.position.x,root.position.z))) {
-      root.position.x=fp.pos.x;root.position.z=fp.pos.z;
+  function bindTransportBattleBro(root){
+    prepareTransportBattleBro(root);
+    const terrain=activeFPTerrain(),shape=battleBroTerrain.profile(root),cell=terrain.worldToCell(root.position.x,root.position.z,root.position.y+shape.step);
+    const character=battleBroFamily(root);
+    if(!explorationActive){
+      // Home navigation is cell based: align the initial placement before planting.
+      const point=terrain.cellToWorld(cell.x,cell.z);
+      root.position.x=point.x;root.position.z=point.z;root.updateMatrixWorld(true);
+      if(character==='longneck'){
+        const mover=registerMinotaurMover(root,cell.x,cell.z);
+        mover.sampleFootGround=(x,z)=>terrain.groundYAt(x,z,0,root.position.y+shape.step);
+      }
+      else if(character==='specter')registerSpecterMover(root,cell.x,cell.z,root.position.y);
+      else registerLavaMonsterMover(root,cell.x,cell.z);
+    }else{
+      root.userData.transportActor={root,character,x:cell.x,z:cell.z,islandId:cell.islandId,
+        supportY:root.position.y-(character==='specter'?SPECTER_HOVER_CLEARANCE:0),phase:root.userData.idlePhase||0,
+        mover:{root,parts:root.userData.locomotionRig||root.userData.rig,state:'IDLE',progress:0,ikTarget:new THREE.Vector3()}};
     }
-    root.position.y=activeFPTerrain().groundYAt(root.position.x,root.position.z)
-      +(character==='specter'?SPECTER_HOVER_CLEARANCE:0);
-    root.rotation.y=fp.yaw;
-    root.userData.idlePhase=source.userData.idlePhase||0;
-    activeFPTerrain().group.add(root);
-    const parts=root.userData.rig;
-    Object.assign(explorationCompanion,{source,root,parts,character,phase:0,
-      mode:'idle',target:null,reactionTime:0,retargetTime:0,blockedTime:0,
-      preferredMin:character==='longneck'?3.8:character==='specter'?3.5:3.9,
-      preferredMax:character==='longneck'?5.5:character==='specter'?5.8:5.6,
-      lagTime:.45+Math.random()*.9,moveSpeed:0,actualSpeed:0,
-      motionBlend:0,runBlend:0,locomotion:'idle',
-      rests:{rigY:parts.rig?.position.y||0,torsoZ:parts.torso?.rotation.z||0,
-        torsoX:parts.torso?.rotation.x||0,headY:parts.head?.position.y||0,
-        headX:parts.head?.rotation.x||0,headYaw:parts.head?.rotation.y||0,
-        supports:(parts.leftArm&&parts.rightArm?[parts.leftArm,parts.rightArm]
-          :parts.leftSupport&&parts.rightSupport?[parts.leftSupport,parts.rightSupport]
-          :root.userData.locomotionRig?.leftArm&&root.userData.locomotionRig?.rightArm
-            ?[root.userData.locomotionRig.leftArm,root.userData.locomotionRig.rightArm]:null)?.map(arm=>({
-          x:arm.shoulder.rotation.x,z:arm.shoulder.rotation.z,handX:arm.hand?.rotation.x||0}))||null,
-        limbs:(parts.limbs||root.userData.locomotionRig?.limbs)?.map(limb=>limb.position.clone())||null,
-        legs:parts.minotaurLegs?['frontLeft','frontRight','rearLeft','rearRight']
-          .map(name=>parts.minotaurLegs[name].position.clone()):null}});
-    explorationCompanion.lookRemaining=1.5;
-    explorationCompanion.lookDirection=0;
-    explorationCompanion.jawBaseX=parts.jaw?.rotation.x||0;
-    tickLooseRockAttachments(root,0,0);
   }
-  function tickExplorationCompanion(t,dt) {
-    const pet=explorationCompanion;
-    if(!fp.active || !explorationActive){if(pet.root)stopExplorationCompanion();return;}
-    if(baseBattleBroPrototype!==pet.source)startExplorationCompanion();
-    if(!pet.root)return;
-    const root=pet.root,parts=pet.parts,terrain=activeFPTerrain();
-    const playerDistance=Math.hypot(root.position.x-fp.pos.x,root.position.z-fp.pos.z);
-    if(pet.mode==='idle') {
-      const tooClose=playerDistance<pet.preferredMin-.7;
-      const tooFar=playerDistance>pet.preferredMax+.6;
-      pet.reactionTime=tooClose||tooFar?pet.reactionTime+dt:0;
-      if((tooClose||tooFar) && (pet.reactionTime>=pet.lagTime || playerDistance>COMPANION_FOLLOW.urgentAt)) {
-        pet.mode=tooClose?'retreat':'follow';pet.target=null;pet.reactionTime=0;
-        pet.lagTime=.45+Math.random()*.9;
-      }
-    } else if((pet.mode==='follow' && playerDistance<=pet.preferredMax-.6)
-      || (pet.mode==='retreat' && playerDistance>=pet.preferredMin-.25)) {
-      pet.mode='idle';pet.target=null;pet.reactionTime=0;pet.blockedTime=0;
+  function transportLanding(x,z,maxY=null){
+    const terrain=activeFPTerrain(),source=baseBattleBroPrototype;
+    const landingCell=terrain.worldToCell(x,z,maxY),landingPoint=terrain.cellToWorld(landingCell.x,landingCell.z,landingCell.islandId);x=landingPoint.x;z=landingPoint.z;
+    const shape=battleBroTerrain.profile(source),radius=Math.max(1,shape.halfWidth,shape.halfDepth);
+    if(Math.hypot(x-fp.pos.x,z-fp.pos.z)<radius+2)return null;
+    const support=battleBroTerrain.stand(terrain,shape,x,z,fp.yaw||0,maxY,landingCell.islandId);
+    if(!support)return null;
+    const y=support.y;
+    if(!explorationActive&&support.samples.some(p=>trainingFacilityOccupiesCell(p.cell.x,p.cell.z)||stargateOccupiesCell(p.cell.x,p.cell.z)))return null;
+    if(residentBodyOccupied(source,x,y,z))return null;
+    const cell=terrain.worldToCell(x,z,maxY),anchor=terrain.cellToWorld(cell.x,cell.z,cell.islandId);
+    return {x,y,z,cell,anchor,maxY:support.max+.11};
+  }
+  function transportCubeBlocked(from,to){
+    const terrain=activeFPTerrain(),ground=terrain.groundYAt(to.x,to.z,0,to.y+.12);
+    if(terrain.blocksBodyAt?.(to.x,to.z,to.y-.08,to.y+.08,0)||ground>to.y+.1)return true;
+    const c=terrain.worldToCell(to.x,to.z,to.y+.12),cell=terrain.getCell(c.x,c.z,c.islandId);
+    if(!cell||!cell.kind&&!cell.extras?.length)return false;
+    const height={flower:.2,bush:.5,rock:.8,fence:1,tree:2,house:Math.max(1,Number(cell.floors)||1)*.6}[cell.kind];
+    return !!cell.extras?.length||height===undefined||to.y-.1<ground+height;
+  }
+  function ensureTransportCube(){
+    if(transportCubeController)return transportCubeController;
+    transportCubeController=createTransportCube(THREE,{
+      scene,camera:persCam,box:getBoxGeometry,
+      active:()=>fp.active&&!trainingAppearance.active,
+      equipped:()=>excavation.equipped==='transport-cube',source:()=>baseBattleBroPrototype,
+      hand:out=>out.set(.28,-.22,-.55).applyQuaternion(persCam.quaternion).add(persCam.position),
+      direction:out=>persCam.getWorldDirection(out),yaw:()=>fp.yaw,
+      ground:(x,z,maxY)=>activeFPTerrain().groundYAt(x,z,0,maxY),landing:transportLanding,
+      anchor:cell=>activeFPTerrain().cellToWorld(cell.x,cell.z,cell.islandId),
+      blocked:transportCubeBlocked,
+      current:source=>!explorationActive&&source?.parent===worldGroup?source:null,
+      pause:pauseTransportBattleBro,prepare:prepareTransportBattleBro,
+      place:root=>activeFPTerrain().group.add(root),
+      hover:root=>battleBroFamily(root)==='specter'?SPECTER_HOVER_CLEARANCE:0,
+      bind:bindTransportBattleBro,
+      animate:(root,t,dt)=>{if(explorationActive&&root.userData.transportActor)tickExplorationResidentMotion(root.userData.transportActor,t,dt);},
+      visual:root=>{const field=root.userData.looseRocks?.orbitField;
+        if(field){field.position.copy(root.position);field.scale.copy(root.scale);field.visible=root.visible;}},
+      release:root=>{pauseTransportBattleBro(root);root.parent?.remove(root);},
+      status:message=>{if(excavation.equipped==='transport-cube'){excavationStatus.textContent=message;excavationHud.hidden=false;}}
+    });
+    return transportCubeController;
+  }
+  function throwTransportCube(){
+    if(!fp.active||trainingAppearance.active)return false;
+    if(!baseBattleBroPrototype){excavationStatus.textContent='Choose your BattleBro at home first';excavationHud.hidden=false;return false;}
+    return ensureTransportCube().throw();
+  }
+  function tickTransportCube(t,dt){
+    if(excavation.equipped==='transport-cube'&&fp.active){
+      ensureTransportCube();
     }
-    pet.retargetTime=Math.max(0,pet.retargetTime-dt);
-    if(pet.mode!=='idle' && (pet.target===null || (pet.retargetTime===0 &&
-      Math.hypot(fp.pos.x-pet.target.playerX,fp.pos.z-pet.target.playerZ)>COMPANION_FOLLOW.targetDrift))) {
-      pet.target=chooseCompanionTarget(pet,pet.mode);
-      pet.retargetTime=.55+Math.random()*.65;
-    }
-    let moving=false;
-    const oldX=root.position.x,oldZ=root.position.z;
-    let desiredSpeed=0;
-    if(pet.target) {
-      const dx=pet.target.x-root.position.x,dz=pet.target.z-root.position.z;
-      const distance=Math.hypot(dx,dz);
-      desiredSpeed=pet.mode==='retreat'?1.5:playerDistance>12?5.2:playerDistance>COMPANION_FOLLOW.urgentAt?3.7:2;
-      desiredSpeed=Math.min(desiredSpeed,Math.sqrt(distance)*3.1);
-      const desiredYaw=Math.atan2(dx,dz);
-      const delta=Math.atan2(Math.sin(desiredYaw-root.rotation.y),Math.cos(desiredYaw-root.rotation.y));
-      const turnRate=pet.character==='juggernaut'?2.2:pet.character==='longneck'?2.8:4;
-      root.rotation.y+=Math.max(-turnRate*dt,Math.min(turnRate*dt,delta));
-      const turnTravel=Math.max(.25,1-Math.abs(delta)/Math.PI);
-      pet.moveSpeed+=(desiredSpeed*turnTravel-pet.moveSpeed)*(1-Math.exp(-dt*(desiredSpeed>pet.moveSpeed?3.2:5)));
-      const step=Math.min(distance,dt*pet.moveSpeed);
-      const steer=.75;
-      const vx=Math.sin(root.rotation.y)*(1-steer)+dx/Math.max(distance,.001)*steer;
-      const vz=Math.cos(root.rotation.y)*(1-steer)+dz/Math.max(distance,.001)*steer;
-      const length=Math.hypot(vx,vz)||1;
-      const nextX=root.position.x+vx/length*step;
-      const nextZ=root.position.z+vz/length*step;
-      if(step>.001 && companionPathClear(terrain,root.position.x,root.position.z,nextX,nextZ)) {
-        root.position.x=nextX;root.position.z=nextZ;
-        moving=true;pet.blockedTime=0;
-      } else if(distance<.12)pet.target=null;
-      else {pet.moveSpeed=0;pet.blockedTime+=dt;}
-    } else {
-      pet.moveSpeed*=Math.exp(-dt*6);
-      if(pet.moveSpeed>.05){
-        const coast=Math.min(.12,pet.moveSpeed*dt);
-        const nextX=root.position.x+Math.sin(root.rotation.y)*coast;
-        const nextZ=root.position.z+Math.cos(root.rotation.y)*coast;
-        if(companionPathClear(terrain,root.position.x,root.position.z,nextX,nextZ)){
-          root.position.x=nextX;root.position.z=nextZ;moving=true;
-        }else pet.moveSpeed=0;
-      }
-      if(pet.mode!=='idle')pet.blockedTime+=dt;
-    }
-    // Recovery is reserved for extreme separation or a long impasse.
-    if(playerDistance>COMPANION_FOLLOW.emergencyAt || pet.blockedTime>8) {
-      const rescue=chooseCompanionTarget(pet,'follow',false);
-      if(rescue) {
-        root.position.x=rescue.x;root.position.z=rescue.z;
-        pet.mode='idle';pet.target=null;pet.blockedTime=0;pet.moveSpeed=0;
-        tickLooseRockAttachments(root,t,0);
-      }
-    }
-    pet.actualSpeed=moving?Math.hypot(root.position.x-oldX,root.position.z-oldZ)/Math.max(dt,.001):0;
-    const ground=activeFPTerrain().groundYAt(root.position.x,root.position.z)
-      +(pet.character==='specter'?SPECTER_HOVER_CLEARANCE:0);
-    root.position.y+=(ground-root.position.y)*Math.min(1,dt*8);
-    const groundMoving=pet.actualSpeed>.08;
-    const keepRunning=pet.runBlend>.12&&playerDistance>COMPANION_FOLLOW.runUntil;
-    const wantsRun=groundMoving&&pet.mode==='follow'
-      &&(playerDistance>COMPANION_FOLLOW.urgentAt||keepRunning);
-    const motionTarget=groundMoving?Math.min(1,pet.actualSpeed/.8):0,runTarget=wantsRun?1:0;
-    pet.motionBlend+=(motionTarget-pet.motionBlend)*(1-Math.exp(-dt*(motionTarget?6:4.5)));
-    pet.runBlend+=(runTarget-pet.runBlend)*(1-Math.exp(-dt*(runTarget?4.5:3.5)));
-    pet.locomotion=pet.motionBlend<.08?'idle':pet.runBlend>.45?'run':'walk';
-    const cycleRate=pet.character==='specter'?3.5:pet.character==='longneck'?4.6:5.2;
-    pet.phase+=dt*(groundMoving?cycleRate*pet.actualSpeed:1.2);
-    const gait=groundMoving?Math.sin(pet.phase):0;
-    if(pet.character!=='juggernaut'){
-      if(parts.rig)parts.rig.position.y=pet.rests.rigY+(moving?Math.abs(gait)*.014:Math.sin(t*1.8)*.006);
-      if(parts.torso)parts.torso.rotation.z=pet.rests.torsoZ+gait*.018;
-    }
-    if(pet.character==='longneck') {
-      const names=['frontLeft','frontRight','rearLeft','rearRight'];
-      names.forEach((name,i)=>{
-        const leg=parts.minotaurLegs[name],rest=pet.rests.legs[i];
-        const swing=groundMoving?Math.sin(pet.phase+(i===0||i===3?0:Math.PI)):0;
-        const reach=Math.min(1.8,.55+pet.actualSpeed*.18)*pet.motionBlend;
-        leg.position.x=rest.x+swing*.055*reach;
-        leg.position.y=rest.y+Math.max(0,swing)*.065*reach;
-        leg.position.z=rest.z;
-      });
-      parts.head.position.y=pet.rests.headY-Math.abs(gait)*.008;
-      pet.state=groundMoving?MINOTAUR_MOVE_STATE.WALKING_FLAT:MINOTAUR_MOVE_STATE.IDLE;
-      tickLongneckHead(pet,t,dt);
-    } else if(pet.character==='monsters' || pet.character==='juggernaut') {
-      if(pet.character==='juggernaut'){
-        const formScale=.72+Math.min(6,(root.userData.form||1)-1)*(.28/6);
-        const stride=Math.sin(pet.phase),counter=Math.sin(pet.phase+Math.PI);
-        const lift=(.014+pet.runBlend*.018)*formScale*pet.motionBlend;
-        parts.rig.position.y=pet.rests.rigY+(Math.abs(stride)-.45)*lift;
-        parts.torso.rotation.z=pet.rests.torsoZ+stride*(.018+pet.runBlend*.012)*pet.motionBlend;
-        parts.torso.rotation.x=pet.rests.torsoX-(.012+pet.runBlend*.026)*pet.motionBlend;
-        parts.head.position.y=pet.rests.headY-Math.abs(stride)*(.010+pet.runBlend*.010)*pet.motionBlend;
-        parts.head.rotation.x=pet.rests.headX+stride*(.012+pet.runBlend*.010)*pet.motionBlend;
-        parts.head.rotation.y=pet.rests.headYaw+Math.sin(t*.85+root.userData.idlePhase)*.16*pet.runBlend;
-        if(pet.rests.supports){
-          const swing=(.065+pet.runBlend*.075)*formScale*pet.motionBlend;
-          parts.leftArm.shoulder.rotation.x=pet.rests.supports[0].x+stride*swing;
-          parts.rightArm.shoulder.rotation.x=pet.rests.supports[1].x+counter*swing;
-          parts.leftArm.shoulder.rotation.z=pet.rests.supports[0].z+stride*swing*.34;
-          parts.rightArm.shoulder.rotation.z=pet.rests.supports[1].z-counter*swing*.34;
-        } else if(pet.rests.limbs){
-          (parts.limbs||root.userData.locomotionRig?.limbs).forEach((limb,i)=>{
-            const wave=i?counter:stride,rest=pet.rests.limbs[i];
-            limb.position.z=rest.z+wave*(.035+pet.runBlend*.035)*formScale*pet.motionBlend;
-            limb.position.y=rest.y+Math.max(0,wave)*(.035+pet.runBlend*.045)*formScale*pet.motionBlend;
-          });
-        }
-      } else if(pet.rests.limbs) {
-        (parts.limbs||root.userData.locomotionRig?.limbs).forEach((limb,i)=>{
-          const rest=pet.rests.limbs[i],wave=Math.sin(pet.phase+i*Math.PI);
-          const reach=Math.min(2,.5+pet.actualSpeed*.22)*pet.motionBlend;
-          limb.position.z=rest.z+wave*.10*reach;
-          limb.position.y=rest.y+Math.max(0,wave)*.09*reach;
-        });
-      } else if(pet.rests.supports) {
-        const supports=parts.leftSupport&&parts.rightSupport?[parts.leftSupport,parts.rightSupport]
-          :[root.userData.locomotionRig?.leftArm,root.userData.locomotionRig?.rightArm];
-        supports.forEach((arm,i)=>{
-          const wave=Math.sin(pet.phase+i*Math.PI),rest=pet.rests.supports[i];
-          const reach=Math.min(1.8,.55+pet.actualSpeed*.2)*pet.motionBlend;
-          arm.shoulder.rotation.x=rest.x+wave*.18*reach;
-          arm.shoulder.rotation.z=rest.z+(i?1:-1)*wave*.035*reach;
-          if(arm.hand)arm.hand.rotation.x=rest.handX-Math.max(0,wave)*.12*reach;
-        });
-      }
-      tickUpperArmMotion(root,t,dt,{parts,state:groundMoving?LAVA_MOVE_STATE.PULL_LEFT:LAVA_MOVE_STATE.IDLE});
-    }
-    if(pet.character==='specter'){
-      tickFloatingRockArmGestures(root,t,dt);
-      if(groundMoving){
-        const stroke=Math.sin(pet.phase),reach=Math.min(1,pet.actualSpeed/3);
-        parts.torso.rotation.x=-.04-reach*.16;
-        for(const [arm,side] of [[parts.leftArm,-1],[parts.rightArm,1]]){
-          arm.shoulder.rotation.x-=reach*(.2+stroke*side*.45);
-          arm.elbow.rotation.x-=reach*(.15+stroke*side*.3);
-        }
-      }
-    }
-    tickBattleBroWorldExpression(root,t);
-    tickBattleBroExpression(root,dt);
-    if(pet.character==='longneck') {
-      const blink=(t+root.userData.idlePhase)%4.6;
-      const eyeScale=blink>4.38?Math.max(.1,Math.abs(blink-4.49)/.11):1;
-      parts.leftEye.scale.y*=eyeScale;parts.rightEye.scale.y*=eyeScale;
-    }
-    tickLooseRockAttachments(root,t,dt,{state:moving?'MOVING':'IDLE'});
+    transportCubeController?.tick(dt,t);
   }
 
   function fpGroundYAt(worldX, worldZ) {
@@ -32223,7 +31540,7 @@ function neighborStarVector(edge, index) {
     fp.terrainLift = 0;
     fp.landingTime = 0;
     fp.landingDip = 0;
-    if(other)switchFPWorld(true);else startExplorationCompanion();
+    if(other)switchFPWorld(true);else resetTransportCube(false);
     persCam.fov = FP_FOV;
     persCam.near = FP_NEAR;
     persCam.updateProjectionMatrix();
@@ -32242,8 +31559,8 @@ function neighborStarVector(edge, index) {
     document.getElementById('fp-tools').hidden=true;
     cancelFPWarp();
     fpJourney.previous=null;
+    resetTransportCube(explorationActive);
     fp.active = false;
-    stopExplorationCompanion();
     activeFPTerrain().deactivate();
     fpKeys.clear();
     persCam.fov = PERS_FOV_DEFAULT;
@@ -32303,7 +31620,7 @@ function neighborStarVector(edge, index) {
 
   function tickFP(dt) {
     if (!fp.active) return;
-    activeFPTerrain().tick?.(dt,fp,fpEyeHeight(),explorationCompanion.root);
+    activeFPTerrain().tick?.(dt,fp,fpEyeHeight(),transportCube.root);
     fp.landingTime = Math.max(0, fp.landingTime - dt);
     const sinY = Math.sin(fp.yaw), cosY = Math.cos(fp.yaw);
     let fx = 0, fz = 0;
@@ -36831,6 +36148,47 @@ function neighborStarVector(edge, index) {
     docHidden = !!document.hidden;
   });
 
+  // Local-only review uses the existing renderer and single animation loop.
+  let longneckReview=null;
+  if(['localhost','127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).has('longneckReview')) {
+    const reviewScript=document.createElement('script');reviewScript.src='tools/longneck-review.js';
+    reviewScript.onload=()=>{longneckReview=window.createLongneckReview(THREE,{
+      canvas:renderer.domElement,create:createLongNeckBattleBro,animation:mover=>createLongneckAnimation(THREE,mover,{random:()=>.75}),
+      release:disposeGroup,jump:{prepare:BATTLEBRO_JUMP_SETTINGS.prepare,land:BATTLEBRO_JUMP_SETTINGS.land,velocity:FP_JUMP_V0},gravity:FP_GRAVITY,
+      secondary:(root,t,dt,mover)=>{tickBattleBroExpression(root,dt);tickLooseRockAttachments(root,t,dt,mover);}
+    });};
+    document.head.append(reviewScript);
+  }
+
+  if(['localhost','127.0.0.1'].includes(location.hostname)&&new URLSearchParams(location.search).has('juggernautReview')){
+    const script=document.createElement('script');script.src='tools/juggernaut-review.js';
+    script.onload=()=>{longneckReview=window.createJuggernautReview(THREE,{
+      canvas:renderer.domElement,release:disposeGroup,
+      actor(form,x,mode){
+        const root=createBattleBroCharacter({character:'juggernaut',form,variant:'ice'});root.position.set(x,0,0);root.updateMatrixWorld(true);
+        if(root.userData.juggernautLook)root.userData.juggernautLook.wait=999;
+        const nav={selectRoute:()=>null,runTargetValid:()=>true,
+          contact:(m,p)=>p.clone().setY(0),
+          swing:(m,start,end,index,yaw,lift)=>({start:start.clone(),end:end.clone().setY(0),lift,raised:false,adjustment:0})};
+        const mover=registerLavaMonsterMover(root,0,0,nav),animation=ensureJuggernautAnimation(mover);
+        mover.pauseRemaining=Infinity;mover.homeJumpWait=Infinity;
+        Object.assign(mover,{startX:x,startZ:0,startY:0,targetX:x,targetZ:1,targetY:0,targetCellX:0,targetCellZ:1,dx:0,dz:1,desiredYaw:mode==='turn'?Math.PI/2:0});
+        mover.terrainPlan=planLavaTerrainMove(mover,0,1,mover.desiredYaw);
+        if(['walk','run','moving support','blocked'].includes(mode)){
+          if(form<4){mover.state='REACH';mover.reachStart.copy(mover.anchors[mover.sideIndex]);}
+          else{
+            mover.rightGoal.copy(mover.terrainPlan.swings[0].end);mover.leftGoal.copy(mover.terrainPlan.swings[1].end);
+            if(mode==='run'){mover.juggernautJog={support:0,total:1,remaining:1};beginJuggernautRun(mover);}
+            else beginJuggernautStride(mover);
+          }
+        }else if(mode==='turn')mover.state='TURNING';
+        const jump=mode==='jump'?createBattleBroJump(THREE,root,{...BATTLEBRO_JUMP_SETTINGS,character:'juggernaut',gravity:FP_GRAVITY,velocity:FP_JUMP_V0,
+          groundY:()=>0,solveSupport:solveLavaTurnArm,poseJuvenile:poseDevelopingArms}):null;
+        return {root,mover,animation,jump};
+      }
+    });};document.head.append(script);
+  }
+
   function animate(now, xrFrame) {
     if (docHidden && !xrSession) {
       // Tab is backgrounded — keep the rAF heartbeat (browsers throttle
@@ -36842,6 +36200,7 @@ function neighborStarVector(edge, index) {
     const t = now / 1000;
     const dt = prevT ? Math.min(t - prevT, 0.05) : 0;
     prevT = t;
+    if(longneckReview){longneckReview.render(renderer,dt);return;}
 
     if (battleArenaView.active) {
       battleArenaView.time+=dt;
@@ -36863,7 +36222,8 @@ function neighborStarVector(edge, index) {
     tickSquashAnims(dt);
     if (rippleAnims.length) tickRippleAnims(dt);
     const inTrainingAppearance=tickTrainingAppearance(dt,t);
-    if (fp.active && !inTrainingAppearance) {if(!tickFPJourney(dt))tickFP(dt);tickExplorationCompanion(t,dt);}
+    if (fp.active && !inTrainingAppearance) {if(!tickFPJourney(dt))tickFP(dt);}
+    tickTransportCube(t,dt);
     tickExplorationResidents(t,dt);
     tickExcavation(dt);
     if (flight.active) tickFlightMode(dt);

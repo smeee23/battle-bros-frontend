@@ -13,6 +13,13 @@ new vm.Script(inlineApp, { filename: 'index.inline.js' });
 
 for (const relativePath of [
   'vendor/three/three.r128.min.js',
+  'assets/longneck-animation.js',
+  'assets/juggernaut-animation.js',
+  'assets/monster-animation.js',
+  'assets/specter-animation.js',
+  'assets/battlebro-jump.js',
+  'assets/transport-cube.js',
+  'assets/battlebro-terrain.js',
   'runtime-config.js',
   'vendor/three/GLTFLoader.r128.js',
   'vendor/tiny-crowd-layer.js',
@@ -26,5 +33,8 @@ for (const relativePath of [
     throw new Error(`Missing runtime asset: ${relativePath}`);
   }
 }
+
+for(const name of ['longneck-animation','juggernaut-animation','monster-animation','specter-animation','battlebro-jump','transport-cube','battlebro-terrain'])
+  new vm.Script(fs.readFileSync(path.join(root,'assets/'+name+'.js'),'utf8'),{filename:name+'.js'});
 
 console.log('check: inline JavaScript syntax and runtime assets OK');

@@ -60,10 +60,10 @@ console.log('sky islands: sparse miniature terrain, layered collisions, drift, r
 // Real first-person integration: jump from a lower island onto the entry sky island.
 const actual=setup();actual.terrain.activate();
 Object.assign(actual.context,{persCam:{near:.1,fov:55,position:new THREE.Vector3(),lookAt(){}},activeFPTerrain:()=>actual.terrain,
- explorationCompanion:{root:null},markCameraMoving(){}});
+ transportCube:{root:null},markCameraMoving(){}});
 const html=fs.readFileSync('index.html','utf8');
 const section=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)));
-vm.runInContext(section('  const FP_EYE_H =','  // ---------- first-person companion ----------')
+vm.runInContext(section('  const FP_EYE_H =','  // ---------- transport cube ----------')
  +section('  function fpGroundYAt(', '  function enterFP(')+section('  function tickFP(', '  // ---------- first-person flight ----------')
  +'\nthis.api={fp,fpKeys,tickFP,FP_JUMP_V0,FP_EYE_H};',actual.context);
 const {fp,fpKeys,tickFP,FP_JUMP_V0,FP_EYE_H}=actual.context.api;

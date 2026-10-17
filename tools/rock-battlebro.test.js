@@ -14,7 +14,7 @@ function section(start, end) {
 let seed = 42;
 const seededMath = Object.create(Math);
 seededMath.random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
-const context = vm.createContext({ THREE, assert, performance, console, Math: seededMath });
+const context = vm.createContext({ createSpecterAnimationSystem:require('../assets/specter-animation.js'), createMonsterAnimationSystem:require('../assets/monster-animation.js'), battleBroTerrain:require('../assets/battlebro-terrain.js'), createJuggernautAnimationSystem:require('../assets/juggernaut-animation.js'), createLongneckAnimation:require('../assets/longneck-animation.js'), createBattleBroJump:require('../assets/battlebro-jump.js'), THREE, assert, performance, console, Math: seededMath });
 vm.runInContext(`
   const geomCache = new Map();
   ${section('  function getBoxGeometry(', '  // Variant of getBoxGeometry')}
@@ -52,7 +52,7 @@ vm.runInContext(`
     telekineticRockThrow, cancelTelekineticRockThrow, restoreTelekineticBody,
     evaluateLavaTerrainStep, tickLavaTraversalProgress, chooseLavaContactSwing, planLavaContactSwing, lavaContactCandidates, selectJuggernautImpactRoute, selectLavaWalkRoute, chooseLavaWalkTarget, setLavaHandAnchor, planLavaTerrainMove, planLavaTerrainTurn, safeLavaContact, lavaContactExtent, sampleLavaContactSwing, lavaTerrainRectangle,
     setTerrainHeights: entries => heights = new Map(entries),
-    registerLavaMonsterMover, beginJuggernautStride, tickJuggernautStride, tickLavaMonsterMovers, tickLooseRockAttachments, tickBattleBroOrbitField, lavaMonsterMovers, worldGroup,
+    recoverHomeBattleBro, registerLavaMonsterMover, beginJuggernautStride, tickJuggernautStride, tickLavaMonsterMovers, tickLooseRockAttachments, tickBattleBroOrbitField, lavaMonsterMovers, worldGroup,
     ensureRockVariantExamples, rockVariantExamples, lavaCellIsWalkable, tilePos,
     setBlocked: cells => blocked = new Set(cells)};
 `, context);

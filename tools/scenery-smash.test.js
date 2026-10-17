@@ -286,7 +286,8 @@ console.log('Longneck forms I–VII: left/right look, neck follow and idle jaw c
   if(mover.state==='GALLOPING' && Math.abs(legs.frontLeft.position.y-legs.frontRight.position.y)<.035
     && Math.abs(legs.frontLeft.position.y-legs.rearLeft.position.y)>.04)pairedBound=true;
   if(mover.state==='GALLOPING'){
-   minBodyY=Math.min(minBodyY,root.position.y);maxBodyY=Math.max(maxBodyY,root.position.y);
+   const bodyY=mover.parts.rig.getWorldPosition(new THREE.Vector3()).y;
+   minBodyY=Math.min(minBodyY,bodyY);maxBodyY=Math.max(maxBodyY,bodyY);
    minSpine=Math.min(minSpine,mover.parts.animalBody.scale.x);
    maxSpine=Math.max(maxSpine,mover.parts.animalBody.scale.x);
    const phase=mover.progress;

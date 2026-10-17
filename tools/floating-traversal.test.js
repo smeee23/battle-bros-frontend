@@ -5,8 +5,8 @@ const html=fs.readFileSync('index.html','utf8'),THREE=require('../vendor/three/t
 const section=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)));
 const {terrain,context}=setup();terrain.activate();
 Object.assign(context,{persCam:{near:.1,fov:55,position:new THREE.Vector3(),lookAt(){}},activeFPTerrain:()=>terrain,
- explorationCompanion:{root:null},markCameraMoving(){}});
-vm.runInContext(section('  const FP_EYE_H =','  // ---------- first-person companion ----------')
+ transportCube:{root:null},markCameraMoving(){}});
+vm.runInContext(section('  const FP_EYE_H =','  // ---------- transport cube ----------')
  +section('  function fpGroundYAt(', '  function enterFP(')
  +section('  function tickFP(', '  // ---------- first-person flight ----------')
  +'\nthis.api={fp,fpKeys,tickFP,FP_JUMP_V0,FP_EYE_H};',context);

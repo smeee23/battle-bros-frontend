@@ -26,7 +26,7 @@ const context={THREE,document,window:{addEventListener:noop},Option:function(tit
  battleBroCharacterPreviewPanel:null,lavaMonsterMovers:new Set([{root:source}]),specterMovers:new Set(),minotaurMovers:new Set(),
  createBattleBroCharacter:make,applyBattleBroColors:(root,colors)=>{root.userData.colors=colors;},
  getBoxGeometry:(...args)=>new THREE.BoxGeometry(...args),geomCache:new Map(),disposeGroup:noop,
- tickLooseRockAttachments:noop,stopExplorationCompanion:noop,startExplorationCompanion:()=>resumed++,leaveExcavation:noop,
+ tickLooseRockAttachments:noop,resetTransportCube:()=>resumed++,leaveExcavation:noop,
  tickFP:noop,fpGroundYAt:()=>2.5,markCameraMoving:noop,worldToCellCoord:Math.floor,finishTerrainConsume:noop,cancelTelekineticRockThrow:noop,
  registerLavaMonsterMover:(root)=>context.lavaMonsterMovers.add({root}),registerSpecterMover:noop,registerMinotaurMover:noop};
 vm.createContext(context);
@@ -71,7 +71,7 @@ assert.equal(run('trainingAppearance.display.rotation.y'),originalYaw+.5,'Appear
 assert.equal(context.baseBattleBroPrototype,source,'Skin changes preserve the existing world actor');
 assert.equal(context.baseBattleBroPrototype.userData.visualVariant,'ice');assert.deepEqual(context.baseBattleBroPrototype.position,source.position,'Changing skin preserves home location');
 run("trainingAppearance.controls.eye.value='blue';changeTrainingAppearance()");assert.equal(context.baseBattleBroPrototype.userData.colors.eye,'blue');
-run('leaveTrainingAppearance()');assert.equal(shell.visible,true);assert.equal(get('training-appearance-controls').hidden,true);assert.equal(resumed,1);
+run('leaveTrainingAppearance()');assert.equal(shell.visible,true);assert.equal(get('training-appearance-controls').hidden,true);assert.equal(resumed,2,'Training entry and exit clear any transport deployment');
 assert.equal(facility.getObjectByName('appearancePedestal'),undefined);
 for(const mesh of building.children.filter(mesh=>mesh.userData.trainingDoorSide))
  assert(Math.abs(mesh.position.x-mesh.userData.trainingDoorSide*(mesh.geometry.parameters.width===.96?.5:.09))<1e-8,'Door and handle return to closed positions');assert(!run('trainingDoorApproach(fp.pos,trainingFacility)'),'Exit lands outside trigger');
@@ -79,12 +79,13 @@ for(let i=0;i<60;i++)run('tickTrainingAppearance(.05,3)');assert(!run('trainingA
 console.log('training appearance: doorway-only home entry, smooth camera, pedestal, fixed type/form, live skin/colors, cleanup and safe exit passed');
 
 // Real companion lifecycle on training exit must not spawn a home-world copy.
-const companionStart=html.indexOf('  // ---------- first-person companion ----------');
+Object.assign(context,{createTransportCube:require('../assets/transport-cube'),scene:new THREE.Scene(),excavation:{equipped:'hands'}});
+const companionStart=html.indexOf('  // ---------- transport cube ----------');
 vm.runInContext(html.slice(companionStart,html.indexOf('  function fpGroundYAt(',companionStart)),context);
 run('enterTrainingAppearance()');
 run("trainingAppearance.controls.skin.value='lava';changeTrainingAppearance()");
 run('leaveTrainingAppearance()');
 assert.equal(context.baseBattleBroPrototype,source,'Training exit retains the same BattleBro');
-assert.equal(run('explorationCompanion.root'),null,'Training exit creates no following clone');
+assert.equal(run('transportCube.root'),source,'Training retains the original active home instance');
 assert.equal(run('trainingAppearance.display'),null,'Training preview is removed on exit');
 assert.equal(worldGroup.children.filter(child=>child.userData.characterFamily==='juggernaut').length,1,'Only the original BattleBro remains at home');

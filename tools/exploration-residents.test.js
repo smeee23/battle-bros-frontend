@@ -2,17 +2,19 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const THREE=require('../vendor/three/three.r128.min.js');
 const html=fs.readFileSync('index.html','utf8');
-const source=html.slice(html.indexOf('  // Sparse local scenery inhabitants'),html.indexOf('  // ---------- first-person companion'));
+const longneckFixture=require('./longneck-fixture')();
+const source=html.slice(html.indexOf('  // Sparse local scenery inhabitants'),html.indexOf('  // ---------- transport cube'));
 const group=new THREE.Group(),island=new THREE.Group();island.name='floating-fragment-flat';group.add(island);
 let drift=0,mountain=false,disposed=0;const appearances=[];
-const context=vm.createContext({THREE,fp:{active:true,pos:new THREE.Vector3()},explorationActive:true,
- explorationCompanion:{root:{userData:{form:4}}},SPECTER_HOVER_CLEARANCE:1,
- explorationTerrain:{group,worldToCell:(x,z)=>({x:Math.floor(x-drift),z:Math.floor(z)}),getCell:(x,z)=>({islandId:'flat',terrainFloors:mountain?20:3,kind:null}),
- cellToWorld:(x,z)=>({x:x+.5+drift,z:z+.5}),groundYAt:()=>.4},
- createBattleBroCharacter:appearance=>{appearances.push(appearance);const root=new THREE.Group();
+const context=vm.createContext({SPECTER_MOVE_STATE:longneckFixture.api.SPECTER_MOVE_STATE,battleBroTerrain:require('../assets/battlebro-terrain'),ensureLongneckAnimation:longneckFixture.api.ensureLongneckAnimation,tickBattleBroExpression(){},tickLooseRockAttachments(){},THREE,fp:{active:true,pos:new THREE.Vector3()},explorationActive:true,
+ transportCube:{root:{userData:{form:4}}},SPECTER_HOVER_CLEARANCE:1,
+ explorationTerrain:{group,worldToCell:(x,z)=>({x:Math.floor(x-drift),z:Math.floor(z),islandId:'flat'}),getCell:(x,z)=>({islandId:'flat',terrainFloors:mountain?20:3,kind:null}),
+ cellToWorld:(x,z)=>({x:x+.5+drift,z:z+.5}),groundYAt:()=>mountain?3.8:.4},
+ createBattleBroCharacter:appearance=>{appearances.push(appearance);if(['juggernaut','monsters','specter'].includes(appearance.character))return longneckFixture.api.createBattleBroCharacter(appearance);if(appearance.character==='longneck')return longneckFixture.api.createLongNeckBattleBro(appearance);const root=new THREE.Group();
  root.userData.rig={rig:new THREE.Group(),head:new THREE.Group(),torso:new THREE.Group()};return root;},
  battleBroYawDelta:v=>Math.atan2(Math.sin(v),Math.cos(v)),tickBattleBroWorldExpression(){},
  disposeGroup:()=>disposed++,tickBattleBroArenaActor:()=>{}});
+for(const key of ['registerSpecterMover','ensureSpecterAnimation','chooseSpecterDestination','ensureSupportAnimation','ensureJuggernautAnimation','registerLavaMonsterMover','lavaContactExtent','planLavaTerrainMove','restoreTelekineticBody','lavaMovementForm'])context[key]=longneckFixture.api[key];
 vm.runInContext(source+'\nthis.residents=explorationResidents;',context);
 for(let i=0;i<20;i++)vm.runInContext('tickExplorationResidents(1,1)',context);
 assert(context.residents.size>1&&context.residents.size<=6,'Sparse bounded population');
@@ -45,7 +47,7 @@ const Module=require('node:module'),path=require('node:path');
 const filename=path.resolve('tools/rock-battlebro.test.js');
 let fixture=fs.readFileSync(filename,'utf8').split('const api = context.api;')[0];
 fixture=fixture.replace('const M = {','const M_ANIMAL={hoof:new THREE.MeshLambertMaterial()};const M = {')
- .replace('globalThis.api = {','globalThis.api = {tickBattleBroArenaActor, battleBroYawDelta, lavaSupportScale, setLavaHandAnchor, beginJuggernautStride, tickJuggernautStride, solveLavaArmToAnchor, beginLongneckFootMotion, poseLongneckFeet, resetLongneckFeet, tickLongneckHead, tickFloatingRockArmGestures, tickBattleBroWorldExpression,');
+ .replace('globalThis.api = {','globalThis.api = {SPECTER_MOVE_STATE,chooseSpecterDestination,ensureSpecterAnimation,registerSpecterMover,initLavaTerrainContacts,ensureSupportAnimation,ensureMonsterAnimation,ensureJuggernautAnimation,lavaMovementForm,ensureLongneckAnimation,tickBattleBroExpression,tickLooseRockAttachments,tickBattleBroArenaActor, battleBroYawDelta, lavaSupportScale, setLavaHandAnchor, beginJuggernautStride, tickJuggernautStride, solveLavaArmToAnchor, beginLongneckFootMotion, poseLongneckFeet, resetLongneckFeet, tickLongneckHead, tickFloatingRockArmGestures, tickBattleBroWorldExpression,');
 const moduleFixture=new Module(filename,module);
 moduleFixture.filename=filename;moduleFixture.paths=Module._nodeModulePaths(path.dirname(filename));
 moduleFixture._compile(fixture+'module.exports=context.api;',filename);
@@ -69,8 +71,8 @@ const terrainFixture=fs.readFileSync('tools/exploration-world.test.js','utf8')
  .split('const {terrain,scene,xrWorldRoot,context}=setup();')[0];
 const setupTerrain=new Function('require',terrainFixture+'return setup;')(require);
 const actual=setupTerrain();actual.terrain.activate();
-Object.assign(actual.context,api,{fp:{active:true,pos:new THREE.Vector3(),yaw:0},
- explorationCompanion:{root:{userData:{form:4}}},SPECTER_HOVER_CLEARANCE:1,
+Object.assign(actual.context,api,{battleBroTerrain:require('../assets/battlebro-terrain'),fp:{active:true,pos:new THREE.Vector3(),yaw:0},
+ transportCube:{root:{userData:{form:4}}},SPECTER_HOVER_CLEARANCE:1,
  disposeGroup(){},createBattleBroCharacter:api.createBattleBroCharacter,
  tickBattleBroArenaActor:api.tickBattleBroArenaActor});
 vm.runInContext(source+'\nthis.residents=explorationResidents;',actual.context);
@@ -88,7 +90,7 @@ const roaming=[...actual.context.residents.values()].map(actor=>({actor,x:actor.
 for(let frame=420;frame<1800;frame++)vm.runInContext(`tickExplorationResidents(${frame/60},1/60)`,actual.context);
 assert(roaming.some(({actor,x,z})=>actor.x!==x||actor.z!==z),'Residents roam on the actual terrain');
 for(const actor of actual.context.residents.values()) {
- assert(actual.context.residentFlatCell(actor.x,actor.z),'Roaming stays on broad flat patches');
+ assert(actual.context.residentSupport(actor),'Roaming stays on footprint-supported terrain');
  assert(Math.hypot(actor.x-actor.motion.homeX,actor.z-actor.motion.homeZ)<=5,'Roaming remains local');
 }
 assert.equal(api.lavaMonsterMovers.size,0,'Residents do not join home terrain controllers');
@@ -96,13 +98,20 @@ console.log('exploration residents: shared home gaits, local roaming and flat-gr
 context.residents.clear();
 for(const character of ['monsters','juggernaut','longneck','specter'])for(let form=1;form<=7;form++) {
  const root=api.createBattleBroCharacter({character,form,variant:'ice'});group.add(root);
+ root.position.set(200.5+drift,.4,200.5);
  const actor={root,mover:{root,parts:root.userData.locomotionRig||root.userData.rig,
   state:'IDLE',progress:0,ikTarget:new THREE.Vector3()},x:200,z:200,character,phase:0};
  context.actor=actor;
  let completedStep=false;
- for(let frame=0;frame<600;frame++) {
+ for(let frame=0;frame<(['juggernaut','monsters'].includes(character)?1800:600);frame++) {
   vm.runInContext(`tickExplorationResidentMotion(actor,${frame/60},1/60)`,context);
   completedStep ||= actor.x!==200||actor.z!==200;
+  if(character==='longneck'){
+   assert.equal(actor.mover.longneckAnimation.mover,actor.mover,'Resident executes the shared controller on its own rig');
+   assert.equal(actor.mover.grounded,true,'Resident supplies resolved ground contact');
+   assert(Number.isFinite(actor.mover.actualSpeed+actor.mover.yawRate),'Resident supplies resolved movement');
+   if(Math.abs(actor.mover.yawRate)>.01)assert.notEqual(actor.mover.state,'IDLE','Turning is not reported as idle');
+  }
  }
  assert(Number.isFinite(root.position.x)&&Number.isFinite(root.position.y),`${character} ${form}: finite roaming pose`);
  assert(completedStep,`${character} ${form}: completes an animated step`);
