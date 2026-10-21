@@ -5689,7 +5689,7 @@
     ]);
     battleBroStatRows('battlebro-territory', [
       ['Location', bro.locationId == null ? 'Unoccupied' : '#'+bro.locationId],
-      ['Pending challenge', bro.pendingChallengeId == null ? 'None' : '#'+bro.pendingChallengeId],
+      ['Active registration / battle', bro.pendingChallengeId == null ? 'None' : '#'+bro.pendingChallengeId],
     ]);
   }
 
@@ -5758,7 +5758,7 @@
   }
 
   function normalizeBattleBrosPublicDocuments(manifest, game, bro, requestedTokenId) {
-    if (manifest.schemaVersion !== 2 || game.schemaVersion !== 2 || game.projectionVersion !== 3 || manifest.projectionVersion !== 3) throw new Error('Unsupported territory publication version.');
+    if (manifest.schemaVersion !== 3 || game.schemaVersion !== 3 || game.projectionVersion !== 4 || manifest.projectionVersion !== 4) throw new Error('Unsupported territory publication version.');
     if (manifest.chainId !== game.chainId || manifest.deploymentId !== game.deploymentId || game.contracts.combat.toLowerCase() !== game.deploymentId.toLowerCase() || JSON.stringify(manifest.snapshot) !== JSON.stringify(game.snapshot)) throw new Error('Territory snapshot identity mismatch.');
     if (!bro || BigInt(bro.tokenId) !== requestedTokenId) throw new Error('BattleBro not found.');
     const lanes = a => ({attack:BigInt(a[0]),defend:BigInt(a[1]),counter:BigInt(a[2])});
@@ -5766,7 +5766,7 @@
       progression:{xp:BigInt(bro.xp),level:BigInt(bro.level),capacity:BigInt(bro.capacity),reserves:lanes(bro.projectedReserves)},
       training:{weightsBps:lanes(bro.training),lastTrainingAt:BigInt(bro.lastTrainingAt)},
       need:{active:bro.need.active,activeSinceTimestamp:bro.need.activeSinceTimestamp},
-      capital:{freeShares:BigInt(bro.freeShares),reservedShares:BigInt(bro.reservedShares),totalShares:BigInt(bro.freeShares)+BigInt(bro.reservedShares),currentValue:BigInt(bro.currentValueWei??0),protectedPrincipal:BigInt(bro.protectedPrincipal),riskableShares:BigInt(bro.riskableShares??0)},
+      capital:{committedShares:BigInt(bro.committedShares??0),availableShares:BigInt(bro.availableShares??bro.freeShares),freeShares:BigInt(bro.freeShares),reservedShares:BigInt(bro.reservedShares),totalShares:BigInt(bro.freeShares)+BigInt(bro.reservedShares),currentValue:BigInt(bro.currentValueWei??0),protectedPrincipal:BigInt(bro.protectedPrincipal),riskableShares:BigInt(bro.riskableShares??0)},
       defense:{weightsBps:lanes(bro.defense)},snapshot:{...game.snapshot,blockNumber:BigInt(game.snapshot.blockNumber)},territory:bro.locationId,pendingChallengeId:bro.pendingChallengeId};
   }
 
@@ -5843,11 +5843,11 @@
     if(!config.manifestUrl)throw new Error('No territory publication is configured.');
     const manifestUrl=new URL(config.manifestUrl,location.href);
     const manifest=await fetchBattleBrosPublicJson(manifestUrl.href,'Manifest');
-    if(manifest.schemaVersion!==2 || manifest.projectionVersion!==3 || !manifest.paths?.gameState)
+    if(manifest.schemaVersion!==3 || manifest.projectionVersion!==4 || !manifest.paths?.gameState)
       throw new Error('Only current territory publications are supported.');
     const gameUrl=new URL(manifest.paths.gameState,manifestUrl);
     const game=await fetchBattleBrosPublicJson(gameUrl.href,'Territory state');
-    if(game.schemaVersion!==2 || game.projectionVersion!==3 || game.chainId!==manifest.chainId
+    if(game.schemaVersion!==3 || game.projectionVersion!==4 || game.chainId!==manifest.chainId
       || game.deploymentId!==manifest.deploymentId || game.contracts?.combat?.toLowerCase()!==manifest.deploymentId.toLowerCase()
       || JSON.stringify(game.snapshot)!==JSON.stringify(manifest.snapshot)
       || !Array.isArray(game.battleBros) || !Array.isArray(game.challenges) || !Array.isArray(game.history))
@@ -5892,7 +5892,7 @@
 
   function summarizeBattleHistory(model, game) {
     const id=model.identity.tokenId.toString();
-    const battles=game.challenges.filter(c=>c.attacker===id||c.defender===id)
+    const battles=game.challenges.filter(c=>c.attacker!=='0'&&(c.attacker===id||c.defender===id))
       .map(c=>({...c,role:c.attacker===id?'Attack':'Defense',opponent:c.attacker===id?c.defender:c.attacker}))
       .sort((a,b)=>BigInt(a.challengeId)>BigInt(b.challengeId)?-1:1);
     const resolved=battles.filter(c=>c.status==='RESOLVED');
@@ -5938,10 +5938,16 @@
       ['Training weights',weights(model.training.weightsBps)],['Defense weights',weights(model.defense.weightsBps)],
       ['Last training',new Date(Number(model.training.lastTrainingAt)*1000).toLocaleString()],
       ['Protected principal',formatBattleBrosUnits(model.capital.protectedPrincipal)+' stETH'],
-      ['Free / reserved shares',model.capital.freeShares+' / '+model.capital.reservedShares],
+      ['Available / committed shares',model.capital.availableShares+' / '+model.capital.committedShares],
       ['Total challenges',summary.battles.length],['Attacks initiated',summary.attacks],['Defenses',summary.defenses],
       ['Resolved battles',summary.resolved],['Wins / losses',summary.wins+' / '+summary.losses],['Pending / expired',summary.pending+' / '+summary.expired]];
     for(const [label,value] of rows)stats.append(historyMetric(label,String(value)));content.append(stats);
+    for(const registration of (game.registrations??[]).filter(r=>Object.values(r.entries).some(e=>e.token===id)).slice().reverse()){
+      const row=document.createElement('p');
+      const disposition=['REGISTERING','PENDING'].includes(registration.status)?'Commitment locked':registration.status==='RESOLVED'&&registration.selectedToken===id?'Selected attacker; commitment consumed':'Commitment released automatically';
+      row.textContent='Registration #'+registration.registrationId+' · '+registration.status+' · '+disposition;
+      content.append(row);
+    }
     const filter=document.createElement('select');filter.setAttribute('aria-label','Filter battle history');
     for(const [value,label] of [['all','All battles'],['Attack','Attacks initiated'],['Defense','Defenses']]) {
       const option=document.createElement('option');option.value=value;option.textContent=label;filter.append(option);
@@ -26468,7 +26474,7 @@ function neighborStarVector(edge, index) {
     if (referencedUrl.href !== expectedUrl.href) throw new Error('Player ' + player.playerId + ' colony ' + colony.colonyId + ' has an invalid world-state reference.');
     try {
       const data = await fetchPublicSnapshotJson(expectedUrl.href, manifest.snapshot.id + ':world:' + player.playerId + ':' + colony.colonyId);
-      if (data.schemaVersion !== 2
+      if (data.schemaVersion !== 3
           || data.catalogVersion !== BUILDING_RESOURCE_CATALOG_VERSION
           || data.gridSize !== HOME_GRID_DEFAULT || !Array.isArray(data.cells)) {
         throw new Error('World state does not use the canonical version 2 cell envelope.');
@@ -26647,7 +26653,7 @@ function neighborStarVector(edge, index) {
         const url = publicSnapshotUrl(snapshotRootUrl, manifest.paths.tables, { tableId });
         const table = await fetchPublicSnapshotJson(url.href, entry.snapshot.id + ':history-table:' + tableId);
         assertPublicSnapshotIdentity(table, manifest, 'Historical table ' + tableId, { roundId: selectedId, tableId });
-        if (table.schemaVersion !== 2 || !Array.isArray(table.conflictGroups)) {
+        if (table.schemaVersion !== 3 || !Array.isArray(table.conflictGroups)) {
           throw new Error('Historical table ' + tableId + ' is not a canonical version 2 document.');
         }
         for (const conflict of table.conflictGroups) {
@@ -30577,9 +30583,32 @@ function neighborStarVector(edge, index) {
       applyDistanceMistSettings(currentSkyBgHex);
     }
     function deactivate() {group.visible=false;xrWorldRoot.visible=homeWasVisible;explorationActive=false;scene.background=homeBackground;applyDistanceMistSettings(currentSkyBgHex);}
+    // HUD snapshot reads loaded cells only: never invoke collision sampling or
+    // generate terrain just to draw the map. Both drawing passes share it.
+    function minimapCells(minX,minZ,size) {
+      const result=new Map(),heights=new Map();
+      for(const body of islands.values()) {
+        const bounds=body.site.bounds;
+        if(bounds.maxX+body.ox<minX||bounds.minX+body.ox>=minX+size||
+          bounds.maxZ+body.oz<minZ||bounds.minZ+body.oz>=minZ+size)continue;
+        for(const {x,z} of body.entries) {
+          const wx=Math.ceil(x+body.ox),wz=Math.ceil(z+body.oz);
+          if(wx<minX||wz<minZ||wx>=minX+size||wz>=minZ+size)continue;
+          const id=body.site.sky?body.site.id+'|'+key(x,z):key(x,z);
+          const cell=edits.has(id)?edits.get(id):cells.get(id);
+          if(!cell)continue;
+          const mapKey=key(wx,wz),height=(body.site.elevation||0)+columnTop(cell);
+          if(!heights.has(mapKey)||height>heights.get(mapKey)) {
+            result.set(mapKey,cell);heights.set(mapKey,height);
+          }
+        }
+      }
+      return result;
+    }
     function diagnostics() {return {islands:islands.size,pending:pending.length,cells:cells.size,sites:sites.size,sleeping:sleeping.size,
       fragments:[...islands.values()].map(b=>({id:b.site.id,sky:!!b.site.sky,elevation:b.site.elevation||0,width:b.site.width,length:b.site.length,style:b.site.style,count:b.mass,ox:b.ox,oz:b.oz,vx:b.vx,vz:b.vz}))};}
-    return {group,getCell,setCell,worldToCell,cellToWorld,groundYAt,blocksBodyAt,ceilingYAt,nearbyColumns,ensureAround,canExcavate,activate,deactivate,tick,diagnostics};
+    return {group,getCell,setCell,worldToCell,cellToWorld,groundYAt,blocksBodyAt,ceilingYAt,nearbyColumns,ensureAround,canExcavate,activate,deactivate,tick,diagnostics,
+      minimapCells};
   })();
   const homeFPTerrain = {
     get group() { return worldGroup; },
@@ -31435,6 +31464,22 @@ function neighborStarVector(edge, index) {
     const height={flower:.2,bush:.5,rock:.8,fence:1,tree:2,house:Math.max(1,Number(cell.floors)||1)*.6}[cell.kind];
     return !!cell.extras?.length||height===undefined||to.y-.1<ground+height;
   }
+  function transportRecallVisibility(root){
+    persCam.updateMatrixWorld(true);root.updateWorldMatrix(true,true);
+    const point=new THREE.Box3().setFromObject(root).getCenter(new THREE.Vector3());
+    const screen=point.clone().project(persCam);
+    if(screen.z < -1 || screen.z > 1 || Math.abs(screen.x)>1 || Math.abs(screen.y)>1)
+      return 'Look at your BattleBro to recall';
+    // Check only on recall clicks, using the existing terrain obstacle rules.
+    const from=persCam.position.clone(),delta=point.clone().sub(from),distance=delta.length();
+    const steps=Math.ceil(distance/.2),previous=from.clone(),next=from.clone();
+    for(let i=1;i<steps;i++){
+      next.copy(from).addScaledVector(delta,i/steps);
+      if(transportCubeBlocked(previous,next))return 'BattleBro is blocked · Find a clear view to recall';
+      previous.copy(next);
+    }
+    return null;
+  }
   function ensureTransportCube(){
     if(transportCubeController)return transportCubeController;
     transportCubeController=createTransportCube(THREE,{
@@ -31446,6 +31491,7 @@ function neighborStarVector(edge, index) {
       ground:(x,z,maxY)=>activeFPTerrain().groundYAt(x,z,0,maxY),landing:transportLanding,
       anchor:cell=>activeFPTerrain().cellToWorld(cell.x,cell.z,cell.islandId),
       blocked:transportCubeBlocked,
+      playerPosition:()=>fp.pos,recallVisibility:transportRecallVisibility,
       current:source=>!explorationActive&&source?.parent===worldGroup?source:null,
       pause:pauseTransportBattleBro,prepare:prepareTransportBattleBro,
       place:root=>activeFPTerrain().group.add(root),
@@ -31464,11 +31510,21 @@ function neighborStarVector(edge, index) {
     if(!baseBattleBroPrototype){excavationStatus.textContent='Choose your BattleBro at home first';excavationHud.hidden=false;return false;}
     return ensureTransportCube().throw();
   }
+  let transportMinimapUpdatedAt = -Infinity;
+  let transportMinimapHadBro = false;
   function tickTransportCube(t,dt){
     if(excavation.equipped==='transport-cube'&&fp.active){
       ensureTransportCube();
     }
     transportCubeController?.tick(dt,t);
+    const hasBro = !!transportCube.root;
+    if (hasBro || transportMinimapHadBro) {
+      if (hasBro !== transportMinimapHadBro || t - transportMinimapUpdatedAt >= .2) {
+        if (typeof requestMinimapRepaint === 'function') requestMinimapRepaint();
+        transportMinimapUpdatedAt = t;
+        transportMinimapHadBro = hasBro;
+      }
+    }
   }
 
   function fpGroundYAt(worldX, worldZ) {
@@ -40991,7 +41047,8 @@ function neighborStarVector(edge, index) {
   function minimapDrawCellCount(logicalCells) {
     return Math.min(logicalCells, GRID >= 256 ? 192 : (GRID >= 128 ? 224 : logicalCells));
   }
-  function minimapGlobalCell(gx, gz) {
+  function minimapGlobalCell(gx, gz, explorationCells) {
+    if (explorationActive) return explorationCells?.get((gx - GRID / 2) + ',' + (gz - GRID / 2)) || null;
     const bx = Math.floor(gx / GRID);
     const bz = Math.floor(gz / GRID);
     const lx = gx - bx * GRID;
@@ -41082,10 +41139,13 @@ function neighborStarVector(edge, index) {
     const W = canvas.width, H = canvas.height;
     const cw = W / S, ch = H / S;
     const sampleStep = N / S;
-    const centerGx = Math.floor(target.x + GRID / 2);
-    const centerGz = Math.floor(target.z + GRID / 2);
+    const mapCenter = fp.active ? fp.pos : target;
+    const centerGx = Math.floor(mapCenter.x + GRID / 2);
+    const centerGz = Math.floor(mapCenter.z + GRID / 2);
     const startGx = centerGx - Math.floor(N / 2);
     const startGz = centerGz - Math.floor(N / 2);
+    const explorationCells = explorationActive
+      ? explorationTerrain.minimapCells(startGx - GRID / 2, startGz - GRID / 2, N) : null;
     minimapState = { startGx, startGz, cells: N, width: W, height: H };
     const sizeEl = document.getElementById('minimap-size');
     if (sizeEl) sizeEl.textContent = N + '×' + N + ' map';
@@ -41095,9 +41155,9 @@ function neighborStarVector(edge, index) {
       for (let z = 0; z < S; z++) {
         const gx = startGx + Math.floor(x * sampleStep);
         const gz = startGz + Math.floor(z * sampleStep);
-        const cell = minimapGlobalCell(gx, gz);
+        const cell = minimapGlobalCell(gx, gz, explorationCells);
         const terrain = (cell && cell.terrain) || 'grass';
-        let colorHex = minimapTerrainHex(terrain);
+        let colorHex = explorationActive && !cell ? 0x101522 : minimapTerrainHex(terrain);
         // Tint by terrainFloors so hills/mountains read as raised.
         const tf = cell ? (cell.terrainFloors || 1) : 1;
         if (tf > 1 && terrain !== 'water' && terrain !== 'lava') {
@@ -41113,7 +41173,7 @@ function neighborStarVector(edge, index) {
       for (let z = 0; z < S; z++) {
         const gx = startGx + Math.floor(x * sampleStep);
         const gz = startGz + Math.floor(z * sampleStep);
-        const cell = minimapGlobalCell(gx, gz);
+        const cell = minimapGlobalCell(gx, gz, explorationCells);
         if (!cell || !cell.kind) continue;
         drawMinimapProp(ctx, cell.kind, x * cw + cw / 2, z * ch + ch / 2, Math.min(cw, ch));
       }
@@ -41124,9 +41184,9 @@ function neighborStarVector(edge, index) {
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.70)';
     ctx.lineWidth = Math.max(1, W * 0.006);
-    ctx.strokeRect((0 - startGx) * cw, (0 - startGz) * ch, GRID * cw, GRID * ch);
-    const tx = (target.x + GRID / 2 - startGx) * cw;
-    const tz = (target.z + GRID / 2 - startGz) * ch;
+    if (!explorationActive) ctx.strokeRect((0 - startGx) * cw, (0 - startGz) * ch, GRID * cw, GRID * ch);
+    const tx = (mapCenter.x + GRID / 2 - startGx) * W / N;
+    const tz = (mapCenter.z + GRID / 2 - startGz) * H / N;
     ctx.strokeStyle = 'rgba(42,39,34,0.60)';
     ctx.lineWidth = Math.max(1, W * 0.004);
     ctx.beginPath();
@@ -41136,6 +41196,43 @@ function neighborStarVector(edge, index) {
     ctx.moveTo(tx, tz - Math.max(5, ch * 0.45));
     ctx.lineTo(tx, tz + Math.max(5, ch * 0.45));
     ctx.stroke();
+    ctx.restore();
+    drawMinimapBro(ctx, minimapState);
+  }
+  function drawMinimapBro(ctx, map) {
+    const bro = transportCube.root;
+    if (!bro || !bro.parent || !bro.visible || !fp.active) return;
+    const { startGx, startGz, cells, width: W, height: H } = map;
+    const px = (bro.position.x + GRID / 2 - startGx) * W / cells;
+    const py = (bro.position.z + GRID / 2 - startGz) * H / cells;
+    const margin = 14;
+    const dx = px - W / 2, dy = py - H / 2;
+    const scale = Math.min(1, (W / 2 - margin) / Math.max(.001, Math.abs(dx)),
+      (H / 2 - margin) / Math.max(.001, Math.abs(dy)));
+    const x = W / 2 + dx * scale, y = H / 2 + dy * scale;
+    const distance = Math.round(Math.hypot(bro.position.x - fp.pos.x, bro.position.z - fp.pos.z));
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = '#ffdf57';
+    ctx.strokeStyle = '#241c0b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (scale < 1) {
+      ctx.rotate(Math.atan2(dy, dx));
+      ctx.moveTo(9, 0); ctx.lineTo(-6, -6); ctx.lineTo(-6, 6); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.rotate(-Math.atan2(dy, dx));
+    } else {
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+    }
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = x < 48 ? 'left' : x > W - 48 ? 'right' : 'center';
+    ctx.textBaseline = y < 32 ? 'top' : 'bottom';
+    const labelY = y < 32 ? 11 : -11;
+    ctx.lineWidth = 3;
+    ctx.strokeText('Bro · ' + distance + 'm', 0, labelY);
+    ctx.fillText('Bro · ' + distance + 'm', 0, labelY);
     ctx.restore();
   }
   function drawMinimapProp(ctx, kind, cx, cy, size) {

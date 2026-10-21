@@ -16,7 +16,7 @@
   const cube=createTransportCube.createModel(THREE,hooks.box),top=cube.children[0];
   cube.visible=false;hooks.scene.add(cube);
   let phase='carried',root=null,source=null,stored=null,age=0,actorScale=null,landing=null,returnStart=null;
-  let deployed=false,flightAge=0,recallStart=null,recallDuration=0;
+  let deployed=false,flightAge=0,recallStart=null,recallDuration=0,feedbackRemaining=0;
   const velocity=new THREE.Vector3(),hand=new THREE.Vector3(),previous=new THREE.Vector3();
   function status(message){hooks.status?.(message);}
   // Keep the selected instance (and its gameplay data), never a visual clone.
@@ -53,6 +53,10 @@
     syncSource();
     if(!['carried','deployed'].includes(phase))return false;
     if(root){
+      const origin=hooks.playerPosition?.()||hooks.camera.position;
+      if(origin.distanceTo(root.position)>15){status('Move within 15m of your BattleBro to recall');feedbackRemaining=2;return false;}
+      const obstruction=hooks.recallVisibility?.(root);
+      if(obstruction){status(obstruction);feedbackRemaining=2;return false;}
       hooks.pause(root);
       hooks.hand(hand);cube.position.copy(hand);recallStart=hand.clone();
       recallDuration=Math.max(.5,Math.min(2,hand.distanceTo(root.position)/12));
@@ -75,6 +79,7 @@
     landing.x+=dx;landing.z+=dz;landing.anchor=point;
   }
   function tick(dt,t){
+    feedbackRemaining=Math.max(0,feedbackRemaining-dt);
     syncSource();
     if(!hooks.active()){cube.visible=false;return;}
     hooks.hand(hand);
@@ -82,7 +87,7 @@
     if(phase==='carried'||phase==='deployed'){
       cube.visible=equipped;cube.position.copy(hand);cube.quaternion.copy(hooks.camera.quaternion);
       cube.rotateY(.35);cube.rotateX(.15);
-      if(equipped)status(root?'Click to throw the cube and recall your BattleBro':'Click to throw your BattleBro · Aim at clear ground');
+      if(equipped&&!feedbackRemaining)status(root?'Recall BattleBro · Within 15m and in clear view':'Click to throw your BattleBro · Aim at clear ground');
     }else if(phase==='recall-flight'){
       age+=dt;const u=Math.min(1,age/recallDuration);
       const target=root.position.clone();target.y+=.1;

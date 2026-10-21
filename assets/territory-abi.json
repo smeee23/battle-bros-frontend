@@ -19,6 +19,18 @@
       "inputs": []
     },
     {
+      "name": "advanceRegistration",
+      "signature": "advanceRegistration(uint256)",
+      "selector": "0x79773682",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "bros",
       "signature": "bros()",
       "selector": "0xf2f0baa8",
@@ -111,6 +123,18 @@
       ]
     },
     {
+      "name": "committedShares",
+      "signature": "committedShares(uint256)",
+      "selector": "0xb97901c6",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "config",
       "signature": "config()",
       "selector": "0x79502c55",
@@ -148,6 +172,12 @@
       "name": "currentConfig",
       "signature": "currentConfig()",
       "selector": "0xcae58807",
+      "inputs": []
+    },
+    {
+      "name": "currentRegistrationConfig",
+      "signature": "currentRegistrationConfig()",
+      "selector": "0x5d6f4226",
       "inputs": []
     },
     {
@@ -240,7 +270,7 @@
       "inputs": [
         {
           "internalType": "uint256",
-          "name": "",
+          "name": "token",
           "type": "uint256"
         }
       ]
@@ -278,6 +308,59 @@
       "name": "reclaimBlocks",
       "signature": "reclaimBlocks(uint256)",
       "selector": "0x3c4048cf",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "registrationConfig",
+      "signature": "registrationConfig()",
+      "selector": "0xbff74643",
+      "inputs": []
+    },
+    {
+      "name": "registrationConfigEffectiveAt",
+      "signature": "registrationConfigEffectiveAt()",
+      "selector": "0x9cd952e6",
+      "inputs": []
+    },
+    {
+      "name": "registrationEntries",
+      "signature": "registrationEntries(uint256,uint256)",
+      "selector": "0x06fe047c",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "registrationRelease",
+      "signature": "registrationRelease(uint256)",
+      "selector": "0xdf077945",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "registrations",
+      "signature": "registrations(uint256)",
+      "selector": "0xf4ddb5be",
       "inputs": [
         {
           "internalType": "uint256",
@@ -361,9 +444,44 @@
       ]
     },
     {
+      "name": "scheduleRegistrationConfiguration",
+      "signature": "scheduleRegistrationConfiguration((uint32,uint32,uint32))",
+      "selector": "0xaae80882",
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "uint32",
+              "name": "duration",
+              "type": "uint32"
+            },
+            {
+              "internalType": "uint32",
+              "name": "cooldown",
+              "type": "uint32"
+            },
+            {
+              "internalType": "uint32",
+              "name": "recoveryBackoff",
+              "type": "uint32"
+            }
+          ],
+          "internalType": "struct TerritoryCombat.RegistrationConfig",
+          "name": "value",
+          "type": "tuple"
+        }
+      ]
+    },
+    {
       "name": "scheduledConfig",
       "signature": "scheduledConfig()",
       "selector": "0xf3266381",
+      "inputs": []
+    },
+    {
+      "name": "scheduledRegistrationConfig",
+      "signature": "scheduledRegistrationConfig()",
+      "selector": "0xbd05841e",
       "inputs": []
     },
     {
@@ -763,6 +881,18 @@
       "signature": "pendingOwner()",
       "selector": "0xe30c3978",
       "inputs": []
+    },
+    {
+      "name": "powerRegistration",
+      "signature": "powerRegistration(uint256)",
+      "selector": "0x7c3500bd",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
     },
     {
       "name": "prepare",

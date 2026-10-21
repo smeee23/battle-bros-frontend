@@ -2,6 +2,7 @@ import ABI from './assets/territory-abi.json' with {type:'json'};
 
 const $=id=>document.getElementById(id), cfg=window.__battleBrosPublicData??{}, params=new URLSearchParams(location.search);
 const status=$('status');let manifestUrl=params.get('manifestUrl')||cfg.manifestUrl,manifest,doc,account=null;
+const submittedRegistrations=new Map();
 const u=x=>BigInt(x??0), short=x=>x?`${x.slice(0,6)}…${x.slice(-4)}`:'—', fmt=(x,d=18)=>{
   const n=u(x),unit=10n**BigInt(d),whole=n/unit,frac=(n%unit).toString().padStart(d,'0').slice(0,4).replace(/0+$/,'');
   return frac?`${whole}.${frac}`:String(whole);
@@ -38,7 +39,7 @@ async function transact(key,name,args,value='0x0'){
   setStatus(`Transaction submitted: ${hash}`);
   for(let i=0;i<90;i++){
     const receipt=await window.ethereum.request({method:'eth_getTransactionReceipt',params:[hash]});
-    if(receipt){if(receipt.status==='0x0')throw new Error(`Transaction reverted: ${hash}`);setStatus('Transaction confirmed. Refreshing the public index…');await new Promise(r=>setTimeout(r,1200));await refresh();return hash;}
+    if(receipt){if(receipt.status==='0x0')throw new Error(`Transaction reverted: ${hash}`);if(name==='challenge')submittedRegistrations.set(String(args[1]),BigInt(receipt.blockNumber));await refresh();setStatus(name==='challenge'?'Registration submitted; awaiting confirmed game state.':'Transaction included; awaiting confirmed game state.');return hash;}
     await new Promise(r=>setTimeout(r,1500));
   }
   setStatus(`Transaction is still pending: ${hash}`);return hash;
@@ -55,7 +56,10 @@ function labelLevels(loc){return loc.maxLevel==='0' ? (loc.minLevel==='1'?'Open 
 function make(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;}
 function makeSelect(items,value){const s=document.createElement('select');for(const x of items){const o=document.createElement('option');o.value=x.value;o.textContent=x.label;s.append(o);}if(value!==undefined)s.value=String(value);return s;}
 function button(text,fn,cls=''){const b=make('button',cls,text);b.addEventListener('click',async()=>{b.disabled=true;try{await fn();}catch(e){setStatus(e.shortMessage||e.message||String(e),true);}finally{b.disabled=false;}});return b;}
+function countdown(until,ended){const n=make('span','muted');n.dataset.until=String(until);n.dataset.ended=ended;return n;}
+function updateCountdowns(){for(const n of document.querySelectorAll('[data-until]')){const seconds=Math.max(0,Number(n.dataset.until)-Math.floor(Date.now()/1000));n.textContent=seconds?`${Math.floor(seconds/60)}m ${seconds%60}s remaining`:n.dataset.ended;}}
 function render(){
+  for(const [token,block] of submittedRegistrations)if(u(doc.snapshot.blockNumber)>=block)submittedRegistrations.delete(token);
   $('snapshot').textContent=`Block ${doc.snapshot.blockNumber} · ${new Date(Number(doc.snapshot.timestamp)*1000).toLocaleString()} · ${doc.needs.activeTokenIds.length} BattleBros with an active need`;
   $('population').textContent=`${doc.locations.length} locations · ${doc.battleBros.filter(b=>b.active).length} active BattleBros`;
   const own=ownerIds(), management=$('management');management.replaceChildren();management.hidden=!account;
@@ -88,39 +92,56 @@ function render(){
   for(const loc of [...doc.locations].sort((a,b)=>Number(a.locationId)-Number(b.locationId))){
     const card=make('article','card location'),id=String(loc.locationId),occupied=u(loc.occupant)!==0n,def=occupied?broBy(loc.occupant):null;
     card.append(make('span','pill',labelLevels(loc)),make('h3','',`Location ${id}`));
+    const pool=doc.registrations.find(r=>r.registrationId===loc.pendingChallengeId);
+    const now=Math.floor(Date.now()/1000),cooling=u(loc.cooldownUntil)>BigInt(now);
+    const open=pool?.status==='REGISTERING'&&now<Number(pool.closesAt);
+    const phase=pool?.status==='REGISTERING'?(open?'Registration open':'Registration closed; awaiting confirmed update'):pool?.status==='PENDING'?'Battle pending':cooling?'Territory cooldown':occupied?'Available for challenge':'Vacant';
     const stats=make('div','stats');
-    for(const [k,v] of [['Status',loc.pendingChallengeId!=='0'?'Challenge pending':occupied?'Occupied':'Vacant'],['Defender',def?`${broLabel(def)} · Level ${def.level}`:'—'],['Started',loc.occupiedAt!=='0'?new Date(Number(loc.occupiedAt)*1000).toLocaleString():'—'],['Pot',`${fmt(loc.potShares)} stETH shares`]]){stats.append(make('span','muted',k),make('span','',v));}
+    for(const [k,v] of [['Status',phase],['Defender',def?`${broLabel(def)} · Level ${def.level}`:'—'],['Started',loc.occupiedAt!=='0'?new Date(Number(loc.occupiedAt)*1000).toLocaleString():'—'],['Pot',`${fmt(loc.potShares)} stETH shares`]]){stats.append(make('span','muted',k),make('span','',v));}
     card.append(stats);
+    if(pool){card.append(make('p','',`${pool.count} registered attackers · equal chance per BattleBro`));
+      if(pool.status==='REGISTERING')card.append(countdown(pool.closesAt,'Registration closed; awaiting confirmed update'));
+      for(const entry of Object.values(pool.entries).filter(e=>e.owner.toLowerCase()===account?.toLowerCase()))card.append(make('p','',`Your BattleBro #${entry.token} is registered · ${entry.power} power and ${fmt(entry.stakeShares)} stETH shares committed.`));
+      if(pool.selectedToken)card.append(make('p','',`Selected attacker: #${pool.selectedToken}`));
+    } else if(cooling)card.append(countdown(loc.cooldownUntil,'Cooldown elapsed; refresh confirmed state'));
+    for(const r of doc.registrations.filter(r=>r.location===id&&['RESOLVED','EXPIRED'].includes(r.status)).slice(-1)){
+      const battle=doc.challenges.find(c=>c.challengeId===r.registrationId);
+      card.append(make('p','muted',r.status==='RESOLVED'?`Last battle: attacker #${r.selectedToken}; winner #${battle?.winner??'—'}. Unselected commitments released automatically.`:'Previous registration expired; all commitments released automatically.'));
+    }
     if(def){const weights=make('p','muted',`Defense weights · Attack ${fmt(def.defense[0],2)}% · Defend ${fmt(def.defense[1],2)}% · Counter ${fmt(def.defense[2],2)}%`);
       const reserves=make('p','muted',`Projected reserves · ${def.projectedReserves.join(' / ')} · capacity ${def.capacity}`);card.append(weights,reserves);
     }
     const controls=make('div','row');
-    const available=own.filter(b=>b.hatchedAt!=='0'&&!b.locationId&&b.pendingChallengeId===null&&!b.need.active&&u(b.level)>=u(loc.minLevel)&&(loc.maxLevel==='0'||u(b.level)<=u(loc.maxLevel)));
+    const available=own.filter(b=>b.hatchedAt!=='0'&&!submittedRegistrations.has(b.tokenId)&&!b.locationId&&b.pendingChallengeId===null&&!b.need.active&&u(b.level)>=u(loc.minLevel)&&(loc.maxLevel==='0'||u(b.level)<=u(loc.maxLevel)));
     const claimable=available.filter(b=>b.tokenId!==loc.reclaimBlockedTokenId&&b.owner?.toLowerCase()!==loc.reclaimBlockedOwner?.toLowerCase());
     if(!occupied&&loc.enabled&&claimable.length){const token=makeSelect(claimable.map(b=>({value:b.tokenId,label:`Claim with ${broLabel(b)} · Lv ${b.level}`})));
       controls.append(token,button('Claim',()=>transact('TerritoryCombat','claim',[id,token.value,loc.nonce,broBy(token.value).defense])));
-    } else if(occupied&&account&&def?.owner?.toLowerCase()!==account.toLowerCase()&&loc.pendingChallengeId==='0'&&!loc.departing&&available.length){
+    } else if(occupied&&account&&def?.owner?.toLowerCase()!==account.toLowerCase()&&!cooling&&((loc.pendingChallengeId==='0'&&!loc.departing)||open)&&available.length){
       const token=makeSelect(available.map(b=>({value:b.tokenId,label:`Attack with ${broLabel(b)} · Lv ${b.level}`})));
       const action=makeSelect([{value:'0',label:'ATTACK'},{value:'1',label:'DEFEND'},{value:'2',label:'COUNTER'}]);
       const amount=document.createElement('input');amount.type='number';amount.min='1';amount.step='1';amount.value=String(Math.ceil(Number(available[0].capacity)/10));amount.setAttribute('aria-label','Combat power to commit');
       const attacker=()=>broBy(token.value), refreshAmount=()=>{const b=attacker(),reserve=b?.projectedReserves[Number(action.value)]??'0';amount.max=String(Math.min(Number(b?.capacity??0),Number(reserve)));amount.value=String(Math.ceil(Number(b?.capacity??0)/10));};token.addEventListener('change',refreshAmount);action.addEventListener('change',refreshAmount);refreshAmount();
-      controls.append(token,action,amount,button('Challenge',()=>transact('TerritoryCombat','challenge',[id,token.value,action.value,amount.value,loc.nonce,def.defenseNonce,Math.floor(Date.now()/1000)+300,broBy(token.value).defense])));
+      controls.append(token,action,amount,button(open?'Join registration':'Open 10-minute registration',()=>transact('TerritoryCombat','challenge',[id,token.value,action.value,amount.value,loc.nonce,def.defenseNonce,Math.floor(Date.now()/1000)+300,broBy(token.value).defense])));
     }
     if(loc.pendingChallengeId!=='0'&&account){const challenge=doc.challenges.find(c=>String(c.challengeId)===String(loc.pendingChallengeId));
-      if(challenge){if(challenge.status==='PENDING'&&challenge.randomnessFulfilled)controls.append(button('Resolve challenge',()=>transact('TerritoryCombat','resolve',[challenge.challengeId]),'secondary'));
+      if(challenge){if(challenge.status==='REGISTERING'){
+          if(Number(doc.snapshot.timestamp)>=Number(challenge.deadline))controls.append(button('Release expired registration',()=>transact('TerritoryCombat','expire',[challenge.challengeId]),'secondary'));
+          else if(now>=Number(pool.closesAt))controls.append(button('Advance registration',()=>transact('TerritoryCombat','advanceRegistration',[challenge.challengeId]),'secondary'));
+        } else if(challenge.status==='PENDING'&&challenge.randomnessFulfilled)controls.append(button('Resolve challenge',()=>transact('TerritoryCombat','resolve',[challenge.challengeId]),'secondary'));
         else if(challenge.status==='PENDING'&&Number(doc.snapshot.timestamp)>=Number(challenge.deadline))controls.append(button('Expire challenge',()=>transact('TerritoryCombat','expire',[challenge.challengeId]),'secondary'));
         else if(challenge.status==='PENDING')controls.append(make('span','muted','Waiting for VRF fulfillment…'));}
     }
     card.append(controls);root.append(card);
   }
-  const history=$('history');const rows=doc.history.filter(e=>/Challenge(Resolved|Expired)|OccupancyChanged|Need(sSeedAccepted|Assigned)|CareProvided/.test(e.name)).slice(-40).reverse();
+  const history=$('history');const rows=doc.history.filter(e=>/Registration(Opened|Finalized)|AttackerSelected|Challenge(Resolved|Expired)|OccupancyChanged|Need(sSeedAccepted|Assigned)|CareProvided/.test(e.name)).slice(-40).reverse();
+  updateCountdowns();
   history.replaceChildren(...(rows.length?rows.map(e=>{const p=make('p','',`${new Date(Number(e.timestamp)*1000).toLocaleString()} · ${e.name} · block ${e.blockNumber}`);return p;}):[make('p','muted','No territory activity has been indexed yet.') ]));
 }
 async function refresh(){
-  if(!manifestUrl){setStatus('Configure the v2 territory manifest URL in runtime-config.js or pass ?manifestUrl=…',true);return;}
-  try{manifest=await getJson(manifestUrl,'Manifest');if(manifest.schemaVersion!==2)throw new Error('This URL points to a v1 round manifest. Configure a territory v2 deployment manifest.');
+  if(!manifestUrl){setStatus('Configure the v3 territory manifest URL in runtime-config.js or pass ?manifestUrl=…',true);return;}
+  try{manifest=await getJson(manifestUrl,'Manifest');if(manifest.schemaVersion!==3)throw new Error('This URL points to a v1 round manifest. Configure a territory v3 deployment manifest.');
     const root=new URL('.',new URL(manifestUrl,location.href)),url=new URL(manifest.paths.gameState,root);doc=await getJson(url,'Territory state');
-    if(doc.schemaVersion!==2||doc.projectionVersion!==3||manifest.projectionVersion!==3||doc.chainId!==manifest.chainId||doc.deploymentId!==manifest.deploymentId||doc.contracts.combat.toLowerCase()!==manifest.deploymentId.toLowerCase()||JSON.stringify(doc.snapshot)!==JSON.stringify(manifest.snapshot))throw new Error('Manifest and territory snapshot do not match.');
+    if(doc.schemaVersion!==3||doc.projectionVersion!==4||manifest.projectionVersion!==4||doc.chainId!==manifest.chainId||doc.deploymentId!==manifest.deploymentId||doc.contracts.combat.toLowerCase()!==manifest.deploymentId.toLowerCase()||JSON.stringify(doc.snapshot)!==JSON.stringify(manifest.snapshot))throw new Error('Manifest and territory snapshot do not match.');
     render();setStatus(`Showing confirmed block ${doc.snapshot.blockNumber}. Transactions are checked against the live contract before submission.`);
   }catch(e){setStatus(e.message||String(e),true);}
 }
@@ -128,3 +149,5 @@ $('connect').addEventListener('click',()=>connect().catch(e=>setStatus(e.message
 $('refresh').addEventListener('click',()=>refresh());
 window.ethereum?.on?.('accountsChanged',accounts=>{account=accounts[0]??null;$('connect').textContent=account?short(account):'Connect wallet';refresh();});
 window.ethereum?.on?.('chainChanged',()=>refresh());refresh();
+
+setInterval(updateCountdowns,1000);

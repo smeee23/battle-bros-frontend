@@ -23,6 +23,9 @@ const start=html.indexOf('  // ---------- transport cube ----------');
 vm.runInContext(html.slice(start,html.indexOf('  function fpGroundYAt(',start))+
  '\nthis.transport={ensureTransportCube,throwTransportCube,resetTransportCube,tickTransportCube,transportLanding,transportCubeBlocked,pauseTransportBattleBro,bindTransportBattleBro,state:transportCube};',context);
 const transport=context.transport;
+// Lifecycle fixtures do not model camera visibility; recall eligibility is
+// exercised with a real camera in transport-recall.test.js.
+context.transportRecallVisibility=()=>null;
 // Use the production world-transition function, with the existing terrain fixtures.
 terrain.activate=()=>{context.explorationActive=true;};terrain.deactivate=()=>{context.explorationActive=false;};
 Object.assign(context,{fpKeys:new Set(),leaveExcavation(){},fpJourney:{home:null},fpGroundYAt:(x,z)=>context.activeFPTerrain().groundYAt(x,z)+.6});

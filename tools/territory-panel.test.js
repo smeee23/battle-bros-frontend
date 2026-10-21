@@ -9,7 +9,7 @@ class Element {
 }
 const elements=new Map(),el=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};
 const address='0x'+'1'.repeat(40),snapshot={blockNumber:'123',blockHash:'0x'+'a'.repeat(64),timestamp:'1800000000'};
-const manifest={schemaVersion:2,projectionVersion:3,chainId:'31337',deploymentId:address,snapshot,paths:{gameState:'snapshots/test.json'}};
+const manifest={schemaVersion:3,projectionVersion:4,chainId:'31337',deploymentId:address,snapshot,paths:{gameState:'snapshots/test.json'}};
 const token='9007199254740993';
 const bro={tokenId:token,name:'<img src=x onerror=alert(1)>',owner:address,active:true,hatchedAt:'1',kind:'0',xp:'790',level:'4',capacity:'115',projectedReserves:['38','31','27'],training:['4000','3500','2500'],defense:['1000','6000','3000'],lastTrainingAt:'1700000000',need:{active:false,activeSinceTimestamp:null},freeShares:'1000000000000000001',reservedShares:'2',protectedPrincipal:'1000000000000000000',currentValueWei:'1004000000000000000',locationId:'2',pendingChallengeId:null};
 const challenge=(id,attacker,defender,status,extra={})=>({challengeId:id,location:'2',attacker,defender,status,action:'2',power:'15',weights:['1000','6000','3000'],...extra});
