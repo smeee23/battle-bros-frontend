@@ -5,6 +5,7 @@ const require=createRequire(resolve(import.meta.dirname,'../../battle-bros-contr
 const {id}=require('ethers');
 
 const sources={
+  TerritoryMatchmaker:'../../battle-bros-contracts/abis/territory/TerritoryMatchmaker.json',
   TerritoryCombat:'../../battle-bros-contracts/abis/territory/TerritoryCombat.json',
   TerritoryBro:'../../battle-bros-contracts/abis/territory/TerritoryBro.json',
   NeedsOracle:'../../battle-bros-contracts/abis/territory/NeedsOracle.json',

@@ -18,7 +18,7 @@ try {
  assert.equal(localRuntime(temp),null);
  for(const run of ['first','second']){
    const directory=path.join(temp,'.local-territory/runs',run,'public');fs.mkdirSync(directory,{recursive:true});
-   const snapshot={blockNumber:run==='first'?'1':'2'},manifest={schemaVersion:3,projectionVersion:4,deploymentId:run,snapshot,paths:{gameState:'state.json'}};
+   const snapshot={blockNumber:run==='first'?'1':'2'},manifest={schemaVersion:4,projectionVersion:5,deploymentId:run,snapshot,paths:{gameState:'state.json'}};
    fs.writeFileSync(path.join(directory,'manifest.json'),JSON.stringify(manifest));fs.writeFileSync(path.join(directory,'state.json'),JSON.stringify({deploymentId:run,snapshot,battleBros:[{tokenId:'1',active:true}]}));
    fs.writeFileSync(path.join(temp,'.local-territory/current.json'),JSON.stringify({run}));
    assert.equal(localRuntime(temp).manifestUrl,`/.local-territory/runs/${run}/public/manifest.json`,'Latest deployment is discovered on every request');

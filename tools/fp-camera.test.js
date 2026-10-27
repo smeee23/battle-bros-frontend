@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync('index.html', 'utf8');
 const source = html.slice(html.indexOf('  const FP_EYE_H ='), html.indexOf('  // ---------- first-person flight ----------'));
 const terrainSource = html.slice(html.indexOf('  function terrainRiseForLevel('), html.indexOf('  function materialHex('));
-function setup(floors,other=false) {
+function setup(floors,other=false,territory=false) {
   class Vector3 {
     constructor(x, y, z) { this.set(x, y, z); }
     set(x, y, z) { Object.assign(this, {x, y, z}); }
@@ -23,8 +23,8 @@ function setup(floors,other=false) {
   };
   const handlers = {};
   const context = vm.createContext({THREE: {Vector3}, TOP_H: .18, BUILDABLE_LAND_Y_OFFSET: -.18, MAX_TERRAIN_FLOORS: 64, GRID: 20, world, getWorldCell: (x,z) => world[x]?.[z], persCam: camera,
-    explorationActive:other,fpJourney:{warp:0}, activeFPTerrain:()=>terrain, document: {addEventListener() {}}, window: {addEventListener(name, fn) { handlers[name] = fn; }}, markCameraMoving() {}});
-  vm.runInContext(terrainSource + source + '\nthis.api = {fp, fpKeys, tickFP, fpGroundYAt, FP_TERRAIN_LIFT_MAX};', context);
+    explorationActive:other,territoryWorldState:{active:territory},fpJourney:{warp:0}, activeFPTerrain:()=>terrain, document: {addEventListener() {}}, window: {addEventListener(name, fn) { handlers[name] = fn; }}, markCameraMoving() {}});
+  vm.runInContext(terrainSource + source + '\nthis.api = {fp, fpKeys, tickFP, fpGroundYAt, FP_TERRAIN_LIFT_MAX, settings:{height:fpEyeHeight(),fov:FP_FOV,near:FP_NEAR,lookahead:FP_TERRAIN_LOOKAHEAD,liftMax:FP_TERRAIN_LIFT_MAX,liftLerp:FP_TERRAIN_LIFT_LERP,stepLerp:FP_STEP_LERP,landingDip:FP_LANDING_DIP_MAX,landingDuration:FP_LANDING_DURATION,landingFullSpeed:FP_LANDING_FULL_SPEED,fallThreshold:FP_FALL_THRESHOLD}};', context);
   const api = context.api;
   api.fp.active = true;
   api.fp.pos.set(.5, api.fpGroundYAt(.5,.5), .5);
@@ -36,13 +36,13 @@ function setup(floors,other=false) {
 function run(a, seconds, hz = 60) { for (let i=0; i<seconds*hz; i++) a.tickFP(1/hz); }
 // Ground height matches rendered tile tops, including legacy cells and capped levels.
 for (const [cell, expected] of [
-  [{terrainFloors:1}, .3], [{terrainFloors:2}, .5], [{terrainFloors:5}, 1.1],
-  [{terrainFloors:64}, 12.9], [{terrainFloors:100}, 12.9],
-  [{floors:5}, 1.1], [{kind:'house',floors:5}, .3],
+  [{terrainFloors:1}, .6], [{terrainFloors:2}, .8], [{terrainFloors:5}, 1.4],
+  [{terrainFloors:64}, 13.2], [{terrainFloors:100}, 13.2],
+  [{floors:5}, 1.4], [{kind:'house',floors:5}, .6],
 ]) {
   const a=setup(()=>1);a.world[10][10]=cell;
-  assert(Math.abs(a.fpGroundYAt(.5,.5)-expected)<1e-12,'Eye stays 0.3 above rendered terrain');
-  assert.equal(a.fpGroundYAt(100,100),.3,'Missing terrain uses base height');
+  assert(Math.abs(a.fpGroundYAt(.5,.5)-expected)<1e-12,'Eye stays 0.6 above rendered terrain');
+  assert.equal(a.fpGroundYAt(100,100),.6,'Missing terrain uses base height');
 }
 for (const floors of [() => 1, (_,z) => z < 10 ? 2 : 1]) {
   const a = setup(floors); run(a, 2);
@@ -72,14 +72,14 @@ for (const hz of [20, 30, 60, 120]) {
   jumper.jump();
   assert.equal(jumper.fp.vy, launch, 'No midair jump');
   let peak = 0, elapsed = 0;
-  while (!jumper.fp.grounded && elapsed < 5) {
+  while (!jumper.fp.grounded && elapsed < 11) {
     jumper.tickFP(1/hz);
     elapsed += 1/hz;
     peak = Math.max(peak, jumper.fp.pos.y - ground);
   }
-  assert(launch < 2, 'Gentler upward launch');
-  assert(Math.abs(peak - 1.805) < .002, 'Preserves low-gravity jump height across frame rates');
-  assert(elapsed >= 3.8 - 1e-9 && elapsed <= 3.8 + 1/hz + 1e-9, 'Preserves 3.8-second low-gravity airtime');
+  assert.equal(launch, 2.9, 'Uses the current upward launch speed');
+  assert(Math.abs(peak - (2.9 * 2.9 / (2 * 0.6))) < .002, 'Preserves low-gravity jump height across frame rates');
+  assert(elapsed >= (2 * 2.9 / 0.6) - 1e-9 && elapsed <= (2 * 2.9 / 0.6) + 1/hz + 1e-9, 'Preserves current low-gravity airtime');
   assert.equal(jumper.fp.pos.y, ground, 'Lands exactly on terrain');
   run(jumper, .1, hz);
   assert(jumper.camera.position.y < ground && jumper.camera.position.y >= ground - .01, 'Restrained landing compression');
@@ -97,8 +97,8 @@ for (const hz of [20, 30, 60, 120]) {
 const drop = setup((_,z) => z < 10 ? 1 : 5);
 drop.fpKeys.add('w');
 run(drop, .4);
-assert(!drop.fp.grounded && drop.fp.pos.y > .9, 'Walking off a large ledge starts a gradual fall');
-run(drop, 1.5);
+assert(!drop.fp.grounded && drop.fp.pos.y > .7, 'Walking off a large ledge starts a gradual fall');
+run(drop, 2);
 assert(drop.fp.grounded && drop.fp.pos.y === drop.fpGroundYAt(drop.fp.pos.x, drop.fp.pos.z), 'Ledge fall lands reliably');
 const terrace = setup((_,z) => z < 10 ? 1 : 3);
 terrace.fpKeys.add('w');

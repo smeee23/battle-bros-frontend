@@ -4,6 +4,7 @@
   if(typeof module==='object' && module.exports)module.exports=factory;
   else root.createLongneckAnimation=factory;
 })(typeof globalThis!=='undefined'?globalThis:this,function createLongneckAnimation(THREE,mover,options={}){
+  const encounter=typeof module==='object'&&module.exports?require('./battlebro-encounter.js'):globalThis.BattleBroEncounter;
   const names=['frontLeft','frontRight','rearLeft','rearRight'];
   const LONGNECK_FOOT_FORE_AFT_REACH=.11,LONGNECK_FOOT_SIDE_REACH=.065;
   const battleBroYawDelta=a=>Math.atan2(Math.sin(a),Math.cos(a));
@@ -373,9 +374,9 @@
     const length=Math.hypot(mover.targetX-mover.startX,mover.targetZ-mover.startZ);
     return prepare({groundY:input.groundY,duration:mover.state==='TURNING'?undefined:Math.max(.12,length/Math.max(.02,speed))},dt);
   }
-  function carry(delta){
+  function carry(delta,history=true){
     if(!delta)return;
-    lastPosition.add(delta);
+    if(history)lastPosition.add(delta);
     for(const f of mover.longneckFootMotion||[])for(const key of ['start','goal'])f[key].add(delta);
     for(const f of Object.values(mover.sprint?.feet||{})){f.anchor.add(delta);f.swingStart.add(delta);}
     for(const key of ['start','target'])for(const [axis,field] of [['x','X'],['y','Y'],['z','Z']])
@@ -460,7 +461,24 @@
     parts.leftEye.scale.y=parts.rightEye.scale.y=blink>4.38?Math.max(.10,Math.abs(blink-4.49)/.11):1;
     lastState=mover.state;wasJump=!!jumping;prepared=null;
   }
-  return {mover,prepare,prepareTravel,commit,reset,interrupt,carry,restorePose,finishStep,
+  // Temporary action state calls the same prepare/commit, foot plants and gaze as navigation.
+  function encounterFrame(yaw,dt,t,canTurn){
+    if(Number.isFinite(yaw)&&mover.state!=='TURNING'&&Math.abs(battleBroYawDelta(yaw-root.rotation.y))>.025){
+      mover.desiredYaw=yaw;mover.progress=0;mover.state='TURNING';
+      beginLongneckFootMotion(mover,true);
+    }
+    const proposal=prepare({},dt);
+    const accepted=canTurn(proposal.yaw);
+    if(accepted)root.rotation.y=proposal.yaw;
+    commit({accepted:accepted?1:0,grounded:true,actualSpeed:0},t,dt);
+    if(mover.state==='TURNING'&&mover.progress>=1){mover.state='IDLE';mover.progress=0;}
+    return {accepted,done:mover.state==='IDLE'};
+  }
+  function syncEncounterHistory(){
+    prepared=null;lastPosition.copy(root.position);lastYaw=root.rotation.y;lastState=mover.state;
+    mover.velocity.set(0,0,0);mover.acceleration.set(0,0,0);mover.actualSpeed=0;mover.yawRate=0;
+  }
+  return {encounterFrame,syncEncounterHistory,encounterPose:()=>encounter.createPose(mover,"longneck"),mover,prepare,prepareTravel,commit,reset,interrupt,carry,restorePose,finishStep,
     beginFeet:turning=>beginLongneckFootMotion(mover,turning),
     poseFeet:p=>poseLongneckFeet(mover,p),resetFeet:()=>resetLongneckFeet(mover),
     settle:dt=>settleLongneckGallop(mover,dt),head:(t,dt)=>tickLongneckHead(mover,t,dt)};

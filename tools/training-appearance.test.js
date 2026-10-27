@@ -80,6 +80,7 @@ console.log('training appearance: doorway-only home entry, smooth camera, pedest
 
 // Real companion lifecycle on training exit must not spawn a home-world copy.
 Object.assign(context,{createTransportCube:require('../assets/transport-cube'),scene:new THREE.Scene(),excavation:{equipped:'hands'}});
+const toolAccess=html.indexOf('  function fpToolsAvailable()');vm.runInContext(html.slice(toolAccess,html.indexOf('\n',toolAccess)),context);
 const companionStart=html.indexOf('  // ---------- transport cube ----------');
 vm.runInContext(html.slice(companionStart,html.indexOf('  function fpGroundYAt(',companionStart)),context);
 run('enterTrainingAppearance()');

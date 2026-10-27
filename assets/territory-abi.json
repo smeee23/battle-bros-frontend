@@ -1,4 +1,197 @@
 {
+  "TerritoryMatchmaker": [
+    {
+      "name": "MATCH_GAS",
+      "signature": "MATCH_GAS()",
+      "selector": "0xed3fbf63",
+      "inputs": []
+    },
+    {
+      "name": "MAX_BATCH",
+      "signature": "MAX_BATCH()",
+      "selector": "0x950bff9f",
+      "inputs": []
+    },
+    {
+      "name": "MAX_DRAWS",
+      "signature": "MAX_DRAWS()",
+      "selector": "0xf28d6e77",
+      "inputs": []
+    },
+    {
+      "name": "advanceMatching",
+      "signature": "advanceMatching(uint256,uint256)",
+      "selector": "0xeb2b50ba",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "budget",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "bros",
+      "signature": "bros()",
+      "selector": "0xf2f0baa8",
+      "inputs": []
+    },
+    {
+      "name": "cancel",
+      "signature": "cancel(uint256)",
+      "selector": "0x40e58ee5",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "combat",
+      "signature": "combat()",
+      "selector": "0x08f2d4e8",
+      "inputs": []
+    },
+    {
+      "name": "matches",
+      "signature": "matches(uint256)",
+      "selector": "0x4768d4ef",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "nextMatchId",
+      "signature": "nextMatchId()",
+      "selector": "0xc5adf7c9",
+      "inputs": []
+    },
+    {
+      "name": "open",
+      "signature": "open(uint256,uint256,uint16,address)",
+      "selector": "0x66c1472b",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint16",
+          "name": "feeBps",
+          "type": "uint16"
+        },
+        {
+          "internalType": "address",
+          "name": "recipient",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pools",
+      "signature": "pools(uint256)",
+      "selector": "0xac4afa38",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "randomness",
+      "signature": "randomness()",
+      "selector": "0x36013189",
+      "inputs": []
+    },
+    {
+      "name": "released",
+      "signature": "released(uint256,uint256)",
+      "selector": "0xfe6103a1",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "resolveSide",
+      "signature": "resolveSide(uint256)",
+      "selector": "0x1d53d55e",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "matchId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "settleBatch",
+      "signature": "settleBatch(uint256[])",
+      "selector": "0x6c92e5f2",
+      "inputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "ids",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "start",
+      "signature": "start(uint256,uint256,uint32)",
+      "selector": "0x705cef4f",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "selected",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint32",
+          "name": "count",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "vault",
+      "signature": "vault()",
+      "selector": "0xfbfa77cf",
+      "inputs": []
+    }
+  ],
   "TerritoryCombat": [
     {
       "name": "MAX_FEE_BPS",
@@ -246,6 +439,12 @@
       ]
     },
     {
+      "name": "matchmaker",
+      "signature": "matchmaker()",
+      "selector": "0x3baee363",
+      "inputs": []
+    },
+    {
       "name": "nextChallengeId",
       "signature": "nextChallengeId()",
       "selector": "0xfc67aa50",
@@ -485,6 +684,18 @@
       "inputs": []
     },
     {
+      "name": "selectAttacker",
+      "signature": "selectAttacker(uint256)",
+      "selector": "0xdb92ed4d",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "setEnabled",
       "signature": "setEnabled(uint256,bool)",
       "selector": "0xe5c13dd1",
@@ -717,6 +928,38 @@
         {
           "internalType": "uint256",
           "name": "challenge",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "xpStakeValue",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "finalizeSideBattle",
+      "signature": "finalizeSideBattle(uint256,uint256,bool,uint256,uint256)",
+      "selector": "0x277e4e73",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tokenA",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "tokenB",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "aWon",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "matchId",
           "type": "uint256"
         },
         {

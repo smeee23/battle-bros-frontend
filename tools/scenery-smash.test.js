@@ -431,17 +431,28 @@ for(const character of ['juggernaut','monsters']){
  const root=api.createBattleBroCharacter({character,variant:'lava',form:6});
  api.worldGroup.add(root);root.position.set(.5,0,.5);
  const mover=api.registerLavaMonsterMover(root,32,32);
- const directions=[[1,0],[-1,0],[0,1],[0,-1]];
  for(let i=0;i<4;i++){
-   const [dx,dz]=directions[i];
-   mover.failedTerrain=new Map([[`${32+dx},${32+dz}`,100]]);
+   mover.failedTerrain=new Map([['32,33',100]]);
    const route=api.withRandom((i+.1)/4,()=>api.selectLavaWalkRoute(mover));
-   assert(route&&route.x===32+dx&&route.z===32+dz,`${character}: first safe direction wins regardless of heading or history`);
-   assert(route.plan,'The chosen route retains validated foot placement');
+   assert(route&&route.x===32&&route.z===33,`${character}: safe forward heading wins regardless of random order or history`);
+   assert(route.plan,'The forward route retains validated foot placement');
  }
+ // A nearby actor blocks forward travel through its clearance radius.
+ const blockedZ=32+Math.ceil(Math.max(mover.clearance||2.5,2.5));
+ const blocker={root:new THREE.Group(),cellX:32,cellZ:blockedZ,targetCellX:32,targetCellZ:blockedZ};
+ api.worldGroup.add(blocker.root);api.lavaMonsterMovers.add(blocker);
+ const alternatives=new Set();
+ for(let i=0;i<4;i++){
+   const route=api.withRandom((i+.1)/4,()=>api.selectLavaWalkRoute(mover));
+   assert(route&&route.z===32&&Math.abs(route.x-32)===1,`${character}: blocked forward heading chooses a safe side`);
+   assert(route.plan,'The alternative route retains validated foot placement');
+   alternatives.add(route.x);
+ }
+ assert.equal(alternatives.size,2,`${character}: random order breaks equally gentle left/right ties`);
+ api.lavaMonsterMovers.delete(blocker);api.worldGroup.remove(blocker.root);
  api.worldGroup.remove(root);
 }
-console.log('Shared wandering: Longneck direction order, randomized first-safe choice and preserved foot-placement validation passed.');
+console.log('Shared wandering: forward preference, safe alternatives, random tie-breaking and validated foot placement passed.');
 
 for(const character of ['monsters','juggernaut'])for(const form of [1,2,3,4,5,6,7])for(const kind of ['house','fence']){
  const root=api.createBattleBroCharacter({character,variant:'lava',form});

@@ -5,6 +5,8 @@ const context=vm.createContext({ABI,TextEncoder,BigInt,Array,Number,Error,u:x=>B
 vm.runInContext(source.slice(source.indexOf('function encodeValue'),source.indexOf('async function transact')).replace('export function','function'),context);
 for(const [contract,name,args] of [
  ['TerritoryBro','hatch',['1',0,[3334,3333,3333],[10000,0,0],'Nova 🚀']],
+ ['TerritoryMatchmaker','advanceMatching',['1',32]],
+ ['TerritoryMatchmaker','resolveSide',['1']],
  ['TerritoryCombat','claim',['1','2','3',[10000,0,0]]],
  ['TerritoryCombat','challenge',['1','2',0,10,'3','4',1900000000,[10000,0,0]]]
 ]){

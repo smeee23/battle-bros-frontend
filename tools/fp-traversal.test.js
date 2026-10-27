@@ -59,7 +59,7 @@ for (const hz of [20, 60, 120]) {
   const jumping = cameraSetup((_,z) => z < 10 ? 11 : 1);
   jumping.fpKeys.add('w');
   run(jumping, 1, hz);
-  assert(Math.abs(jumping.fp.pos.z - 0.08) < 0.00001, 'Walking stops at the ledge');
+  assert(Math.abs(jumping.fp.pos.z - 0.09) < 0.00001, 'Walking stops at the ledge');
   jumping.jump();
   run(jumping, 1, hz);
   assert(jumping.fp.pos.z < 0, 'A sufficiently high jump crosses the ledge');

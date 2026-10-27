@@ -5,6 +5,7 @@
   else global.createSpecterAnimationSystem=factory;
 })(typeof globalThis!=='undefined'?globalThis:this,function(THREE,host){
   'use strict';
+  const encounter=typeof module==='object'&&module.exports?require('./battlebro-encounter.js'):globalThis.BattleBroEncounter;
   const {smoothMinotaurStep,battleBroYawDelta,SPECTER_MOVE_STATE,SPECTER_MIN_CLEARANCE}=host;
   function tickFloatingRockArmGestures(root, t, dt) {
     if(root.userData.rockThrow)return;
@@ -136,7 +137,7 @@
         if (mover.progress >= 1) {
           specter.rotation.y = mover.desiredYaw;
           mover.progress = 0;
-          mover.state = SPECTER_MOVE_STATE.FLOATING;
+          mover.state = mover.encounterStationary?SPECTER_MOVE_STATE.IDLE_HOVER:SPECTER_MOVE_STATE.FLOATING;
         }
       } else if (mover.state === SPECTER_MOVE_STATE.FLOATING) {
         mover.progress = Math.min(1, mover.progress + dt / mover.travelDuration);
@@ -191,6 +192,19 @@
       if(gesture){gesture.previousPosition.copy(specter.position);gesture.previousYaw=specter.rotation.y;gesture.travel=0;gesture.turn=0;}
     }
     return {
+      encounterFrame(yaw,dt,t,canTurn){
+        mover.encounterStationary=true;mover.idleRemaining=Infinity;
+        if(Number.isFinite(yaw)&&mover.state!==SPECTER_MOVE_STATE.START_FLOAT&&Math.abs(battleBroYawDelta(yaw-specter.rotation.y))>.025){
+          Object.assign(mover,{state:SPECTER_MOVE_STATE.START_FLOAT,progress:0,startYaw:specter.rotation.y,
+            desiredYaw:yaw,yawTravel:battleBroYawDelta(yaw-specter.rotation.y),startBaseY:specter.position.y,fastFloat:false});
+        }
+        const proposal=this.prepare({},dt,t),accepted=canTurn(proposal.yaw);
+        if(accepted)specter.rotation.y=proposal.yaw;
+        this.commit({accepted:accepted?1:0,grounded:true},t,dt);
+        return {accepted,done:mover.state===SPECTER_MOVE_STATE.IDLE_HOVER};
+      },
+      syncEncounterHistory:interrupt,
+      encounterPose:()=>encounter.createPose(mover,'specter'),
       mover,family:'specter',
       prepare(input={},dt=0,t=0){
         if(pending)throw new Error('Specter prepare requires matching commit');
@@ -223,12 +237,12 @@
         host.worldExpression(specter,t);host.expression(specter,dt);host.secondary(specter,t,dt,mover);
         previous.copy(specter.position);previousYaw=specter.rotation.y;pending=null;
       },
-      carry(delta){
-        previous.add(delta);
+      carry(delta,history=true){
+        if(history)previous.add(delta);
         for(const key of ['startX','targetX'])mover[key]+=delta.x;
         for(const key of ['startZ','targetZ'])mover[key]+=delta.z;
         for(const key of ['baseY','startBaseY','targetBaseY'])mover[key]+=delta.y;
-        specter.userData.floatingArmGestures?.previousPosition.add(delta);
+        if(history)specter.userData.floatingArmGestures?.previousPosition.add(delta);
       },
       interrupt,
       reset({baseY=specter.position.y}={}){

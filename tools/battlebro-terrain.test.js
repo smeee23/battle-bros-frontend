@@ -70,13 +70,17 @@ for(const character of ['longneck','juggernaut','monsters','specter'])for(let fo
  context.pauseTransportBattleBro(root);terrain.group.remove(root);
 }
 // Full throw/open/bind/recall lifecycle on the same actual uneven provider.
+const savedPlayerPosition=context.fp.pos.clone();
 for(const character of ['longneck','juggernaut','monsters','specter']){
  const root=api.createBattleBroCharacter({character,form:4,variant:'ice'});
  context.baseBattleBroPrototype=root;
+ const camera=new THREE.PerspectiveCamera();
+ context.fp.pos.set(point.x,.65,point.z+3.5);camera.position.copy(context.fp.pos);
  const cube=require('../assets/transport-cube')(THREE,{
-  scene:terrain.group,camera:{quaternion:new THREE.Quaternion()},box:(x,y,z)=>new THREE.BoxGeometry(x,y,z),
+  scene:terrain.group,camera,box:(x,y,z)=>new THREE.BoxGeometry(x,y,z),
   active:()=>true,equipped:()=>true,source:()=>root,current:()=>null,
-  hand:out=>out.set(point.x,.65,point.z+3.5),direction:out=>out.set(0,0,-1),yaw:()=>0,
+  playerPosition:()=>context.fp.pos,
+  hand:out=>out.copy(camera.position),direction:out=>out.set(0,0,-1),yaw:()=>0,
   ground:(x,z,maxY)=>terrain.groundYAt(x,z,0,maxY),landing:context.transportLanding,blocked:context.transportCubeBlocked,
   anchor:c=>terrain.cellToWorld(c.x,c.z,c.islandId),pause:context.pauseTransportBattleBro,prepare:context.prepareTransportBattleBro,
   place:r=>terrain.group.add(r),hover:()=>character==='specter'?vm.runInContext('SPECTER_HOVER_CLEARANCE',context):0,
@@ -87,10 +91,13 @@ for(const character of ['longneck','juggernaut','monsters','specter']){
  for(let f=0;f<240;f++)cube.tick(1/60,f/60);
  assert.equal(cube.root,root,character+': full cube opening succeeds on uneven terrain');
  assert(root.userData.transportActor?.motion,character+': emergence binds movement');
+ // Approach the deployed actor so recall exercises the real 15m range check.
+ context.fp.pos.copy(root.position).add(new THREE.Vector3(0,.65,5));camera.position.copy(context.fp.pos);
  assert(cube.throw());for(let f=0;f<240;f++)cube.tick(1/60,4+f/60);
  assert.equal(cube.root,null,character+': recall clears deployment');
  terrain.group.remove(cube.cube);
 }
+context.fp.pos.copy(savedPlayerPosition);
 // Keep every negative test on the real provider; only edit its cells.
 for(const character of ['longneck','juggernaut','monsters','specter']){
  const root=api.createBattleBroCharacter({character,form:4,variant:'ice'}),shape=rules.profile(root);

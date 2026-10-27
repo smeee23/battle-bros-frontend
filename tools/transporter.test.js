@@ -14,6 +14,7 @@ const M = Object.fromEntries(['habitatTrim','habitatBand','habitatShell','habita
   .map(name => [name, new THREE.MeshLambertMaterial()]));
 let rejected = 0, spent = 0, placed = 0;
 const context = vm.createContext({THREE, geomCache, M,
+  transporterObjects:new Set(),animatedCellObjects:new Set(),smokeHouseObjects:new Set(),buildingWindowObjects:new Set(),plasmaTurretObjects:new Set(),
   getBoxGeometry: (w,h,d) => {
     const key = [w,h,d].join(',');
     if (!geomCache.has(key)) geomCache.set(key, new THREE.BoxGeometry(w,h,d));
@@ -24,7 +25,7 @@ const context = vm.createContext({THREE, geomCache, M,
   trySpendMockResourcesForPlacement: () => { spent++; return true; },
   setCell: () => placed++, playMockResourcePlacementSuccess() {},
 });
-for (const name of ['roundedBox','makeTransporter','removedHouseTypeValues','activeHouseTypeValues','normalizeBuildingType','maxFloorsForCell','trySpendForPlacementWithReplacement','makeThumbObject']) {
+for (const name of ['roundedBox','makeTransporter','registerRuntimeObject','unregisterRuntimeObject','removedHouseTypeValues','activeHouseTypeValues','normalizeBuildingType','maxFloorsForCell','trySpendForPlacementWithReplacement','makeThumbObject']) {
   vm.runInContext(fn(name), context);
 }
 const a = context.makeTransporter(), b = context.makeTransporter();
@@ -55,3 +56,16 @@ assert.equal(rejected, 2);
 assert.equal(spent, 0);
 assert.equal(placed, 0);
 console.log('transporter: grounded rounded model, shared assets, type normalization, single-level cap and rejected repeat placement OK');
+
+context.registerRuntimeObject(a);context.registerRuntimeObject(b);
+assert.equal(context.transporterObjects.size,2,'Both placed transporters are indexed for travel');
+context.unregisterRuntimeObject(a);assert(!context.transporterObjects.has(a),'Deletion removes travel registration');
+context.unregisterRuntimeObject(b);assert.equal(context.transporterObjects.size,0);
+Object.assign(context,{world:[[{kind:'house',buildingType:'transporter',terrain:'stone',terrainFloors:1,floors:1}]],
+ stargateOccupiesCell:()=>false,trainingFacilityOccupiesCell:()=>false,
+ refundOneMockResourceLevelForErase(){},terrainLevelForCell:c=>c.terrainFloors,
+ setCell:(x,z,patch)=>Object.assign(context.world[x][z],patch)});
+vm.runInContext(fn('eraseCellWithMockResourceRefund'),context);
+assert.equal(context.eraseCellWithMockResourceRefund(0,0),true,'Player-built transporter can be erased');
+assert.equal(context.world[0][0].kind,null);
+console.log('Transporter placement/deletion: runtime registry and ordinary erase remain enabled.');

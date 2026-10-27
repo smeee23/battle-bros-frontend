@@ -61,7 +61,8 @@ for(const form of [1,2,3,4,5,6,7]) {
   // Sustained runtime progress from a wall/pocket; normal escape is preferred
   // when available, otherwise wait, back up and use a preflighted new heading.
   terrain((x,z)=>z>=33||x<=30||x>=34?1.2:0);
-  m=actor(form); m.pauseRemaining=0;
+  // This scenario owns the walking pose; idle jumps have separate coverage.
+  m=actor(form); m.pauseRemaining=0; m.homeJumpWait=Infinity;
   let backed=false, escaped=false, previous=m.root.position.clone(), maxDelta=0;
   for(let frame=0;frame<3000;frame++) {
     api.tickLavaMonsterMovers(frame/60,1/60);

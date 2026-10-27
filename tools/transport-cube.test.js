@@ -20,6 +20,7 @@ const homeTerrain={...terrain,group:api.worldGroup,worldToCell:(x,z)=>({x:Math.f
  cellToWorld:api.tilePos,getCell:(x,z)=>x>=0&&z>=0&&x<64&&z<64?terrain.getCell(x,z):null};
 vm.runInContext(html.slice(html.indexOf('  // Sparse local scenery inhabitants'),html.indexOf('  // ---------- transport cube ----------')),context);
 const start=html.indexOf('  // ---------- transport cube ----------');
+const access=html.indexOf('  function fpToolsAvailable()');vm.runInContext(html.slice(access,html.indexOf('\n',access)),context);
 vm.runInContext(html.slice(start,html.indexOf('  function fpGroundYAt(',start))+
  '\nthis.transport={ensureTransportCube,throwTransportCube,resetTransportCube,tickTransportCube,transportLanding,transportCubeBlocked,pauseTransportBattleBro,bindTransportBattleBro,state:transportCube};',context);
 const transport=context.transport;
@@ -120,11 +121,13 @@ for(const character of ['longneck','specter','juggernaut','monsters'])for(let fo
    // Simulate capture during a planted step / turn: poison old world anchors.
    if(oldMover.leftAnchor)oldMover.leftAnchor.set(999,999,999);
    if(oldMover.anchors)oldMover.anchors.forEach(a=>a.set(999,999,999));
-   assert(transport.throwTransportCube());assert.equal(registrations(source).length,0,'Capture immediately pauses home navigation');
-   frames(240,true);assert.equal(source.parent,null);assert.equal(transport.state.root,null);
+   assert.equal(transport.throwTransportCube(),false,'Home tools cannot capture the character');
+   source.position.y+=1; // Departing mid-jump must still restore terrain support on return.
+   context.switchFPWorld(true);assert.equal(registrations(source).length,0,'Travel packs and pauses home navigation');
+   assert.equal(source.parent,null);assert.equal(transport.state.root,null);
    assert.equal(registrations(source).length,0,'Stored rig has no animation registrations');
    for(const key of ['lavaMovement','newbornMovement','developingMovement','adolescentMovement','minotaurMovement','specterMovement','transportActor'])assert(!source.userData[key],'Stored rig retains no movement references');
-   context.switchFPWorld(true);frames(1);
+   frames(1);
    assert.equal(transport.state.root,null,'World switch keeps Bro stored');
    assert(transport.throwTransportCube());frames(240);
    assert.equal(transport.state.root,source);assert.equal(source.parent,group);
@@ -145,13 +148,10 @@ for(const character of ['longneck','specter','juggernaut','monsters'])for(let fo
    }
    transport.throwTransportCube();frames(240);assert.equal(source.parent,null);
    context.switchFPWorld(false);
-   transport.throwTransportCube();
-   for(let frame=0;frame<240&&transport.ensureTransportCube().phase!=='opening';frame++)frames(1);
-   frames(20);
-   assert.equal(registrations(source).length,0,'No gait/contact controller during emergence scaling');
-   assert(source.scale.x<source.userData.transportRestScale.x,'Emergence starts below full size');
-   frames(240);
-   assert.equal(transport.state.root,source);assert.equal(source.parent,api.worldGroup);
+   assert.equal(transport.throwTransportCube(),false,'Home cannot deploy a cube');
+   assert.equal(source.parent,api.worldGroup,'Return automatically restores the original home character');
+   assert(Math.abs(source.position.y-(character==='specter'?vm.runInContext('SPECTER_HOVER_CLEARANCE',context):0))<1e-8,'Home return uses terrain support, including departures while airborne');
+   assert.equal(source.scale.x,source.userData.transportRestScale.x,'Return restores full size without a home tool action');
    const mover=registrations(source)[0];assert.equal(registrations(source).length,1,'Exactly one home controller');
    if(character==='monsters'){assert.equal(mover.monsterAnimation?.mover,mover);assert(!mover.juggernautAnimation,'Monster has one actual support controller');}
    if(character==='specter')assert.equal(mover.specterAnimation?.mover,mover,'Home release binds the same Specter controller');
@@ -176,19 +176,19 @@ for(const character of ['longneck','specter','juggernaut','monsters'])for(let fo
  transport.resetTransportCube();assert.equal(registrations(source).length,0);
 }
 context.explorationActive=false;fp.pos.set(0,.6,0);
-transport.throwTransportCube();frames(240);const traveling=context.baseBattleBroPrototype;
-assert.equal(traveling.parent,api.worldGroup);context.switchFPWorld(true);
+const traveling=context.baseBattleBroPrototype;traveling.position.set(.5,traveling.userData.kind==='battlebro-floating-rock-prototype'?.72:0,.5);
+api.worldGroup.add(traveling);transport.bindTransportBattleBro(traveling);
+assert.equal(transport.throwTransportCube(),false);context.switchFPWorld(true);
 assert.equal(traveling.parent,null,'Travel automatically packs an active home Bro');assert.equal(registrations(traveling).length,0);
-frames(240);assert.equal(transport.state.root,null,'Travel never automatically releases');
+frames(240);assert.equal(transport.state.root,null,'Travel never automatically releases in the other world');
 transport.throwTransportCube();frames(240);assert.equal(traveling.parent,group);
-context.switchFPWorld(false);assert.equal(traveling.parent,null,'Return packs active endless Bro');
-assert.equal(transport.state.root,null);transport.throwTransportCube();frames(240);
-assert.equal(traveling.parent,api.worldGroup);assert.equal(registrations(traveling).length,1);
+context.switchFPWorld(false);assert.equal(traveling.parent,api.worldGroup,'Return restores the same character to home');
+assert.equal(transport.throwTransportCube(),false);assert.equal(registrations(traveling).length,1);
 const retainedHomeMover=registrations(traveling)[0];transport.ensureTransportCube().suspend(false);
 fp.active=false;frames(30,true);assert.equal(traveling.parent,api.worldGroup,'Exiting home first person leaves Bro active');
 assert.equal(registrations(traveling)[0],retainedHomeMover,'Leaving first person preserves active home controller');
 fp.active=true;transport.resetTransportCube();
-console.log('Home transport: 28 forms, repeated home/endless capture-release, same identity/gameplay, rebuilt contacts and normal movement passed.');
+console.log('Home transport: 28 forms, blocked home tools, automatic packing/home return, repeated endless capture-release, same identity/gameplay, rebuilt contacts and normal movement passed.');
 // Real streaming keeps the island supporting a deployed character, even when
 // the player leaves its render window. Recall releases that retention.
 const fixture=fs.readFileSync('tools/exploration-world.test.js','utf8').split('const {terrain,scene,xrWorldRoot,context}=setup();')[0];

@@ -22,7 +22,7 @@ try {
  if(!postgresBin&&!process.env.E2E_DATABASE_URL)throw Error('Set POSTGRES_BIN to installed PostgreSQL binaries, or E2E_DATABASE_URL to an isolated local test server.');
  if(process.env.E2E_DATABASE_URL&&!['localhost','127.0.0.1','[::1]'].includes(new URL(process.env.E2E_DATABASE_URL).hostname))throw Error('E2E_DATABASE_URL must point to a local test server.');
  await run(contracts,['node_modules/hardhat/internal/cli/cli.js','compile'],{MAINNET_RPC_URL:''});
- for(const name of ['TerritoryBro','TerritoryVault','TerritoryCombat','TerritoryRandomness','NeedsOracle']) {
+ for(const name of ['TerritoryBro','TerritoryVault','TerritoryCombat','TerritoryRandomness','NeedsOracle','TerritoryMatchmaker']) {
    const artifact=JSON.parse(await fs.readFile(path.join(contracts,`artifacts/contracts/territory/${name}.sol/${name}.json`),'utf8'));
    const canonical=JSON.parse(await fs.readFile(path.join(contracts,`abis/territory/${name}.json`),'utf8'));
    assert.deepEqual(artifact.abi,canonical,`Canonical ABI drift for ${name}; run contracts interfaces:sync`);
@@ -49,7 +49,7 @@ try {
  const deployment=JSON.parse(await fs.readFile(path.join(output,'deployment.json'),'utf8'));
  assert.equal(manifest.deploymentId.toLowerCase(),deployment.combat.toLowerCase());
  assert.equal(createHash('sha256').update(stateBody).digest('hex'),manifest.contentHash);
- assert.equal(state.battleBros.length,3);assert.equal(state.challenges[0].status,'EXPIRED');
+ assert.equal(state.battleBros.length,5);assert.equal(state.challenges[0].status,'EXPIRED');
  // Execute the actual frontend adapter and rendering code against the served publication.
  class Element {constructor(){this.children=[];this.textContent='';this.value='';this.hidden=false;} append(...n){this.children.push(...n);}replaceChildren(...n){this.children=n;this.textContent='';}setAttribute(){}addEventListener(){}focus(){}get text(){return this.textContent+this.children.map(n=>n.text||'').join(' ');}}
  const elements=new Map(),el=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "territory-state.schema.json",
-  "title": "BattleBros territory registration publication v3",
+  "title": "BattleBros paired territory publication v4",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -22,11 +22,13 @@
     "projectionVersion",
     "registrations",
     "registrationConfiguration",
-    "scheduledRegistrationConfiguration"
+    "scheduledRegistrationConfiguration",
+    "sidePools",
+    "sideMatches"
   ],
   "properties": {
     "schemaVersion": {
-      "const": 3
+      "const": 4
     },
     "chainId": {
       "type": "string",
@@ -68,7 +70,8 @@
         "vault",
         "randomness",
         "needs",
-        "stETH"
+        "stETH",
+        "matchmaker"
       ],
       "properties": {
         "combat": {
@@ -92,6 +95,10 @@
           "pattern": "^0x[0-9a-fA-F]{40}$"
         },
         "stETH": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{40}$"
+        },
+        "matchmaker": {
           "type": "string",
           "pattern": "^0x[0-9a-fA-F]{40}$"
         }
@@ -645,7 +652,7 @@
       ]
     },
     "projectionVersion": {
-      "const": 4
+      "const": 5
     },
     "registrations": {
       "type": "array",
@@ -726,7 +733,10 @@
                 "xpStakeValue",
                 "power",
                 "capacity",
-                "action"
+                "action",
+                "sideStakeShares",
+                "disposition",
+                "matchId"
               ],
               "properties": {
                 "index": {
@@ -760,6 +770,31 @@
                 "owner": {
                   "type": "string",
                   "pattern": "^0x[0-9a-fA-F]{40}$"
+                },
+                "sideStakeShares": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)$"
+                },
+                "disposition": {
+                  "enum": [
+                    "WAITING",
+                    "TERRITORY",
+                    "ASSIGNED",
+                    "SETTLED",
+                    "BYE",
+                    "EXPIRED"
+                  ]
+                },
+                "matchId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               }
             }
@@ -862,6 +897,148 @@
           "type": "null"
         }
       ]
+    },
+    "sidePools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "poolId",
+          "requestId",
+          "totalEther",
+          "totalShares",
+          "remaining",
+          "waiting",
+          "generated",
+          "settled",
+          "started",
+          "complete"
+        ],
+        "properties": {
+          "poolId": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "requestId": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "totalEther": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "totalShares": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "remaining": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "waiting": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "generated": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "settled": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "started": {
+            "type": "boolean"
+          },
+          "complete": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "sideMatches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pool",
+          "matchId",
+          "indexA",
+          "indexB",
+          "stakeShares",
+          "xpStakeValue",
+          "tokenA",
+          "tokenB",
+          "assignedAt",
+          "status"
+        ],
+        "properties": {
+          "pool": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "matchId": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "indexA": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "indexB": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "stakeShares": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "xpStakeValue": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "tokenA": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "tokenB": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "assignedAt": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "status": {
+            "enum": [
+              "PENDING",
+              "RESOLVED"
+            ]
+          },
+          "winner": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "loser": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "weightA": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "weightB": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "finishedAt": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          }
+        }
+      }
     }
   }
 }

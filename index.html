@@ -4955,7 +4955,7 @@
       <span class="view-thumb" aria-hidden="true">
         <svg viewBox="0 0 32 28" width="36" height="32"><circle cx="16" cy="13" r="3" fill="#cdb98a"/><path d="M14 17h4l-2 8z" fill="#a08454"/><path d="M10 22l6-4 6 4" stroke="#8a6f44" stroke-width="1.5" fill="none"/></svg>
       </span>
-      <span class="view-body"><strong>Walk (first-person home)</strong><em>WASD · mouse · Q tools · Space: jump · esc exits</em></span>
+      <span class="view-body"><strong>Walk (first-person home)</strong><em>WASD · mouse · Space: jump · esc exits</em></span>
     </button>
     <button class="view-option" data-view="fp" data-fp-world="other" role="menuitem">
       <span class="view-thumb" aria-hidden="true">
@@ -5021,6 +5021,9 @@
 
   <!-- World-name popup menu -->
   <div class="world-menu" id="world-menu" hidden role="menu">
+    <div class="world-menu-section">
+      <button class="world-menu-item" id="territory-world-toggle" role="menuitem">Enter Territory World (dev)</button>
+    </div>
     <div class="world-menu-head">
       <input class="world-menu-input" id="world-menu-name" placeholder="Whispering Vale" maxlength="80" aria-label="World name" />
       <button class="world-menu-rename" id="world-menu-rename" data-tooltip="Save name">
@@ -5616,11 +5619,20 @@
     </div>
   </div>
 
+  <div id="bro-encounter-menu" hidden role="dialog" aria-modal="true" aria-labelledby="bro-encounter-question" style="position:fixed;inset:0;z-index:10000;background:#07121a99;place-items:center">
+    <div style="background:#142d42;color:#fff;padding:28px;border:1px solid #92e8ef;border-radius:12px;text-align:center">
+      <p id="bro-encounter-question">Do you want to battle?</p>
+      <button type="button" data-bro-choice="yes" style="padding:10px 28px">Yes</button>
+      <button type="button" data-bro-choice="no" style="padding:10px 28px">No</button>
+    </div>
+  </div>
   <script defer src="assets/character-battle-actions.js"></script>
   <script defer src="assets/battle-arena.js"></script>
   <script src="runtime-config.js"></script>
   <script src="vendor/three/three.r128.min.js"></script>
   <script src="vendor/three/GLTFLoader.r128.js"></script>
+  <script src="assets/battlebro-encounter.js"></script>
+  <script src="assets/territory-world.js"></script>
   <script src="assets/longneck-animation.js"></script>
   <script src="assets/juggernaut-animation.js"></script>
   <script src="assets/monster-animation.js"></script>
@@ -5758,7 +5770,7 @@
   }
 
   function normalizeBattleBrosPublicDocuments(manifest, game, bro, requestedTokenId) {
-    if (manifest.schemaVersion !== 3 || game.schemaVersion !== 3 || game.projectionVersion !== 4 || manifest.projectionVersion !== 4) throw new Error('Unsupported territory publication version.');
+    if (manifest.schemaVersion !== 4 || game.schemaVersion !== 4 || game.projectionVersion !== 5 || manifest.projectionVersion !== 5) throw new Error('Unsupported territory publication version.');
     if (manifest.chainId !== game.chainId || manifest.deploymentId !== game.deploymentId || game.contracts.combat.toLowerCase() !== game.deploymentId.toLowerCase() || JSON.stringify(manifest.snapshot) !== JSON.stringify(game.snapshot)) throw new Error('Territory snapshot identity mismatch.');
     if (!bro || BigInt(bro.tokenId) !== requestedTokenId) throw new Error('BattleBro not found.');
     const lanes = a => ({attack:BigInt(a[0]),defend:BigInt(a[1]),counter:BigInt(a[2])});
@@ -5843,11 +5855,11 @@
     if(!config.manifestUrl)throw new Error('No territory publication is configured.');
     const manifestUrl=new URL(config.manifestUrl,location.href);
     const manifest=await fetchBattleBrosPublicJson(manifestUrl.href,'Manifest');
-    if(manifest.schemaVersion!==3 || manifest.projectionVersion!==4 || !manifest.paths?.gameState)
+    if(manifest.schemaVersion!==4 || manifest.projectionVersion!==5 || !manifest.paths?.gameState)
       throw new Error('Only current territory publications are supported.');
     const gameUrl=new URL(manifest.paths.gameState,manifestUrl);
     const game=await fetchBattleBrosPublicJson(gameUrl.href,'Territory state');
-    if(game.schemaVersion!==3 || game.projectionVersion!==4 || game.chainId!==manifest.chainId
+    if(game.schemaVersion!==4 || game.projectionVersion!==5 || game.chainId!==manifest.chainId
       || game.deploymentId!==manifest.deploymentId || game.contracts?.combat?.toLowerCase()!==manifest.deploymentId.toLowerCase()
       || JSON.stringify(game.snapshot)!==JSON.stringify(manifest.snapshot)
       || !Array.isArray(game.battleBros) || !Array.isArray(game.challenges) || !Array.isArray(game.history))
@@ -5895,6 +5907,10 @@
     const battles=game.challenges.filter(c=>c.attacker!=='0'&&(c.attacker===id||c.defender===id))
       .map(c=>({...c,role:c.attacker===id?'Attack':'Defense',opponent:c.attacker===id?c.defender:c.attacker}))
       .sort((a,b)=>BigInt(a.challengeId)>BigInt(b.challengeId)?-1:1);
+    for(const m of game.sideMatches??[])if(m.tokenA===id||m.tokenB===id){
+      const pool=game.registrations.find(r=>r.registrationId===m.pool),own=pool.entries[m.tokenA===id?m.indexA:m.indexB],other=pool.entries[m.tokenA===id?m.indexB:m.indexA];
+      battles.push({...m,challengeId:m.matchId,location:pool.location,role:'Side',opponent:other.token,action:own.action,power:own.power,defenderAction:other.action,acceptedAt:m.assignedAt});
+    }
     const resolved=battles.filter(c=>c.status==='RESOLVED');
     const wins=resolved.filter(c=>c.winner===id).length;
     return {battles,resolved:resolved.length,wins,losses:resolved.filter(c=>c.loser===id).length,
@@ -5944,12 +5960,13 @@
     for(const [label,value] of rows)stats.append(historyMetric(label,String(value)));content.append(stats);
     for(const registration of (game.registrations??[]).filter(r=>Object.values(r.entries).some(e=>e.token===id)).slice().reverse()){
       const row=document.createElement('p');
-      const disposition=['REGISTERING','PENDING'].includes(registration.status)?'Commitment locked':registration.status==='RESOLVED'&&registration.selectedToken===id?'Selected attacker; commitment consumed':'Commitment released automatically';
+      const entry=Object.values(registration.entries).find(e=>e.token===id);
+      const disposition=({WAITING:'Waiting for pairing; commitment locked',TERRITORY:'Selected territory attacker',ASSIGNED:'Side battle pending; commitment locked',SETTLED:'Battle complete; power consumed',BYE:'Bye; commitment released',EXPIRED:'Expired; commitment released'})[entry.disposition];
       row.textContent='Registration #'+registration.registrationId+' · '+registration.status+' · '+disposition;
       content.append(row);
     }
     const filter=document.createElement('select');filter.setAttribute('aria-label','Filter battle history');
-    for(const [value,label] of [['all','All battles'],['Attack','Attacks initiated'],['Defense','Defenses']]) {
+    for(const [value,label] of [['all','All battles'],['Attack','Attacks initiated'],['Defense','Defenses'],['Side','Side battles']]) {
       const option=document.createElement('option');option.value=value;option.textContent=label;filter.append(option);
     }
     const list=document.createElement('div');list.className='battle-history-list';
@@ -5962,12 +5979,12 @@
         const card=document.createElement('article');card.className='battle-history-card';
         const title=document.createElement('strong');
         const outcome=c.status==='RESOLVED'?(c.winner===id?'Won':c.loser===id?'Lost':'Resolved'):c.status;
-        title.textContent=c.role+' · Challenge #'+c.challengeId+' · '+outcome;
+        title.textContent=c.role+(c.role==='Side'?' · Match #':' · Challenge #')+c.challengeId+' · '+outcome;
         const opponent=document.createElement('button');opponent.className='btn';opponent.textContent='View BattleBro #'+c.opponent;
         opponent.addEventListener('click',()=>showBattleHistory(c.opponent));
         const detail=document.createElement('p');
-        detail.textContent='Location '+c.location+' · Attacker action '+action(c.action)+' · Committed power '+c.power
-          +' · Defender action '+action(c.defenderAction)
+        detail.textContent='Location '+c.location+(c.role==='Side'?' · Your action ':' · Attacker action ')+action(c.action)+' · Committed power '+c.power
+          +(c.role==='Side'?' · Opponent action ':' · Defender action ')+action(c.defenderAction)
           +(c.weights?' · Defense weights '+c.weights.map(v=>formatBattleBrosWeight(BigInt(v))).join(' / '):'')
           +(c.acceptedAt?' · Started '+new Date(Number(c.acceptedAt)*1000).toLocaleString():'')
           +(c.finishedAt?' · Finished '+new Date(Number(c.finishedAt)*1000).toLocaleString():'');
@@ -6456,6 +6473,7 @@
   }
 
   function ghostBoardsEnabledForGrid() {
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return false;
     return ENABLE_GHOST_BOARDS && !!renderAutoExpand && renderBudgetForGrid(GRID).ghostRadius > 0;
   }
 
@@ -8338,6 +8356,7 @@
   }
 
   function addTerraformGreenhouseBox(root, baseY = 0, heightScale = 1, visibleSides = null) {
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return null;
     if (!root) return null;
     const box = new THREE.Group();
     addCropGreenhouseDome(box, visibleSides);
@@ -10142,6 +10161,7 @@
   }
 
   function addCropGreenhouseDome(g, visibleSides = null) {
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return;
     const assets = ensureCropDomeAssets();
     const half = CROP_DOME_SIZE / 2;
     const midY = CROP_DOME_BASE_Y + CROP_DOME_HEIGHT / 2;
@@ -12322,6 +12342,7 @@
   const smokeHouseObjects = new Set();
   const buildingWindowObjects = new Set();
   const plasmaTurretObjects = new Set();
+  const transporterObjects = new Set();
   const buildingWindowBaseMaterials = new Set([M.windowB, M.skyGlass, M.habitatWindow]);
   const cropPositions = new Set();        // 'x,z' strings for home-grid cells whose kind is in CROP_KINDS
   const airCommandPositions = new Set();  // 'x,z' strings for Air Command flight targets
@@ -12331,6 +12352,7 @@
   function registerRuntimeObject(obj) {
     if (!obj || !obj.userData) return;
     const kind = obj.userData.kind;
+    if(kind==='house'&&obj.userData.buildingType==='transporter')transporterObjects.add(obj);
     obj.traverse(o => {
       if (o.name === 'plasmaTurret' && o.userData && o.userData.trackingHead) plasmaTurretObjects.add(o);
     });
@@ -12343,12 +12365,14 @@
 
   function unregisterRuntimeObject(root) {
     if (!root) return;
+    transporterObjects.delete(root);
     animatedCellObjects.delete(root);
     smokeHouseObjects.delete(root);
     buildingWindowObjects.delete(root);
     plasmaTurretObjects.delete(root);
     if (root.traverse) {
       root.traverse(o => {
+        transporterObjects.delete(o);
         animatedCellObjects.delete(o);
         smokeHouseObjects.delete(o);
         buildingWindowObjects.delete(o);
@@ -12471,7 +12495,9 @@
   // objects at startup.
 
   const MAX_FLOORS = 8;
-  const MAX_TERRAIN_FLOORS = 64;
+  // Local development board; never part of authoritative territory state.
+  var territoryWorldState = { active:false, switching:false, home:null, territory:null, cameras:{} };
+  let MAX_TERRAIN_FLOORS = 64;
   let activeEnvironment = 'LUNAR';
   let activeTerrainSeed = 'battlebros';
   const OXYGEN_PLANT_MAX_LEVEL = 6;
@@ -21316,11 +21342,11 @@ function neighborStarVector(edge, index) {
   }
 
   function canMutateActiveColony() {
-    return !neighborInspectionState.active;
+    return !(typeof territoryWorldState !== 'undefined' && territoryWorldState.switching) && !neighborInspectionState.active;
   }
 
   function canPersistActiveColony() {
-    return !neighborInspectionState.active;
+    return !(typeof territoryWorldState !== 'undefined' && territoryWorldState.active) && !neighborInspectionState.active;
   }
 
   function selectedNeighborColonyContext() {
@@ -21384,6 +21410,7 @@ function neighborStarVector(edge, index) {
   }
 
   function enterNeighborInspection() {
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return false;
     if (neighborInspectionState.active) return false;
     const { slot, colony } = selectedNeighborColonyContext();
     const validation = validateNeighborWorldSnapshot(slot, colony);
@@ -21657,6 +21684,7 @@ function neighborStarVector(edge, index) {
   }
 
   function saveActiveControlledLandSnapshot() {
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return controlledLandState.lands.get(activeControlledLandId());
     const id = activeControlledLandId();
     const sourceSlot = id.startsWith('neighbor:')
       ? neighborSlotById.get(id.slice('neighbor:'.length))
@@ -21701,6 +21729,7 @@ function neighborStarVector(edge, index) {
   }
 
   function loadControlledLand(landId, opts = {}) {
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return false;
     const id = landId || HOME_CONTROLLED_LAND_ID;
     ensureHomeControlledLand();
     const land = controlledLandState.lands.get(id);
@@ -23605,7 +23634,8 @@ function neighborStarVector(edge, index) {
 
     ensureHomeTileGeoms();
 
-    const topMat = (terrain === 'stone' && variant === 1) ? M.stoneHi :
+    const topMat = (terrain === 'stone' && variant === 3) ? customMaterial(M.stone, '#343139') :
+                   (terrain === 'stone' && variant === 1) ? M.stoneHi :
                    (terrain === 'stone' && variant === 2) ? M.stoneSoft :
                    (terrain === 'path')  ? M.path :
                    (terrain === 'water') ? M.water :
@@ -23615,7 +23645,7 @@ function neighborStarVector(edge, index) {
                    (terrain === 'sand')  ? M.sand :
                    (terrain === 'snow')  ? (variant === 1 ? customMaterial(M.snow, '#92cfe2') : M.snow) : M.grass;
 
-    const riserMat = terrainRiserMaterial(terrain);
+    const riserMat = terrain === 'stone' && variant === 3 ? customMaterial(M.stone, '#29262f') : terrainRiserMaterial(terrain);
 
     const dirtMesh = new THREE.InstancedMesh(homeTileGeomDirt, riserMat, homeTileCapacity);
     const capGeometry = makeInstancedTerrainCapGeometry(terrain);
@@ -24195,6 +24225,7 @@ function neighborStarVector(edge, index) {
     if (built) updateGhostRenderBubble();
   }
   function ensureGhostBoardsAroundTarget() {
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return;
     syncGhostRenderBudget();
     if (!ghostBoardsEnabledForGrid()) {
       clearPendingGhostBoards();
@@ -24812,9 +24843,10 @@ function neighborStarVector(edge, index) {
       if (homeTileCapacity !== GRID * GRID) initHomeTileInstancing(GRID);
       const instancePos = tilePos(x, z);
       const shadeRoll = cellRand(x, z, 4107);
-      const shadeVariant = cell.terrain === 'snow'
+      let shadeVariant = cell.terrain === 'snow'
         ? (tileLevelForCell(cell) < 24 && shadeRoll < 0.45 ? 1 : 0)
         : shadeRoll < 0.18 ? 1 : (shadeRoll > 0.82 ? 2 : 0);
+      if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active && cell.terrain === 'stone' && x >= GRID/2 && z >= GRID/2) shadeVariant = 3;
       setHomeTileInstance(x, z, cell.terrain, instancePos.x, instancePos.z, terrainRiseAt(x, z), shadeVariant);
       tile.userData.batchedHomeTerrain = true;
     } else if (insideHome) {
@@ -26871,6 +26903,7 @@ function neighborStarVector(edge, index) {
 
   function applyCatalogCellMutation(x, z, opts) {
     if (BATTLEBROS_MIGRATION_MODE) return setCell(x, z, opts);
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return setCell(x, z, opts);
     const beforeCell = cloneCellIntent(getWorldCell(x, z));
     const beforeTotals = catalogCellTotals(beforeCell);
     const previousSuppressSave = suppressSave;
@@ -27363,6 +27396,7 @@ function neighborStarVector(edge, index) {
   }
 
   function setCell(x, z, opts) {
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.switching && setCellMutationAuthority !== 'restore') return false;
     if (terrainConsumeLocks.has(x+','+z) && setCellMutationAuthority !== 'terrain-consume') return false;
     if (neighborInspectionState.active && !neighborInspectionState.applying) return false;
     const { terrain, terrainFloors, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, impactDust = true, forceTile = false, rotationY, offsetX, offsetZ, appearance } = opts;
@@ -28358,6 +28392,7 @@ function neighborStarVector(edge, index) {
     const k = tool.kind;
     if (!k) return null;
     if (k === 'walking-axe') return makeExcavationAxe();
+    if (k === 'walking-raiser') return makeExcavationAxe(true);
     if (k === 'transport-cube') return createTransportCube.createModel(THREE,getBoxGeometry);
     if (k === 'voxel-build') return makeVoxelBuildStamp(tool.voxelBuildId);
     if (k === 'tree')      return makeVoxelTree();
@@ -30181,6 +30216,11 @@ function neighborStarVector(edge, index) {
   // ---------- exploration terrain ----------
   // Stable logical terrain cells retain edits; streamed island groups supply
   // their current world transforms. Only nearby rigid bodies are simulated.
+  // Exploration columns have an independent height range; Home and Territory
+  // retain their own editor limits regardless of the board used to travel here.
+  function explorationTerrainRiseForLevel(level) {
+    return (Math.max(1,Math.min(4096,Number(level)||1))-1)*.20;
+  }
   const explorationTerrain = (() => {
     const SPACING=24, STREAM_RADIUS=2, MAX_DRIFT=2.2, SKY_DRIFT=3.5, STEP=1/30;
     const cells=new Map(), edits=new Map(), sites=new Map(), islands=new Map(), sleeping=new Map(), skyBodies=new Set();
@@ -30333,7 +30373,7 @@ function neighborStarVector(edge, index) {
     // Sky rock includes six additional base layers; its last layer is 0.2 units thick.
     // Offset those layers so generated islands retain their original surface height.
     function columnTop(cell) {
-      return BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(terrainLevelForCell(cell))
+      return BUILDABLE_LAND_Y_OFFSET+TOP_H+explorationTerrainRiseForLevel(terrainLevelForCell(cell))
         -(cell.islandId?.endsWith(':sky')?1.2:0);
     }
     function surfaceY(hit) {
@@ -30649,6 +30689,9 @@ function neighborStarVector(edge, index) {
     fp.vy=0;fp.grounded=true;fp.terrainLift=0;fp.landingTime=0;fp.landingDip=0;
     fpJourney.previous=null;
     resetTransportCube();
+    if(!other&&typeof restoreHomeTransportBattleBro==='function')restoreHomeTransportBattleBro();
+    if(typeof syncFPTools==='function')syncFPTools();
+    if (typeof requestMinimapRepaint === 'function') requestMinimapRepaint();
   }
   function cancelFPWarp() {
     fpJourney.warp=0;
@@ -30657,6 +30700,24 @@ function neighborStarVector(edge, index) {
   function escapeFP() {
     if(!fp.active)return;
     setCameraMode('perspective');
+  }
+  function transporterEntry(root,from,to,eyeHeight) {
+    // Check the swept foot position in the model's own coordinates, so rotation,
+    // offsets, height and user scale match the rendered building (including fast steps).
+    root.updateWorldMatrix(true,false);
+    const local=point=>root.worldToLocal(point.clone().add(new THREE.Vector3(0,-eyeHeight,0)));
+    const a=local(from),b=local(to),bounds={x:[-1.2,1.2],y:[-.12,.93],z:[-1.2,1.2]};
+    if(Object.entries(bounds).every(([axis,[lo,hi]])=>a[axis]>=lo&&a[axis]<=hi))return false;
+    if(Math.hypot(b.x-a.x,b.z-a.z)<.00001)return false;
+    let enter=0,exit=1;
+    for(const [axis,[lo,hi]] of Object.entries(bounds)) {
+      const delta=b[axis]-a[axis];
+      if(Math.abs(delta)<1e-8){if(a[axis]<lo||a[axis]>hi)return false;continue;}
+      const first=(lo-a[axis])/delta,last=(hi-a[axis])/delta;
+      enter=Math.max(enter,Math.min(first,last));exit=Math.min(exit,Math.max(first,last));
+      if(enter>exit)return false;
+    }
+    return true;
   }
   function tickFPJourney(dt) {
     if(!fp.active)return false;
@@ -30681,22 +30742,15 @@ function neighborStarVector(edge, index) {
       return true;
     }
     if(explorationActive)return false;
-    const gate=stargateLayout(),p=tilePos(gate.x,gate.z),sin=Math.sin(gate.yaw),cos=Math.cos(gate.yaw);
-    const dx=fp.pos.x-p.x,dz=fp.pos.z-p.z;
-    const across=dx*cos-dz*sin,depth=dx*sin+dz*cos;
     const previous=fpJourney.previous;
-    fpJourney.previous={across,depth};
-    // A shallow entry volume catches near misses and fast steps from either
-    // side, instead of requiring the player to cross one exact plane.
-    if(previous && Math.min(previous.depth,depth)<=.55 && Math.max(previous.depth,depth)>=-.55
-      && Math.abs(previous.depth-depth)>.00001) {
-      const fraction=Math.max(0,Math.min(1,previous.depth/(previous.depth-depth)));
-      const cross=previous.across+(across-previous.across)*fraction;
-      const radius=gate.diameter/2;
-      const centerY=BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(stargateTerrainLevel(gate.x,gate.z))+radius+.12;
-      if(Math.hypot(cross,fp.pos.y-centerY)<radius+.2) {
-        // Return in front of the ring, clear of its crossing plane.
-        fp.pos.x=p.x+sin*1.4;fp.pos.z=p.z+cos*1.4;
+    fpJourney.previous=fp.pos.clone();
+    if(!previous)return false;
+    for(const root of transporterObjects) {
+      if(!root.parent||!root.visible||root.userData.kind!=='house'||root.userData.buildingType!=='transporter')continue;
+      if(transporterEntry(root,previous,fp.pos,fpEyeHeight())) {
+        // H returns to the last walkable point outside this particular building.
+        // No guessed exit offset that might land off-board or on another floor.
+        fp.pos.copy(previous);
         if(!fpJourney.overlay) {
           const canvas=document.createElement('canvas');canvas.setAttribute('aria-hidden','true');
           canvas.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:10000';
@@ -30711,13 +30765,14 @@ function neighborStarVector(edge, index) {
 
   // ---------- frontend excavation ----------
   // Local terrain edits use the active first-person terrain provider.
+  function fpToolsAvailable(){return fp.active&&explorationActive&&!trainingAppearance.active;}
   const EXCAVATION_GEMS = Object.freeze({
     blue: { label: 'Gems', color: '#62b5ff' },
   });
-  const EXCAVATION_TUNING = Object.freeze({reach:1.8,swingSeconds:.65,impactSeconds:.30,gemChance:.10});
+  const EXCAVATION_TUNING = Object.freeze({reach:1.8,raiseRange:32,shotSpeed:24,swingSeconds:.65,impactSeconds:.30,gemChance:.10,maxTerrainFloors:4096});
   const excavation = { active:false, gems:{blue:0},
     time:0, axe:null, gem:null, equipped:'hands', gemAge:1,
-    swing:null, target:null, fragmentAge:1, fragmentOrigin:null };
+    swing:null, shots:[], target:null, fragmentAge:1, fragmentOrigin:null };
   const excavationHud = document.getElementById('excavation-hud');
   const excavationStatus = document.getElementById('excavation-status');
   function renderExcavationInventory() {
@@ -30728,14 +30783,26 @@ function neighborStarVector(edge, index) {
     return Number.isInteger(x) && Number.isInteger(z) && activeFPTerrain().canExcavate(x,z,islandId);
   }
   function validExcavationCell(x,z,islandId) {
-    return excavationCellIsClear(x,z,islandId) && (terrainLevelForCell(activeFPTerrain().getCell(x,z,islandId))>1 || (explorationActive && islandId?.endsWith(':sky')));
+    return fpToolsAvailable() && excavationCellIsClear(x,z,islandId) && (terrainLevelForCell(activeFPTerrain().getCell(x,z,islandId))>1 || (explorationActive && islandId?.endsWith(':sky')));
   }
-  function makeExcavationAxe() {
+  function validTerrainRaiseCell(x,z,islandId) {
+    const cell=activeFPTerrain().getCell(x,z,islandId);
+    return fpToolsAvailable() && explorationActive && excavationCellIsClear(x,z,islandId)
+      && !!cell && !cell.buildingType && !terrainConsumeLocks.has(x+','+z)
+      && ['grass','dirt','stone','rock','sand','snow','plant'].includes(cell.terrain)
+      && terrainLevelForCell(cell)<EXCAVATION_TUNING.maxTerrainFloors;
+  }
+  function validTerrainToolCell(target) {
+    return !!target && (excavation.equipped==='raiser'
+      ? validTerrainRaiseCell(target.x,target.z,target.islandId)
+      : validExcavationCell(target.x,target.z,target.islandId));
+  }
+  function makeExcavationAxe(raising=false) {
     // Grip pivot at the origin; the head sits above the metal handle at rest.
     const axe=new THREE.Group();
-    const steel=new THREE.MeshStandardMaterial({color:0x9daebc,metalness:.85,roughness:.28});
+    const steel=new THREE.MeshStandardMaterial({color:raising?0xd8ac55:0x9daebc,metalness:.85,roughness:.28});
     const graphite=new THREE.MeshStandardMaterial({color:0x172a39,metalness:.65,roughness:.5});
-    const plasma=new THREE.MeshStandardMaterial({color:0x87faff,emissive:0x20dfff,emissiveIntensity:2,metalness:.25,roughness:.2});
+    const plasma=new THREE.MeshStandardMaterial({color:raising?0xa9ff83:0x87faff,emissive:raising?0x55ee32:0x20dfff,emissiveIntensity:2,metalness:.25,roughness:.2});
     const handle=new THREE.Mesh(new THREE.CylinderGeometry(.022,.028,.46,10),steel);
     handle.name='axe-handle';handle.position.y=.20;axe.add(handle);
     for(let i=0;i<5;i++) {
@@ -30748,11 +30815,22 @@ function neighborStarVector(edge, index) {
     blade.moveTo(-.06,.40);blade.lineTo(.10,.38);blade.lineTo(.20,.43);
     blade.lineTo(.19,.60);blade.lineTo(-.06,.56);blade.closePath();
     const head=new THREE.Mesh(new THREE.ExtrudeGeometry(blade,{depth:.045,bevelEnabled:true,bevelThickness:.005,bevelSize:.005,bevelSegments:1,steps:1}),steel);
-    head.name='axe-blade';head.rotation.y=Math.PI/2;head.position.x=-.0225;axe.add(head);
+    head.name='axe-blade';head.rotation.y=Math.PI/2;head.position.x=-.0225;if(!raising)axe.add(head);
     const edge=new THREE.Shape();
     edge.moveTo(.17,.43);edge.lineTo(.20,.43);edge.lineTo(.19,.60);edge.lineTo(.16,.59);edge.closePath();
     const glow=new THREE.Mesh(new THREE.ExtrudeGeometry(edge,{depth:.052,bevelEnabled:false}),plasma);
-    glow.rotation.y=Math.PI/2;glow.position.x=-.026;axe.add(glow);
+    glow.rotation.y=Math.PI/2;glow.position.x=-.026;if(!raising)axe.add(glow);
+    if(raising){
+      // Broad construction head and bright upward chevrons distinguish this
+      // tool from the thin cyan mining blade, including in its menu thumbnail.
+      const hammer=new THREE.Mesh(getBoxGeometry(.12,.17,.30),steel);
+      hammer.name='terrain-raiser-head';hammer.position.set(0,.49,-.06);axe.add(hammer);
+      for(const side of [-1,1])for(const direction of [-1,1]){
+        const arrow=new THREE.Mesh(getBoxGeometry(.012,.065,.018),plasma);
+        arrow.position.set(side*.067,.50,-.06+direction*.018);
+        arrow.rotation.x=direction*Math.PI/4;axe.add(arrow);
+      }
+    }
     const collar=new THREE.Mesh(getBoxGeometry(.09,.075,.10),graphite);
     collar.position.y=.445;axe.add(collar);
     return axe;
@@ -30760,7 +30838,16 @@ function neighborStarVector(edge, index) {
   function createExcavationVisuals() {
     if (excavation.axe) return;
     const axe=makeExcavationAxe();
-    scene.add(axe);excavation.axe=axe;
+    scene.add(axe);excavation.axe=axe;excavation.miningAxe=axe;
+    excavation.raiser=makeExcavationAxe(true);scene.add(excavation.raiser);
+    excavation.raiser.visible=false;
+    // Match the fly-by bolts, with a green construction charge and a fixed pool.
+    const shotGeometry=new THREE.SphereGeometry(.065,6,5);
+    const shotMaterial=new THREE.MeshBasicMaterial({color:0x91ff73});
+    for(let i=0;i<8;i++){
+      const mesh=new THREE.Mesh(shotGeometry,shotMaterial);mesh.visible=false;scene.add(mesh);
+      excavation.shots.push({mesh,direction:new THREE.Vector3(),remaining:0,active:false});
+    }
     excavation.axeEdge=new THREE.Vector3(0,.43,-.20);
     excavation.edgeOffset=new THREE.Vector3();excavation.contactPose=new THREE.Vector3();
     excavation.pose=new THREE.Vector3();excavation.rotation=new THREE.Quaternion();excavation.euler=new THREE.Euler(0,0,0,'YXZ');
@@ -30776,23 +30863,28 @@ function neighborStarVector(edge, index) {
   }
   function leaveExcavation() {
     excavation.active=false; excavation.swing=null; excavation.target=null;
+    resetTerrainRaiseShots();
     excavationHud.hidden=true; document.getElementById('excavation-reticle').hidden=true;
-    for (const name of ['axe','gem','marker','fragments']) if(excavation[name])excavation[name].visible=false;
+    for (const name of ['axe','miningAxe','raiser','gem','marker','fragments']) if(excavation[name])excavation[name].visible=false;
   }
   function equipExcavationTool(tool) {
-    if(!FP_TOOLS.some(option=>option.id===tool))return;
-    excavation.equipped=tool; excavation.swing=null;
+    if(!FP_TOOLS.some(option=>option.id===tool)||(tool!=='hands'&&!fpToolsAvailable()))return;
+    excavation.equipped=tool; excavation.swing=null;resetTerrainRaiseShots();
     document.getElementById('fp-equipped-tool-label').textContent=tool==='transport-cube'
-      ?'Transport cube equipped':'Axe equipped · 10% gem chance per broken layer';
-    if(tool==='axe' && fp.active && canMutateActiveColony() && !battleArenaView.active){
-      createExcavationVisuals();excavation.active=true;excavationHud.hidden=false;
+      ?'Transport cube equipped':tool==='raiser'?'Terrain raiser equipped · Aim and click to fire a terrain charge':'Axe equipped · 10% gem chance per broken layer';
+    if((tool==='axe'||tool==='raiser') && fp.active && canMutateActiveColony() && !battleArenaView.active){
+      createExcavationVisuals();
+      excavation.miningAxe.visible=false;excavation.raiser.visible=false;
+      excavation.axe=tool==='raiser'?excavation.raiser:excavation.miningAxe;
+      excavation.gemAge=2;excavation.gem.visible=false;
+      excavation.active=true;excavationHud.hidden=false;
       excavation.axe.visible=true;
       document.getElementById('excavation-reticle').hidden=false;
     }else leaveExcavation();
     for(const button of document.querySelectorAll('#fp-tool-menu button'))
       button.setAttribute('aria-pressed',String(button.dataset.tool===excavation.equipped));
   }
-  const FP_TOOLS=Object.freeze([{id:'hands',label:'None',key:'0'},{id:'axe',label:'Axe',key:'1',kind:'walking-axe',thumbnailOnly:true},{id:'transport-cube',label:'Transport cube',key:'2',kind:'transport-cube',thumbnailOnly:true,thumbnailScale:.7}]);
+  const FP_TOOLS=Object.freeze([{id:'hands',label:'None',key:'0'},{id:'axe',label:'Axe',key:'1',kind:'walking-axe',thumbnailOnly:true},{id:'transport-cube',label:'Transport cube',key:'2',kind:'transport-cube',thumbnailOnly:true,thumbnailScale:.7},{id:'raiser',label:'Terrain raiser',key:'3',kind:'walking-raiser',thumbnailOnly:true}]);
   const fpToolMenu=document.getElementById('fp-tool-menu');
   const fpToolsToggle=document.getElementById('fp-tools-toggle');
   for(const tool of FP_TOOLS){
@@ -30809,7 +30901,7 @@ function neighborStarVector(edge, index) {
     document.getElementById('fp-tool-options').appendChild(button);
   }
   function toggleFPToolMenu(open=fpToolMenu.hidden){
-    if(!fp.active)return;
+    if(!fpToolsAvailable())return;
     fpToolMenu.hidden=!open;fpToolsToggle.setAttribute('aria-expanded',String(open));
     fpKeys.clear();
     excavation.swing=null;
@@ -30825,6 +30917,15 @@ function neighborStarVector(edge, index) {
     }
   }
   fpToolsToggle.addEventListener('click',()=>toggleFPToolMenu(fpToolMenu.hidden));
+  function syncFPTools(){
+    const available=fpToolsAvailable();
+    document.getElementById('fp-tools').hidden=!available;
+    if(!available){
+      fpToolMenu.hidden=true;fpToolsToggle.setAttribute('aria-expanded','false');
+      equipExcavationTool('hands');
+    }
+  }
+
   function excavationWithinReach(target) {
     return fp.grounded && Math.hypot(fp.pos.x-target.wx,fp.pos.z-target.wz)<=EXCAVATION_TUNING.reach
       && Math.abs(fp.pos.y-fpEyeHeight()-target.y)<=.85;
@@ -30832,17 +30933,23 @@ function neighborStarVector(edge, index) {
   // Bounded ray/column intersections query the active terrain, including base
   // cells as occluders. No full-world mesh scan is needed.
   function pickExcavationTarget() {
-    if(!excavation.active || !fp.grounded)return null;
+    const raising=excavation.equipped==='raiser';
+    if(!fpToolsAvailable() || !excavation.active || (!raising&&!fp.grounded))return null;
     persCam.getWorldDirection(excavation.aimDirection);
-    if(excavation.aimDirection.y>=-.04)return null;
-    const ray=excavation.aimRay; ray.set(persCam.position,excavation.aimDirection);
+    if(!raising&&excavation.aimDirection.y>=-.04)return null;
+    const target=raycastTerrainTool(persCam.position,excavation.aimDirection,
+      raising?EXCAVATION_TUNING.raiseRange:EXCAVATION_TUNING.reach+1);
+    return target && (raising || excavationWithinReach(target)) ? target : null;
+  }
+  function raycastTerrainTool(origin,direction,range) {
+    const ray=excavation.aimRay;ray.set(origin,direction);
     const terrain=activeFPTerrain();
-    const radius=Math.ceil(EXCAVATION_TUNING.reach)+1;
+    const radius=Math.ceil(range)+1;
     let columns;
-    if(terrain.nearbyColumns)columns=terrain.nearbyColumns(fp.pos.x,fp.pos.z,radius);
+    if(terrain.nearbyColumns)columns=terrain.nearbyColumns(origin.x,origin.z,radius);
     else {
       columns=[];
-      const {x:gx,z:gz}=terrain.worldToCell(fp.pos.x,fp.pos.z);
+      const {x:gx,z:gz}=terrain.worldToCell(origin.x,origin.z);
       for(let x=gx-radius;x<=gx+radius;x++)for(let z=gz-radius;z<=gz+radius;z++) {
         const cell=terrain.getCell(x,z);if(!cell)continue;
         const {x:wx,z:wz}=terrain.cellToWorld(x,z);
@@ -30854,12 +30961,12 @@ function neighborStarVector(edge, index) {
       excavation.aimBox.min.set(wx-.5,minY,wz-.5);
       excavation.aimBox.max.set(wx+.5,y+(cell.kind || cell.extras?.length ? Math.max(.3,(cell.floors||1)*.2) : 0),wz+.5);
       if(!ray.intersectBox(excavation.aimBox,excavation.aimPoint))continue;
-      const distance=excavation.aimPoint.distanceToSquared(persCam.position);
-      if(distance>=nearest)continue;
+      const distance=excavation.aimPoint.distanceToSquared(origin);
+      if(distance>=nearest || distance>range*range)continue;
       nearest=distance;
       target={x,z,islandId,wx,wz,y,level:terrainLevelForCell(cell),cell,point:excavation.aimPoint.clone()};
     }
-    return target && excavationWithinReach(target) ? target : null;
+    return target;
   }
   function rollExcavationGem(target) {
     if(Math.random()>=EXCAVATION_TUNING.gemChance)return null;
@@ -30872,37 +30979,80 @@ function neighborStarVector(edge, index) {
     return type;
   }
   function startExcavationSwing() {
-    if(!excavation.active || excavation.equipped!=='axe' || excavation.swing || !canMutateActiveColony())return false;
+    if(!fpToolsAvailable() || !excavation.active || !['axe','raiser'].includes(excavation.equipped) || excavation.swing || !canMutateActiveColony())return false;
     const target=pickExcavationTarget();
-    const contact=target ? target.point.clone() : new THREE.Vector3(0,-.38,-.90).applyQuaternion(persCam.quaternion).add(persCam.position);
-    excavation.swing={target,contact,age:0,impacted:false};
+    const contact=target && excavation.equipped!=='raiser' ? target.point.clone() : (excavation.equipped==='raiser'?new THREE.Vector3(.18,-.08,-.25):new THREE.Vector3(0,-.38,-.90)).applyQuaternion(persCam.quaternion).add(persCam.position);
+    excavation.swing={target,contact,tool:excavation.equipped,direction:persCam.getWorldDirection(new THREE.Vector3()),age:0,impacted:false};
     playSfx('whoosh',.5); return true;
   }
-  function impactExcavationSwing(swing) {
+  function impactExcavationSwing(swing,projectile=false) {
     const target=swing.target;
     if(!target)return false;
     const terrain=activeFPTerrain(),cell=terrain.getCell(target.x,target.z,target.islandId);
-    const aimed=pickExcavationTarget();
-    if(!excavation.active || !canMutateActiveColony() || !validExcavationCell(target.x,target.z,target.islandId)
-      || cell!==target.cell || terrainLevelForCell(cell)!==target.level || !excavationWithinReach(target)
-      || !aimed || aimed.x!==target.x || aimed.z!==target.z || aimed.islandId!==target.islandId)return false;
-    // Same layer operation as the trash tool, without its unrelated resource refund.
-    const result=terrain.setCell(target.x,target.z,{...cell,terrainFloors:target.level-1,userEdited:true},target.islandId);
+    const aimed=projectile?target:pickExcavationTarget();
+    if(!fpToolsAvailable() || !excavation.active || swing.tool!==excavation.equipped || !canMutateActiveColony() || !validTerrainToolCell(target)
+      || cell!==target.cell || terrainLevelForCell(cell)!==target.level || (!projectile&&!excavationWithinReach(target))
+      || !aimed || aimed.x!==target.x || aimed.z!==target.z || aimed.islandId!==target.islandId || (!projectile&&!excavationWithinReach(aimed)))return false;
+    const raising=excavation.equipped==='raiser', nextLevel=target.level+(raising?1:-1);
+    if(raising){
+      const nextTop=aimed.y+.20;
+      const ceiling=terrain.ceilingYAt?.(aimed.wx,aimed.wz,aimed.y+.001)??Infinity;
+      if(nextTop>ceiling-1e-6)return false;
+      const underfoot=Math.abs(fp.pos.x-aimed.wx)<=.5 && Math.abs(fp.pos.z-aimed.wz)<=.5;
+      if(underfoot){
+        const headCeiling=terrain.ceilingYAt?.(fp.pos.x,fp.pos.z,fp.pos.y+.12)??Infinity;
+        if(nextTop+fpEyeHeight()+.12>headCeiling-1e-6)return false;
+      }
+    }
+    const result=terrain.setCell(target.x,target.z,{...cell,terrainFloors:nextLevel,userEdited:true},target.islandId);
     const remaining=terrain.getCell(target.x,target.z,target.islandId);
-    if(result===false || (target.level===1 ? remaining!==null : terrainLevelForCell(remaining)!==target.level-1))return false;
+    if(result===false || (!raising && target.level===1 ? remaining!==null : terrainLevelForCell(remaining)!==nextLevel))return false;
     playSfx('knock',.7);
     excavation.fragmentAge=0; excavation.fragmentOrigin={wx:target.wx,wz:target.wz,y:target.y};
     excavation.fragments.material.color.copy(terrainVoxelMaterials(cell.terrain).low.color);
-    const gem=rollExcavationGem(target);
-    excavationStatus.textContent=gem?'Blue gem collected!':'Layer broken · Keep digging for gems';
+    const gem=raising?null:rollExcavationGem(target);
+    excavationStatus.textContent=raising?'Terrain raised one layer':gem?'Blue gem collected!':'Layer broken · Keep digging for gems';
     return true;
   }
+  function resetTerrainRaiseShots() {
+    for(const shot of excavation.shots){shot.active=false;shot.mesh.visible=false;}
+  }
+  function fireTerrainRaiseShot(swing) {
+    const shot=excavation.shots.find(shot=>!shot.active);if(!shot)return false;
+    // The local swing fires from the head, without reaching toward distant land.
+    updateExcavationAxePose();
+    shot.mesh.position.copy(excavation.axeEdge).applyQuaternion(excavation.axe.quaternion).add(excavation.axe.position);
+    if(swing.target)shot.direction.copy(swing.target.point).sub(shot.mesh.position).normalize();
+    else shot.direction.copy(swing.direction);
+    shot.remaining=EXCAVATION_TUNING.raiseRange;shot.active=true;shot.mesh.visible=true;
+    playSfx('ripple',.4);return true;
+  }
+  function tickTerrainRaiseShots(dt) {
+    for(const shot of excavation.shots){
+      if(!shot.active)continue;
+      const step=Math.min(shot.remaining,EXCAVATION_TUNING.shotSpeed*dt);
+      // Sweep the whole segment so fast bolts cannot skip thin land or cover.
+      const target=raycastTerrainTool(shot.mesh.position,shot.direction,step);
+      if(target){
+        shot.mesh.position.copy(target.point);shot.active=false;shot.mesh.visible=false;
+        impactExcavationSwing({target,tool:'raiser'},true);
+      }else{
+        shot.mesh.position.addScaledVector(shot.direction,step);shot.remaining-=step;
+        if(shot.remaining<=0){shot.active=false;shot.mesh.visible=false;}
+      }
+    }
+  }
   function tickExcavationSwing(dt) {
+    if(!fpToolsAvailable() || !excavation.active || !canMutateActiveColony() || battleArenaView.active){excavation.swing=null;resetTerrainRaiseShots();return;}
+    tickTerrainRaiseShots(dt);
     const swing=excavation.swing; if(!swing)return;
     swing.age+=dt;
     if(!swing.impacted && swing.age>=EXCAVATION_TUNING.impactSeconds) {
       swing.impacted=true;
-      if(!impactExcavationSwing(swing))playSfx('ripple',.4);
+      if(swing.tool==='raiser'){
+        fireTerrainRaiseShot(swing);
+        tickTerrainRaiseShots(Math.max(0,swing.age-EXCAVATION_TUNING.impactSeconds));
+      }else if(!impactExcavationSwing(swing))playSfx('ripple',.4);
     }
     if(swing.age>=EXCAVATION_TUNING.swingSeconds)excavation.swing=null;
   }
@@ -30933,6 +31083,7 @@ function neighborStarVector(edge, index) {
     excavation.axe.position.copy(pose);excavation.axe.quaternion.copy(excavation.rotation);
   }
   renderer.domElement.addEventListener('pointerdown',e=>{
+    if(!fpToolsAvailable())return;
     if(fp.active&&excavation.equipped==='transport-cube'&&fpToolMenu.hidden&&e.button===0){
       e.preventDefault();e.stopImmediatePropagation();throwTransportCube();return;
     }
@@ -30940,7 +31091,7 @@ function neighborStarVector(edge, index) {
     e.preventDefault();e.stopImmediatePropagation();startExcavationSwing();
   },true);
   window.addEventListener('keydown',e=>{
-    if(!fp.active || e.ctrlKey || e.metaKey || e.altKey)return;
+    if(!fpToolsAvailable() || e.ctrlKey || e.metaKey || e.altKey)return;
     const key=e.key?.toLowerCase();
     const toggle=e.code==='KeyQ' || key==='q';
     const tool=FP_TOOLS.find(tool=>e.code===`Digit${tool.key}` || key===tool.key);
@@ -30969,11 +31120,11 @@ function neighborStarVector(edge, index) {
   document.addEventListener('visibilitychange',()=>{if(document.hidden)excavation.swing=null;});
   function tickExcavation(dt) {
     if(!excavation.active)return;
-    if(!fp.active || !canMutateActiveColony() || battleArenaView.active){leaveExcavation();return;}
+    if(!fpToolsAvailable() || !canMutateActiveColony() || battleArenaView.active){leaveExcavation();return;}
     excavation.time+=dt;
     tickExcavationSwing(dt);
     excavation.target=pickExcavationTarget();
-    const target=excavation.target, removable=target && validExcavationCell(target.x,target.z,target.islandId);
+    const target=excavation.target, removable=validTerrainToolCell(target);
     excavation.marker.visible=!!target;
     if(target){excavation.marker.position.set(target.wx,target.y+.014,target.wz);excavation.marker.material.color.setHex(removable?0xffd580:0xcc6666);}
     const swing=excavation.swing;
@@ -30993,7 +31144,9 @@ function neighborStarVector(edge, index) {
     excavation.gemAge+=dt;
     excavation.gem.visible=excavation.gemAge<1.5;
     if(excavation.gem.visible){excavation.gem.position.y+=dt*.15;excavation.gem.rotation.y+=dt*3;}
-    if(!swing && excavation.gemAge>=1.5)excavationStatus.textContent=removable?'Click to break a terrain layer'
+    if(!swing && excavation.gemAge>=1.5)excavationStatus.textContent=excavation.equipped==='raiser'
+      ?removable?'Click to fire · Land hit grows one layer':target?.level>=EXCAVATION_TUNING.maxTerrainFloors?'Maximum terrain height reached':target?'Protected terrain · Cannot raise here':'Aim at land within 32 squares and click to fire'
+      :removable?'Click to break a terrain layer'
       :target?.level===1?'Base layer · Cannot dig deeper'
       :target?'Protected cell · Axe will not break terrain':'Aim at raised terrain to dig';
     markCameraMoving();
@@ -31012,8 +31165,66 @@ function neighborStarVector(edge, index) {
   // the BattleBros grid:
   //   - ground height comes from the active first-person terrain provider.
   //   - props remain non-colliding, as in the existing first-person mode.
-  const FP_EYE_H = 0.6;          // other-world eye height above terrain
-  const FP_HOME_EYE_H = 0.3;
+  const broEncounterMenu=document.getElementById('bro-encounter-menu');
+  const broEncounter=BattleBroEncounter.create({
+    enabled:()=>fp.active&&explorationActive&&!trainingAppearance.active,
+    player:()=>transportCubeController&&['deployed','returning'].includes(transportCubeController.phase)
+      ?transportCube.root?.userData.transportActor:null,
+    npcs:()=>[...explorationResidents.values()],
+    available:actor=>!!actor?.root.parent&&actor.root.visible&&!!actor.motion
+      &&!actor.root.userData.characterJumping&&!actor.root.userData.rockThrow&&!actor.root.userData.terrainConsume,
+    controller:actor=>actor.character==='specter'?ensureSpecterAnimation(actor.mover)
+      :actor.character==='longneck'?ensureLongneckAnimation(actor.mover):ensureSupportAnimation(actor.mover),
+    expressionName:actor=>({name:actor.root.userData.slots?.face?.userData.expression?.name||'neutral',
+      cycle:actor.root.userData.expressionCycleEnabled}),
+    expression:(actor,value,immediate=false)=>{
+      setBattleBroExpression(actor.root,typeof value==='string'?value:value.name,{automatic:true,immediate});
+      if(typeof value==='string')actor.root.userData.expressionCycleEnabled=false;
+      else if(value.cycle===undefined)delete actor.root.userData.expressionCycleEnabled;
+      else actor.root.userData.expressionCycleEnabled=value.cycle;
+    },
+    tickExpression:(actor,dt)=>tickBattleBroExpression(actor.root,dt),
+    carry:(actor,controller,t)=>{
+      actor.terrainTime=t;
+      const motion=actor.motion,point=explorationTerrain.cellToWorld(actor.x,actor.z,actor.islandId);
+      const delta=new THREE.Vector3(point.x-motion.pointX,0,point.z-motion.pointZ);
+      actor.root.position.add(delta);controller.carry(delta);motion.pointX=point.x;motion.pointZ=point.z;
+      return !!residentSupport(actor);
+    },
+    canTurn:(actor,yaw)=>{
+      const root=actor.root,shape=battleBroTerrain.profile(root);
+      return !!battleBroTerrain.stand(explorationTerrain,shape,root.position.x,root.position.z,yaw,
+        root.position.y+shape.step,actor.islandId)
+        &&!residentBodyOccupied(root,root.position.x,root.position.y,root.position.z,actor);
+    },
+    menu:show=>{
+      fpKeys.clear();
+      broEncounterMenu.hidden=!show;broEncounterMenu.style.display=show?'grid':'none';
+      if(show){
+        fpKeys.clear();
+        document.exitPointerLock?.();
+        broEncounterMenu.querySelector('button').focus();
+      }
+    }
+  });
+  // Both choices share cleanup; the choice remains an explicit future battle handoff.
+  function chooseBroEncounter(choice){
+    broEncounter.end(choice);
+    if(fp.active){const lock=renderer.domElement.requestPointerLock?.();lock?.catch?.(()=>{});}
+  }
+  broEncounterMenu.addEventListener('click',event=>{
+    const choice=event.target.dataset.broChoice;if(choice)chooseBroEncounter(choice);
+  });
+  broEncounterMenu.addEventListener('keydown',event=>{
+    if(event.key==='Escape'){event.preventDefault();event.stopPropagation();chooseBroEncounter('no');}
+    if(event.key==='Tab'){
+      const buttons=[...broEncounterMenu.querySelectorAll('button')];
+      event.preventDefault();buttons[(buttons.indexOf(document.activeElement)+1)%buttons.length].focus();
+    }
+  });
+
+  const FP_EYE_H = 0.6;          // shared Home, Territory and Other World eye height
+  const FP_HOME_EYE_H = FP_EYE_H;
   function fpEyeHeight() { return explorationActive ? FP_EYE_H : FP_HOME_EYE_H; }
   const FP_SPEED = 1.4;          // units / sec
   const FP_SPRINT_MULT = 2.2;
@@ -31230,6 +31441,7 @@ function neighborStarVector(edge, index) {
     motion.pause=mover.idleRemaining;
   }
   function tickExplorationResidentMotion(actor,t,dt) {
+    if(actor.encounter)return;
     actor.terrainTime=t;
     if(actor.character==='juggernaut')return tickJuggernautResidentMotion(actor,t,dt);
     if(actor.character==='monsters')return tickSupportResidentMotion(actor,t,dt);
@@ -31314,6 +31526,7 @@ function neighborStarVector(edge, index) {
   }
 
   function removeExplorationResident(id,actor) {
+    if(typeof broEncounter!=='undefined')broEncounter.cancel(actor);
     const field=actor.root.userData.looseRocks?.orbitField;
     actor.root.parent?.remove(actor.root);
     if(field)disposeGroup(field);
@@ -31387,12 +31600,25 @@ function neighborStarVector(edge, index) {
   // ---------- transport cube ----------
   // A single selected-character deployment. No follow targets or recovery teleports.
   let transportCubeController=null;
+  let transportHomePlacement=null;
   const transportCube={get root(){return transportCubeController?.root||null;}};
   function resetTransportCube(store=true){
-    // Initialize before travel, even if the cube has never been equipped.
+    // Travel packs the same selected instance even though tools are unavailable at home.
+    const homeRoot=store&&!explorationActive&&baseBattleBroPrototype?.parent===worldGroup?baseBattleBroPrototype:null;
+    if(homeRoot)transportHomePlacement={root:homeRoot,position:homeRoot.position.clone(),yaw:homeRoot.rotation.y};
     ensureTransportCube().suspend(store);
+    if(homeRoot?.parent){pauseTransportBattleBro(homeRoot);homeRoot.parent.remove(homeRoot);}
+  }
+  function restoreHomeTransportBattleBro(){
+    const saved=transportHomePlacement;transportHomePlacement=null;
+    if(!saved||explorationActive||saved.root!==baseBattleBroPrototype)return;
+    const root=saved.root,ground=activeFPTerrain().groundYAt(saved.position.x,saved.position.z,0);
+    if(!Number.isFinite(ground))return;
+    root.position.copy(saved.position);root.position.y=ground+(battleBroFamily(root)==='specter'?SPECTER_HOVER_CLEARANCE:0);
+    root.rotation.y=saved.yaw;worldGroup.add(root);bindTransportBattleBro(root);
   }
   function pauseTransportBattleBro(root){
+    if(typeof broEncounter!=='undefined')broEncounter.resetDeployment(root);
     for(const movers of [lavaMonsterMovers,minotaurMovers,specterMovers]){
       for(const mover of movers)if(mover.root===root){
         finishScenerySmash(mover);
@@ -31484,7 +31710,7 @@ function neighborStarVector(edge, index) {
     if(transportCubeController)return transportCubeController;
     transportCubeController=createTransportCube(THREE,{
       scene,camera:persCam,box:getBoxGeometry,
-      active:()=>fp.active&&!trainingAppearance.active,
+      active:fpToolsAvailable,
       equipped:()=>excavation.equipped==='transport-cube',source:()=>baseBattleBroPrototype,
       hand:out=>out.set(.28,-.22,-.55).applyQuaternion(persCam.quaternion).add(persCam.position),
       direction:out=>persCam.getWorldDirection(out),yaw:()=>fp.yaw,
@@ -31501,18 +31727,19 @@ function neighborStarVector(edge, index) {
       visual:root=>{const field=root.userData.looseRocks?.orbitField;
         if(field){field.position.copy(root.position);field.scale.copy(root.scale);field.visible=root.visible;}},
       release:root=>{pauseTransportBattleBro(root);root.parent?.remove(root);},
-      status:message=>{if(excavation.equipped==='transport-cube'){excavationStatus.textContent=message;excavationHud.hidden=false;}}
+      status:message=>{if(fpToolsAvailable()&&excavation.equipped==='transport-cube'){excavationStatus.textContent=message;excavationHud.hidden=false;}}
     });
     return transportCubeController;
   }
   function throwTransportCube(){
-    if(!fp.active||trainingAppearance.active)return false;
+    if(!fpToolsAvailable())return false;
     if(!baseBattleBroPrototype){excavationStatus.textContent='Choose your BattleBro at home first';excavationHud.hidden=false;return false;}
     return ensureTransportCube().throw();
   }
   let transportMinimapUpdatedAt = -Infinity;
   let transportMinimapHadBro = false;
   function tickTransportCube(t,dt){
+    if(!fpToolsAvailable()){if(transportCubeController)transportCubeController.cube.visible=false;return;}
     if(excavation.equipped==='transport-cube'&&fp.active){
       ensureTransportCube();
     }
@@ -31601,7 +31828,7 @@ function neighborStarVector(edge, index) {
     persCam.near = FP_NEAR;
     persCam.updateProjectionMatrix();
     document.body.classList.add('fp-active');
-    document.getElementById('fp-tools').hidden=false;
+    if(typeof syncFPTools==='function')syncFPTools();
     if (renderer.domElement.requestPointerLock) {
       try { renderer.domElement.requestPointerLock(); } catch (_) {}
     }
@@ -31618,6 +31845,7 @@ function neighborStarVector(edge, index) {
     resetTransportCube(explorationActive);
     fp.active = false;
     activeFPTerrain().deactivate();
+    if(typeof restoreHomeTransportBattleBro==='function')restoreHomeTransportBattleBro();
     fpKeys.clear();
     persCam.fov = PERS_FOV_DEFAULT;
     persCam.near = PERS_NEAR_DEFAULT;
@@ -31629,7 +31857,7 @@ function neighborStarVector(edge, index) {
   }
   document.addEventListener('pointerlockchange', () => {
     if (typeof trainingAppearance!=='undefined' && trainingAppearance.active) return;
-    if (!document.pointerLockElement && fp.active && !fpToolMenu.hidden) return;
+    if (!document.pointerLockElement && fp.active && (!fpToolMenu.hidden || (typeof broEncounterMenu!=='undefined'&&!broEncounterMenu.hidden))) return;
     if (!document.pointerLockElement && fp.active) {
       escapeFP();
     } else if (!document.pointerLockElement && flight.active) {
@@ -31650,6 +31878,7 @@ function neighborStarVector(edge, index) {
   });
   window.addEventListener('keydown', e => {
     if (!fp.active) return;
+    if(typeof broEncounterMenu!=='undefined'&&!broEncounterMenu.hidden)return;
     if (e.key === 'Escape') { if(e.repeat)return; escapeFP(); return; }
     if(e.code==='KeyH' && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if(!e.repeat && explorationActive) {
@@ -31721,8 +31950,8 @@ function neighborStarVector(edge, index) {
     // Keep this visual offset out of fp.pos so stepping, falling and jumping
     // retain their existing rules.
     let liftTarget = 0;
-    const liftMax=explorationActive?FP_TERRAIN_LIFT_MAX:FP_TERRAIN_LIFT_MAX*.5;
-    const lookahead=explorationActive?FP_TERRAIN_LOOKAHEAD:FP_TERRAIN_LOOKAHEAD*.75;
+    const liftMax=FP_TERRAIN_LIFT_MAX;
+    const lookahead=FP_TERRAIN_LOOKAHEAD;
     if (fp.grounded) {
       const aheadX = len > 0 ? fx / len : -sinY;
       const aheadZ = len > 0 ? fz / len : -cosY;
@@ -31809,7 +32038,11 @@ function neighborStarVector(edge, index) {
   }
 
   function flightTerrainMinY(worldX, worldZ) {
-    return fpGroundYAt(worldX, worldZ) - fpEyeHeight() + FLIGHT_MIN_TERRAIN_CLEARANCE;
+    // Walking uses Infinity beyond the board as a wall. Flight must cross that
+    // edge, keeping a finite clearance over empty space and real terrain alike.
+    const ground = homeFPTerrain.groundYAt(worldX, worldZ);
+    const surface = Number.isFinite(ground) ? ground : BUILDABLE_LAND_Y_OFFSET + TOP_H;
+    return surface + FLIGHT_MIN_TERRAIN_CLEARANCE;
   }
 
   function sortedAirCommandCells() {
@@ -32145,6 +32378,7 @@ function neighborStarVector(edge, index) {
   }
 
   function doReset() {
+    if (typeof territoryWorldState !== 'undefined' && (territoryWorldState.active || territoryWorldState.switching)) return;
     hasUserPanned = false;
     clearVehicleRuntime();
     doClear();
@@ -32231,6 +32465,7 @@ function neighborStarVector(edge, index) {
     });
   })();
   function doClear() {
+    if (typeof territoryWorldState !== 'undefined' && (territoryWorldState.active || territoryWorldState.switching)) return;
     if (typeof playSfx === 'function') playSfx('whoosh');
     clearVehicleRuntime();
     if (useWindowedHomeRendering()) {
@@ -36278,9 +36513,10 @@ function neighborStarVector(edge, index) {
     tickSquashAnims(dt);
     if (rippleAnims.length) tickRippleAnims(dt);
     const inTrainingAppearance=tickTrainingAppearance(dt,t);
-    if (fp.active && !inTrainingAppearance) {if(!tickFPJourney(dt))tickFP(dt);}
+    if (fp.active && !inTrainingAppearance) {if(broEncounterMenu.hidden&&!tickFPJourney(dt))tickFP(dt);}
     tickTransportCube(t,dt);
     tickExplorationResidents(t,dt);
+    broEncounter.tick(t,dt);
     tickExcavation(dt);
     if (flight.active) tickFlightMode(dt);
     if (typeof window.__showcaseTick === 'function') window.__showcaseTick(dt);
@@ -37234,6 +37470,7 @@ function neighborStarVector(edge, index) {
       mountainRadius: size * .42 };
   }
   function trainingFacilityOccupiesCell(x, z, size = GRID) {
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return false;
     const layout = trainingFacilityLayout(size);
     const dx = x - layout.x, dz = z - layout.z;
     const across = (dx - dz) * Math.SQRT1_2;
@@ -37256,6 +37493,7 @@ function neighborStarVector(edge, index) {
       diameter: 1.48 * TRAINING_FACILITY_SCALE * 2 / 3 * 1.15 };
   }
   function stargateTerrainLevel(x, z, size = GRID) {
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return BattleBrosTerritoryWorld.portalTerrainLevel(x,z);
     const gate = stargateLayout(size);
     const distance = Math.max(Math.abs(x - gate.x), Math.abs(z - gate.z));
     return distance <= 3 ? 7 : distance <= 4 ? 6 : distance <= 5 ? 5 : distance <= 6 ? 4 : distance <= 7 ? 3 : 0;
@@ -37406,6 +37644,8 @@ function neighborStarVector(edge, index) {
       trainingFacility.parent?.remove(trainingFacility);
       disposeGroup(trainingFacility);
     }
+    trainingFacility = null;
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return;
     const layout = trainingFacilityLayout(GRID);
     const root = new THREE.Group();
     root.name = 'permanentTrainingFacility';
@@ -37434,79 +37674,19 @@ function neighborStarVector(edge, index) {
     trainingFacility = root;
   }
 
-  // Permanent home-world portal. Shared materials use the existing shield clock.
+  // Keep the legacy corner layout/reservation contracts; its permanent portal
+  // now shares the exact model and entry behavior of player-built transporters.
   let stargateLandmark = null;
-  function makeStargate(diameter) {
-    const root = new THREE.Group();
-    root.name = 'dimensionalStargate';
-    const radius = diameter / 2, tube = .22, centerY = radius + .12;
-    const cached = (key, create) => {
-      if (!geomCache.has(key)) {
-        const geometry = create(); geometry.userData.cached = true; geomCache.set(key, geometry);
-      }
-      return geomCache.get(key);
-    };
-    const ring = (name, r, thickness, z, material) => {
-      const geometry = cached('stargate-ring|'+r+'|'+thickness,()=>new THREE.TorusGeometry(r,thickness,12,80));
-      const mesh = new THREE.Mesh(geometry,material);
-      mesh.name=name; mesh.position.set(0,centerY,z);root.add(mesh);
-    };
-    ring('gate-shell',radius-tube,tube,0,M.habitatShell);
-    ring('gate-front-trim',radius-tube,.075,.20,M.habitatTrim);
-    ring('gate-back-trim',radius-tube,.075,-.20,M.habitatBand);
-    ring('gate-inner-light',radius-tube*2-.025,.035,.08,M.habitatWindow);
-    const base=new THREE.Mesh(roundedBox(diameter*.72,.20,.95,.16),M.habitatTrim);
-    base.position.y=.02;root.add(base);
-    const plinth=new THREE.Mesh(roundedBox(diameter*.48,.18,.70,.12),M.habitatBand);
-    plinth.position.y=.24;root.add(plinth);
-    for(let i=0;i<12;i++) {
-      const angle=i*Math.PI/6;
-      const marker=new THREE.Mesh(getBoxGeometry(.13,.25,.10),i%3===0?M.habitatWindow:M.habitatPanel);
-      marker.position.set(Math.sin(angle)*(radius-tube),centerY+Math.cos(angle)*(radius-tube),.23);
-      marker.rotation.z=-angle;root.add(marker);
-    }
-    if(!M.stargatePortal) {
-      M.stargatePortal=new THREE.ShaderMaterial({
-        uniforms:{time:{value:0}}, side:THREE.DoubleSide,
-        transparent:false,depthWrite:true,depthTest:true,
-        vertexShader:`varying vec2 gateUv;
-          void main(){gateUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-        fragmentShader:`uniform float time;varying vec2 gateUv;
-          void main(){
-            vec2 p=(gateUv-.5)*2.0;float r=length(p);float a=atan(p.y,p.x);
-            float spiral=.5+.5*sin(a*5.0-r*22.0+time*.65);
-            float waves=.5+.5*sin(r*35.0-time*1.2+spiral*2.0);
-            float rim=pow(clamp(r,0.0,1.0),5.0);
-            vec3 deep=vec3(.012,.018,.085);
-            vec3 nebula=mix(vec3(.12,.055,.32),vec3(.025,.35,.48),spiral);
-            vec3 color=deep+nebula*(.13+.50*r)*waves;
-            color+=vec3(.15,.70,.95)*rim*.65;
-            gl_FragColor=vec4(color,1.0);
-          }`
-      });
-      forceShieldMaterials.add(M.stargatePortal);
-    }
-    const diskGeometry=cached('stargate-disk|'+diameter,()=>new THREE.CircleGeometry(radius-tube*2+.015,80));
-    const portal=new THREE.Mesh(diskGeometry,M.stargatePortal);
-    portal.name='opaque-dimensional-surface';portal.position.y=centerY;
-    portal.userData.noShadow=true;root.add(portal);
-    // Plasma shimmer on both faces, over an opaque depth-writing portal disk.
-    for(const side of [-1,1]) {
-      const shield=new THREE.Mesh(diskGeometry,M.greenhouseGlass);
-      shield.name='gate-plasma-surface';shield.position.set(0,centerY,side*.012);
-      shield.userData.noShadow=true;shield.renderOrder=4;root.add(shield);
-    }
-    castReceive(root);
-    return root;
-  }
   function syncStargate() {
     if(stargateLandmark){stargateLandmark.parent?.remove(stargateLandmark);disposeGroup(stargateLandmark);}
+    stargateLandmark=null;
     const layout=stargateLayout(GRID),p=tilePos(layout.x,layout.z);
-    const root=makeStargate(layout.diameter);
+    const root=makeTransporter();
+    root.name=(typeof territoryWorldState !== 'undefined' && territoryWorldState.active) ? 'permanentTerritoryTransporter' : 'permanentHomeTransporter';
     root.position.set(p.x,BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(stargateTerrainLevel(layout.x,layout.z)),p.z);
     root.rotation.y=layout.yaw;
-    root.userData={nonInteractive:true,visualHome:true,permanentEnvironment:true};
-    worldGroup.add(root);stargateLandmark=root;
+    Object.assign(root.userData,{nonInteractive:true,visualHome:true,permanentEnvironment:true});
+    worldGroup.add(root);registerRuntimeObject(root);stargateLandmark=root;
   }
 
   async function generateWorld(provider, model, key, userPrompt, gridSize) {
@@ -39751,6 +39931,7 @@ function neighborStarVector(edge, index) {
     if (suppressSave || !canPersistActiveColony()) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
+      if (!canPersistActiveColony()) return;
       try {
         const worldState = getSerializableWorldState();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(worldState));
@@ -39766,6 +39947,7 @@ function neighborStarVector(edge, index) {
   // was overloaded, v3 cells with separate terrainFloors, and v4 fence sides. Walks the FULL
   // grid so every cell gets a tile mesh, then layers in the saved overrides.
   function applyState(data, opts = {}) {
+    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active && !opts.territorySwitch) return false;
     if (neighborInspectionState.active && !neighborInspectionState.applying) return false;
     if (!data || !Array.isArray(data.cells)) return false;
     normalizeWorldCells(data);
@@ -39850,6 +40032,7 @@ function neighborStarVector(edge, index) {
 
     // Upgrade the former mountain region in saved scenes as well as new worlds.
     // The landmark itself is environmental and never serialized as a buildable cell.
+    if (!(typeof territoryWorldState !== 'undefined' && territoryWorldState.active)) {
     const corner = trainingFacilityLayout(GRID);
     for (let x = 0; x < Math.ceil(corner.mountainRadius * 1.2); x++) {
       for (let z = 0; z < Math.ceil(corner.mountainRadius * 1.2); z++) {
@@ -39873,6 +40056,8 @@ function neighborStarVector(edge, index) {
         overrides.set(key,next);
       }
     }
+
+    } // Home-only landmark foundations.
 
     if (useWindowedHomeRendering()) {
       resetHomeWorldIntent();
@@ -41042,7 +41227,9 @@ function neighborStarVector(edge, index) {
   }
   window.__requestMinimapRepaint = requestMinimapRepaint;
   function minimapViewCellCount() {
-    return Math.max(GRID, Math.min(HOME_GRID_MAX, Math.ceil(renderVisibleSize || GRID)));
+    return explorationActive
+      ? Math.max(GRID, Math.min(HOME_GRID_MAX, Math.ceil(renderVisibleSize || GRID)))
+      : GRID;
   }
   function minimapDrawCellCount(logicalCells) {
     return Math.min(logicalCells, GRID >= 256 ? 192 : (GRID >= 128 ? 224 : logicalCells));
@@ -41142,13 +41329,14 @@ function neighborStarVector(edge, index) {
     const mapCenter = fp.active ? fp.pos : target;
     const centerGx = Math.floor(mapCenter.x + GRID / 2);
     const centerGz = Math.floor(mapCenter.z + GRID / 2);
-    const startGx = centerGx - Math.floor(N / 2);
-    const startGz = centerGz - Math.floor(N / 2);
+    // Home always shows the saved board; the other world follows the player.
+    const startGx = explorationActive ? centerGx - Math.floor(N / 2) : 0;
+    const startGz = explorationActive ? centerGz - Math.floor(N / 2) : 0;
     const explorationCells = explorationActive
       ? explorationTerrain.minimapCells(startGx - GRID / 2, startGz - GRID / 2, N) : null;
     minimapState = { startGx, startGz, cells: N, width: W, height: H };
     const sizeEl = document.getElementById('minimap-size');
-    if (sizeEl) sizeEl.textContent = N + '×' + N + ' map';
+    if (sizeEl) sizeEl.textContent = (explorationActive ? 'Other' : 'Home') + ' · ' + N + '×' + N;
     ctx.clearRect(0, 0, W, H);
     // Terrain pass.
     for (let x = 0; x < S; x++) {
@@ -41332,7 +41520,7 @@ function neighborStarVector(edge, index) {
     function paintSize() {
       if (!sizeEl) return;
       const n = (typeof minimapViewCellCount === 'function') ? minimapViewCellCount() : GRID;
-      sizeEl.textContent = n + '×' + n + ' map';
+      sizeEl.textContent = (explorationActive ? 'Other' : 'Home') + ' · ' + n + '×' + n;
     }
     paintSize();
     function syncAutoExpandControl() {
@@ -41997,6 +42185,65 @@ function neighborStarVector(edge, index) {
   function makeWorldId() {
     return 'w_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
   }
+  async function toggleTerritoryWorld() {
+    const state = territoryWorldState;
+    if (state.switching || neighborInspectionState.active || explorationActive || trainingAppearance.active) return false;
+    state.switching = true;
+    const button = document.getElementById('territory-world-toggle');
+    if (button) button.disabled = true;
+    if (fp.active) exitFP();
+    if (flight.active) exitFlightMode();
+    clearTimeout(saveTimer);
+    const previous = state.active ? 'territory' : 'home';
+    state[previous] = getSerializableWorldState();
+    if (!state.active) {
+      // Flush any pending Home edits before entering the isolated dev board.
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.home)); }
+      catch (error) { console.warn('[territory world] Home snapshot remains in memory:', error); }
+      saveLocalGameState();
+    }
+    state.cameras[previous] = { target:target.clone(), viewSize, azimuth, polar, mode:cameraMode, distance:renderVisibleDistance };
+    const next = state.active ? 'home' : 'territory';
+    if (!state.territory) state.territory = BattleBrosTerritoryWorld.generate();
+    state.active = next === 'territory';
+    MAX_TERRAIN_FLOORS = state.active ? 160 : 64;
+    try {
+      disposeAllCellMeshes();
+      clearGhostWorld();
+      for (const key of Object.keys(world)) delete world[key];
+      await new Promise((resolve, reject) => {
+        if (!applyState(state[next], { territorySwitch:true, keepCamera:true, skipGhostBoards:state.active, onDone:resolve })) reject(new Error('World switch rejected'));
+      });
+      const saved = state.cameras[next];
+      if (saved) {
+        target.copy(saved.target); viewSize=saved.viewSize; azimuth=saved.azimuth; polar=saved.polar;
+        renderVisibleDistance=saved.distance; setCameraMode(saved.mode);
+      } else {
+        resetCameraDefaults(); target.y=7; viewSize=Math.max(viewSize,38);
+      }
+      updateCamera();
+      if (!state.active) ensureGhostBoardsAroundTarget();
+      document.getElementById('world-menu-label').textContent = state.active ? 'Territory World (dev)' : (findActiveWorld()?.name || 'My world');
+      window.__requestMinimapRepaint?.();
+      return true;
+    } catch (error) {
+      state.active = previous === 'territory';
+      MAX_TERRAIN_FLOORS = state.active ? 160 : 64;
+      await new Promise(resolve => {
+        if (!applyState(state[previous], {territorySwitch:true,keepCamera:true,skipGhostBoards:state.active,onDone:resolve})) resolve();
+      });
+      throw error;
+    } finally {
+      state.switching=false;
+      if (button) { button.disabled=false; button.textContent=state.active ? 'Return to Home World' : 'Enter Territory World (dev)'; }
+    }
+  }
+  window.__toggleTerritoryWorld = toggleTerritoryWorld;
+  window.__territoryDefenderAreas = () => BattleBrosTerritoryWorld.generate().defenderAreas.map(area => ({...area}));
+  document.getElementById('territory-world-toggle')?.addEventListener('click', () => {
+    toggleTerritoryWorld().catch(error => console.error('[territory world]',error));
+  });
+
   function snapshotCurrentState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -42024,7 +42271,7 @@ function neighborStarVector(edge, index) {
     if (!trigger || !menu || !labelEl || !nameInput || !listEl) return;
     function paintLabel() {
       const active = findActiveWorld();
-      const name = active && active.name ? active.name : 'My world';
+      const name = territoryWorldState.active ? 'Territory World (dev)' : (active && active.name ? active.name : 'My world');
       labelEl.innerHTML = escapeName(name);
       nameInput.value = (active && active.name) || '';
       nameInput.placeholder = (active && active.name) || 'Untitled world';
@@ -42035,6 +42282,12 @@ function neighborStarVector(edge, index) {
       return d.innerHTML;
     }
     function paintList() {
+      if (territoryWorldState.active) {
+        listEl.innerHTML = ''; emptyEl.hidden = false;
+        emptyEl.textContent = 'Territory edits are retained for this session. Return Home to manage Home saves.';
+        return;
+      }
+      emptyEl.textContent = 'No saved worlds yet. Build one and choose Save as new.';
       const list = readWorldsMeta();
       const activeId = getActiveWorldId();
       listEl.innerHTML = '';
@@ -42069,6 +42322,7 @@ function neighborStarVector(edge, index) {
     }
 
     function loadSlot(id) {
+      if (territoryWorldState.active || territoryWorldState.switching) return;
       const slot = readWorldsMeta().find(w => w.id === id);
       if (!slot || !slot.state) return;
       try {
@@ -42081,6 +42335,7 @@ function neighborStarVector(edge, index) {
     }
 
     function saveAsNew(name) {
+      if (territoryWorldState.active || territoryWorldState.switching) return;
       const state = snapshotCurrentState();
       if (!state) return;
       const id = makeWorldId();
@@ -42119,6 +42374,7 @@ function neighborStarVector(edge, index) {
     };
 
     function renameActive(name) {
+      if (territoryWorldState.active || territoryWorldState.switching) return;
       const id = getActiveWorldId();
       const list = readWorldsMeta();
       const idx = list.findIndex(w => w.id === id);
@@ -42181,6 +42437,7 @@ function neighborStarVector(edge, index) {
 
     menu.querySelectorAll('[data-action]').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (territoryWorldState.active || territoryWorldState.switching) return;
         const action = btn.getAttribute('data-action');
         if (action === 'new') {
           doClear();

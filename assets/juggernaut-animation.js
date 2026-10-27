@@ -8,6 +8,7 @@
   else global.createJuggernautAnimationSystem=factory;
 })(typeof globalThis!=='undefined'?globalThis:this,function(THREE,host){
   'use strict';
+  const encounter=typeof module==='object'&&module.exports?require('./battlebro-encounter.js'):globalThis.BattleBroEncounter;
   const Math=host.Math||globalThis.Math;
   const {lavaMovementForm, lavaSupportScale, battleBroYawDelta, LAVA_TURN_MORPHOLOGY, LAVA_TURN_FORM_TUNING, NEWBORN_SPACING, DEVELOPING_GAIT, ADOLESCENT_GAIT, NEWBORN_GAIT, LAVA_HAND_LATERAL, LAVA_HAND_FORWARD, LAVA_WRIST_ABOVE_GROUND, LAVA_UPPER_ARM_LENGTH, LAVA_FOREARM_LENGTH, LAVA_MOVE_STATE, withLavaClamber, planLavaTerrainTurn, smoothBattleBroStep, smoothJuggernautStep, sampleLavaContactSwing, tickAdvancedTurn, usesBipedSupportGait, setLavaHandAnchor, beginJuggernautRun, beginJuggernautStride, enterLavaMoveState, tickJuggernautRun, tickJuggernautStride, settleLavaMonsterMove, tickGreaterBalance, tickAdvancedIdle, tickApexIdle, tickUpperArmMotion, tickLooseRockAttachments, tickBattleBroExpression, poseDevelopingArms}=host;
   const chooseLavaWalkTarget=m=>host.chooseTarget(m);
@@ -279,12 +280,13 @@
           mover.root.rotation.y = mover.desiredYaw;
           setLavaHandAnchor(mover.leftAnchor, mover.startX, mover.startZ, mover.desiredYaw, -1, mover.startY,lavaSupportScale(mover.root));
           setLavaHandAnchor(mover.rightAnchor, mover.startX, mover.startZ, mover.desiredYaw, 1, mover.startY,lavaSupportScale(mover.root));
-          if(bipedGait){if(mover.juggernautJog)beginJuggernautRun(mover);else beginJuggernautStride(mover);}
+          if(mover.encounterStationary){mover.state='IDLE';mover.progress=0;}
+          else if(bipedGait){if(mover.juggernautJog)beginJuggernautRun(mover);else beginJuggernautStride(mover);}
           else enterLavaMoveState(mover, LAVA_MOVE_STATE.SHIFT_LEFT);
         }
       } else if (state === LAVA_MOVE_STATE.TURNING) {
         if (tickLavaTurn(mover, dt)) {
-          if(mover.pendingScenerySmash){
+          if(mover.pendingScenerySmash||mover.encounterStationary){
             mover.state=LAVA_MOVE_STATE.IDLE;mover.progress=0;
             parts.rig.position.set(0,0,0);parts.torso.rotation.set(0,0,0);
           }else if(bipedGait){if(mover.juggernautJog)beginJuggernautRun(mover);else beginJuggernautStride(mover);}
@@ -437,7 +439,7 @@
       }
     } else if (mover.state === 'TURNING') {
       if (tickLavaTurn(mover, dt)) {
-        if(mover.pendingScenerySmash){mover.state='IDLE';mover.progress=0;parts.rig.position.set(0,0,0);}
+        if(mover.pendingScenerySmash||mover.encounterStationary){mover.state='IDLE';mover.progress=0;parts.rig.position.set(0,0,0);}
         else {mover.state = 'REACH'; mover.progress = 0;mover.reachStart.copy(mover.anchors[mover.sideIndex]);}
       }
     } else if (adolescent && mover.state === 'PLANT') {
@@ -549,6 +551,24 @@
       return ()=>{for(const restore of records)restore();};
     }
     return {
+      encounterFrame(yaw,dt,t,canTurn){
+        mover.encounterStationary=true;mover.pauseRemaining=Infinity;
+        if(Number.isFinite(yaw)&&mover.state!=='TURNING'&&Math.abs(battleBroYawDelta(yaw-root.rotation.y))>.025){
+          mover.desiredYaw=yaw;mover.turn=null;mover.progress=0;mover.state='TURNING';
+          mover.startX=root.position.x;mover.startY=root.position.y;mover.startZ=root.position.z;
+          mover.targetX=root.position.x;mover.targetY=root.position.y;mover.targetZ=root.position.z;
+          mover.targetCellX=mover.cellX;mover.targetCellZ=mover.cellZ;
+        }
+        const wasTurning=mover.state==='TURNING';
+        const proposal=this.prepare({},dt,t),accepted=canTurn(proposal.yaw);
+        if(accepted)root.rotation.y=proposal.yaw;
+        this.commit({accepted:accepted?1:0,grounded:true},t,dt);
+        const done=mover.state==='IDLE';
+        const failed=wasTurning&&done&&Math.abs(battleBroYawDelta(mover.desiredYaw-root.rotation.y))>.04;
+        return {accepted:accepted&&!failed,done};
+      },
+      syncEncounterHistory(){pending=null;previous.copy(root.position);previousYaw=root.rotation.y;velocity.set(0,0,0);},
+      encounterPose:()=>encounter.createPose(mover,root.userData.characterFamily||"juggernaut"),
       mover,
       // Phase/contact preparation precedes movement resolution; IK runs afterwards.
       prepare(input={},dt=0,t=0){
@@ -573,8 +593,8 @@
         if(juvenile)tickBattleBroExpression(root,dt);
         previous.copy(root.position);previousYaw=root.rotation.y;pending=null;
       },
-      carry(delta){
-        previous.add(delta);
+      carry(delta,history=true){
+        if(history)previous.add(delta);
         const seen=new Set();
         const carry=v=>{if(v?.isVector3&&!seen.has(v)){v.add(delta);seen.add(v);}};
         for(const key of ['leftAnchor','rightAnchor','leftGoal','rightGoal','reachStart','goal'])carry(mover[key]);

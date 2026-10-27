@@ -32,7 +32,7 @@ async function transact(key,name,args,value='0x0'){
   if(!account)throw new Error('Connect your wallet first.');
   const chain=await window.ethereum.request({method:'eth_chainId'});
   if(BigInt(chain)!==u(doc.chainId))throw new Error(`Switch wallet to chain ${doc.chainId} before submitting.`);
-  const data=encode(key,name,args),to=contract(({TerritoryCombat:'combat',TerritoryBro:'bros',NeedsOracle:'needs',StETH:'stETH'})[key]);
+  const data=encode(key,name,args),to=contract(({TerritoryCombat:'combat',TerritoryMatchmaker:'matchmaker',TerritoryBro:'bros',NeedsOracle:'needs',StETH:'stETH'})[key]);
   const tx={from:account,to,data,...(value!=='0x0'?{value}: {})};
   await window.ethereum.request({method:'eth_call',params:[tx,'latest']});
   const hash=await window.ethereum.request({method:'eth_sendTransaction',params:[tx]});
@@ -99,14 +99,14 @@ function render(){
     const stats=make('div','stats');
     for(const [k,v] of [['Status',phase],['Defender',def?`${broLabel(def)} · Level ${def.level}`:'—'],['Started',loc.occupiedAt!=='0'?new Date(Number(loc.occupiedAt)*1000).toLocaleString():'—'],['Pot',`${fmt(loc.potShares)} stETH shares`]]){stats.append(make('span','muted',k),make('span','',v));}
     card.append(stats);
-    if(pool){card.append(make('p','',`${pool.count} registered attackers · equal chance per BattleBro`));
+    if(pool){card.append(make('p','',`${pool.count} registered attackers · 1/${pool.count} territory chance per Bro · ${u(pool.count)%2n===1n?'all attackers':`${u(pool.count)-1n}/${pool.count} attackers`} can battle at this count`));
       if(pool.status==='REGISTERING')card.append(countdown(pool.closesAt,'Registration closed; awaiting confirmed update'));
-      for(const entry of Object.values(pool.entries).filter(e=>e.owner.toLowerCase()===account?.toLowerCase()))card.append(make('p','',`Your BattleBro #${entry.token} is registered · ${entry.power} power and ${fmt(entry.stakeShares)} stETH shares committed.`));
+      for(const entry of Object.values(pool.entries).filter(e=>e.owner.toLowerCase()===account?.toLowerCase()))card.append(make('p','',`Your BattleBro #${entry.token} is registered · ${entry.power} power and ${fmt(entry.sideStakeShares)} stETH shares maximum exposure.`));
       if(pool.selectedToken)card.append(make('p','',`Selected attacker: #${pool.selectedToken}`));
     } else if(cooling)card.append(countdown(loc.cooldownUntil,'Cooldown elapsed; refresh confirmed state'));
     for(const r of doc.registrations.filter(r=>r.location===id&&['RESOLVED','EXPIRED'].includes(r.status)).slice(-1)){
       const battle=doc.challenges.find(c=>c.challengeId===r.registrationId);
-      card.append(make('p','muted',r.status==='RESOLVED'?`Last battle: attacker #${r.selectedToken}; winner #${battle?.winner??'—'}. Unselected commitments released automatically.`:'Previous registration expired; all commitments released automatically.'));
+      card.append(make('p','muted',r.status==='RESOLVED'?`Last battle: attacker #${r.selectedToken}; winner #${battle?.winner??'—'}. Other entrants await side battles or a bye.`:'Previous registration expired; all commitments released automatically.'));
     }
     if(def){const weights=make('p','muted',`Defense weights · Attack ${fmt(def.defense[0],2)}% · Defend ${fmt(def.defense[1],2)}% · Counter ${fmt(def.defense[2],2)}%`);
       const reserves=make('p','muted',`Projected reserves · ${def.projectedReserves.join(' / ')} · capacity ${def.capacity}`);card.append(weights,reserves);
@@ -120,28 +120,39 @@ function render(){
       const token=makeSelect(available.map(b=>({value:b.tokenId,label:`Attack with ${broLabel(b)} · Lv ${b.level}`})));
       const action=makeSelect([{value:'0',label:'ATTACK'},{value:'1',label:'DEFEND'},{value:'2',label:'COUNTER'}]);
       const amount=document.createElement('input');amount.type='number';amount.min='1';amount.step='1';amount.value=String(Math.ceil(Number(available[0].capacity)/10));amount.setAttribute('aria-label','Combat power to commit');
-      const attacker=()=>broBy(token.value), refreshAmount=()=>{const b=attacker(),reserve=b?.projectedReserves[Number(action.value)]??'0';amount.max=String(Math.min(Number(b?.capacity??0),Number(reserve)));amount.value=String(Math.ceil(Number(b?.capacity??0)/10));};token.addEventListener('change',refreshAmount);action.addEventListener('change',refreshAmount);refreshAmount();
+      const exposure=make('p','muted');card.append(exposure);
+      const attacker=()=>broBy(token.value), refreshAmount=()=>{const b=attacker(),reserve=b?.projectedReserves[Number(action.value)]??'0';amount.max=String(Math.min(Number(b?.capacity??0),Number(reserve)));amount.value=String(Math.ceil(Number(b?.capacity??0)/10));exposure.textContent=`Maximum yield exposure: ${fmt(u(b?.riskableShares)*u(doc.configuration.riskBps)/10000n)} stETH shares. A side battle uses the lesser participant commitment; both spend power. Side XP: up to 4 for a win / 2 for a loss. Fee: ${fmt(doc.configuration.feeBps,2)}% of the losing stake. No side pot contribution.`;};token.addEventListener('change',refreshAmount);action.addEventListener('change',refreshAmount);refreshAmount();
       controls.append(token,action,amount,button(open?'Join registration':'Open 10-minute registration',()=>transact('TerritoryCombat','challenge',[id,token.value,action.value,amount.value,loc.nonce,def.defenseNonce,Math.floor(Date.now()/1000)+300,broBy(token.value).defense])));
     }
     if(loc.pendingChallengeId!=='0'&&account){const challenge=doc.challenges.find(c=>String(c.challengeId)===String(loc.pendingChallengeId));
       if(challenge){if(challenge.status==='REGISTERING'){
           if(Number(doc.snapshot.timestamp)>=Number(challenge.deadline))controls.append(button('Release expired registration',()=>transact('TerritoryCombat','expire',[challenge.challengeId]),'secondary'));
           else if(now>=Number(pool.closesAt))controls.append(button('Advance registration',()=>transact('TerritoryCombat','advanceRegistration',[challenge.challengeId]),'secondary'));
-        } else if(challenge.status==='PENDING'&&challenge.randomnessFulfilled)controls.append(button('Resolve challenge',()=>transact('TerritoryCombat','resolve',[challenge.challengeId]),'secondary'));
+        } else if(challenge.status==='PENDING'&&challenge.randomnessFulfilled){controls.append(button('Resolve challenge',()=>transact('TerritoryCombat','resolve',[challenge.challengeId]),'secondary'));if(challenge.attacker==='0')controls.append(button('Select territory attacker',()=>transact('TerritoryCombat','selectAttacker',[challenge.challengeId]),'secondary'));}
         else if(challenge.status==='PENDING'&&Number(doc.snapshot.timestamp)>=Number(challenge.deadline))controls.append(button('Expire challenge',()=>transact('TerritoryCombat','expire',[challenge.challengeId]),'secondary'));
         else if(challenge.status==='PENDING')controls.append(make('span','muted','Waiting for VRF fulfillment…'));}
     }
+    for(const side of doc.sidePools.filter(p=>doc.registrations.find(r=>r.registrationId===p.poolId)?.location===id)){
+      card.append(make('p','muted',`Pool #${side.poolId}: ${side.settled}/${side.generated} side battles settled${side.complete?' · complete':''}.`));
+      if(side.started&&side.remaining!=='0'&&account)controls.append(button('Pair remaining attackers',()=>transact('TerritoryMatchmaker','advanceMatching',[side.poolId,32]),'secondary'));
+      for(const match of doc.sideMatches.filter(m=>m.pool===side.poolId)){
+        card.append(make('p','',`Side battle #${match.matchId}: #${match.tokenA} vs #${match.tokenB} · ${fmt(match.stakeShares)} shares each · ${match.status==='RESOLVED'?`winner #${match.winner}`:'pending'}`));
+        if(match.status==='PENDING'&&account)controls.append(button(`Resolve side battle #${match.matchId}`,()=>transact('TerritoryMatchmaker','resolveSide',[match.matchId]),'secondary'));
+      }
+      const registration=doc.registrations.find(r=>r.registrationId===side.poolId);
+      for(const e of Object.values(registration.entries).filter(e=>e.disposition==='BYE'))card.append(make('p','muted',`#${e.token} received a bye; power and yield commitment released.`));
+    }
     card.append(controls);root.append(card);
   }
-  const history=$('history');const rows=doc.history.filter(e=>/Registration(Opened|Finalized)|AttackerSelected|Challenge(Resolved|Expired)|OccupancyChanged|Need(sSeedAccepted|Assigned)|CareProvided/.test(e.name)).slice(-40).reverse();
+  const history=$('history');const rows=doc.history.filter(e=>/Side(MatchResolved|ParticipantReleased)|Registration(Opened|Finalized)|AttackerSelected|Challenge(Resolved|Expired)|OccupancyChanged|Need(sSeedAccepted|Assigned)|CareProvided/.test(e.name)).slice(-40).reverse();
   updateCountdowns();
   history.replaceChildren(...(rows.length?rows.map(e=>{const p=make('p','',`${new Date(Number(e.timestamp)*1000).toLocaleString()} · ${e.name} · block ${e.blockNumber}`);return p;}):[make('p','muted','No territory activity has been indexed yet.') ]));
 }
 async function refresh(){
-  if(!manifestUrl){setStatus('Configure the v3 territory manifest URL in runtime-config.js or pass ?manifestUrl=…',true);return;}
-  try{manifest=await getJson(manifestUrl,'Manifest');if(manifest.schemaVersion!==3)throw new Error('This URL points to a v1 round manifest. Configure a territory v3 deployment manifest.');
+  if(!manifestUrl){setStatus('Configure the v4 territory manifest URL in runtime-config.js or pass ?manifestUrl=…',true);return;}
+  try{manifest=await getJson(manifestUrl,'Manifest');if(manifest.schemaVersion!==4)throw new Error('This URL points to a v1 round manifest. Configure a territory v4 deployment manifest.');
     const root=new URL('.',new URL(manifestUrl,location.href)),url=new URL(manifest.paths.gameState,root);doc=await getJson(url,'Territory state');
-    if(doc.schemaVersion!==3||doc.projectionVersion!==4||manifest.projectionVersion!==4||doc.chainId!==manifest.chainId||doc.deploymentId!==manifest.deploymentId||doc.contracts.combat.toLowerCase()!==manifest.deploymentId.toLowerCase()||JSON.stringify(doc.snapshot)!==JSON.stringify(manifest.snapshot))throw new Error('Manifest and territory snapshot do not match.');
+    if(doc.schemaVersion!==4||doc.projectionVersion!==5||manifest.projectionVersion!==5||doc.chainId!==manifest.chainId||doc.deploymentId!==manifest.deploymentId||doc.contracts.combat.toLowerCase()!==manifest.deploymentId.toLowerCase()||JSON.stringify(doc.snapshot)!==JSON.stringify(manifest.snapshot))throw new Error('Manifest and territory snapshot do not match.');
     render();setStatus(`Showing confirmed block ${doc.snapshot.blockNumber}. Transactions are checked against the live contract before submission.`);
   }catch(e){setStatus(e.message||String(e),true);}
 }
