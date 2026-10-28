@@ -3056,6 +3056,7 @@
     transition: transform 0.18s ease;
     cursor: grab;
   }
+  .minimap-wrap[hidden] { display: none; }
   .minimap-wrap.dragging { cursor: grabbing; transition: none; }
   .minimap-wrap.collapsed { transform: translateX(180px); }
   .minimap-card {
@@ -4540,8 +4541,8 @@
   <!-- Lower-left controls, minimap, activity vehicles, and project link -->
   <div class="lower-left-ui" id="lower-left-ui">
     <div class="lower-left-main-row">
-  <!-- Minimap (top-down repaint of the home grid) -->
-  <div class="minimap-wrap" id="minimap-wrap">
+  <!-- Endless-world minimap; hidden until exploration begins. -->
+  <div class="minimap-wrap" id="minimap-wrap" hidden>
     <div class="minimap-card">
       <canvas id="minimap-canvas" width="240" height="240"></canvas>
       <div class="minimap-foot">
@@ -23506,6 +23507,25 @@ function neighborStarVector(edge, index) {
 
   const HOME_TILE_LOW_DETAIL_THRESHOLD = 48; // kept for compatibility; caps are clean slabs in both modes
 
+  function terrainTileMaterials(terrain, variant = 0) {
+    const topMat = (terrain === 'stone' && variant === 3) ? customMaterial(M.stone, '#343139') :
+                   (terrain === 'stone' && variant === 1) ? M.stoneHi :
+                   (terrain === 'stone' && variant === 2) ? M.stoneSoft :
+                   (terrain === 'path')  ? M.path :
+                   (terrain === 'water') ? M.water :
+                   (terrain === 'dirt')  ? M.dirtRich :
+                   (terrain === 'stone') ? M.stone :
+                   (terrain === 'lava')  ? M.lava :
+                   (terrain === 'sand')  ? M.sand :
+                   (terrain === 'snow')  ? (variant === 1 ? customMaterial(M.snow, '#92cfe2') : M.snow) : M.grass;
+
+    const riserMat = terrain === 'stone' && variant === 3 ? customMaterial(M.stone, '#29262f') : terrainRiserMaterial(terrain);
+
+    return { topMat, riserMat };
+  }
+  function terrainSnowShadeVariant(shadeRoll, level) {
+    return level < 24 && shadeRoll < 0.45 ? 1 : 0;
+  }
   // Shared detailed cap: the original slab, narrow edge highlights and corners.
   // Per-instance exposed-edge flags collapse hidden trim to a point in the vertex
   // shader, keeping one draw call per material instead of sixteen edge buckets.
@@ -23634,18 +23654,7 @@ function neighborStarVector(edge, index) {
 
     ensureHomeTileGeoms();
 
-    const topMat = (terrain === 'stone' && variant === 3) ? customMaterial(M.stone, '#343139') :
-                   (terrain === 'stone' && variant === 1) ? M.stoneHi :
-                   (terrain === 'stone' && variant === 2) ? M.stoneSoft :
-                   (terrain === 'path')  ? M.path :
-                   (terrain === 'water') ? M.water :
-                   (terrain === 'dirt')  ? M.dirtRich :
-                   (terrain === 'stone') ? M.stone :
-                   (terrain === 'lava')  ? M.lava :
-                   (terrain === 'sand')  ? M.sand :
-                   (terrain === 'snow')  ? (variant === 1 ? customMaterial(M.snow, '#92cfe2') : M.snow) : M.grass;
-
-    const riserMat = terrain === 'stone' && variant === 3 ? customMaterial(M.stone, '#29262f') : terrainRiserMaterial(terrain);
+    const { topMat, riserMat } = terrainTileMaterials(terrain, variant);
 
     const dirtMesh = new THREE.InstancedMesh(homeTileGeomDirt, riserMat, homeTileCapacity);
     const capGeometry = makeInstancedTerrainCapGeometry(terrain);
@@ -24844,7 +24853,7 @@ function neighborStarVector(edge, index) {
       const instancePos = tilePos(x, z);
       const shadeRoll = cellRand(x, z, 4107);
       let shadeVariant = cell.terrain === 'snow'
-        ? (tileLevelForCell(cell) < 24 && shadeRoll < 0.45 ? 1 : 0)
+        ? terrainSnowShadeVariant(shadeRoll, tileLevelForCell(cell))
         : shadeRoll < 0.18 ? 1 : (shadeRoll > 0.82 ? 2 : 0);
       if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active && cell.terrain === 'stone' && x >= GRID/2 && z >= GRID/2) shadeVariant = 3;
       setHomeTileInstance(x, z, cell.terrain, instancePos.x, instancePos.z, terrainRiseAt(x, z), shadeVariant);
@@ -30227,12 +30236,48 @@ function neighborStarVector(edge, index) {
     const group=new THREE.Group();group.name='explorationWorld';group.visible=false;scene.add(group);
     const dummy=new THREE.Object3D(),box=new THREE.BoxGeometry(TILE,1,TILE);
     let centerX=null,centerZ=null,homeWasVisible=true,clock=0,accumulator=0,lastSafe={x:0,z:0};
+    const surfaceStyles=new Map();
     let materials=null,starfield=null,homeBackground=null,pending=[];
     const key=(x,z)=>x+','+z;
     const hash=(x,z,salt=0)=>{
       let n=Math.imul(x,374761393)^Math.imul(z,668265263)^Math.imul(salt+1,1442695041);
       n=Math.imul(n^(n>>>13),1274126177);return ((n^(n>>>16))>>>0)/4294967296;
     };
+    // Eight sectors (192 units) per region: neighboring islands share a
+    // biome. Repeat the Territory quadrant layout across the infinite plane.
+    function biomeAt(sx,sz) {
+      const quadrant=n=>((Math.floor((n+4)/8)%2)+2)%2;
+      return quadrant(sx)===0?(quadrant(sz)===0?'EARTH':'DESERT')
+        :(quadrant(sz)===0?'LAVA':'ICE');
+    }
+    function surfaceTerrain(site,x,z,level) {
+      if(site.biome==='DESERT')return 'sand';
+      if(site.biome==='ICE')return 'snow';
+      if(site.biome==='LAVA') {
+        // Branching incandescent seams in dark volcanic rock; keep the low
+        // jumping shelves solid and preserve every original column height.
+        return !site.sky&&level>5&&Math.abs(Math.sin(x*.17+Math.sin(z*.13)*1.8))<.23?'lava':'stone';
+      }
+      if(level>18)return 'stone';
+      if(!site.sky&&level<=8&&Math.sin(x*.16+1)*Math.cos(z*.14)>.58)return 'water';
+      return 'grass';
+    }
+    function surfaceStyle(terrain,biome) {
+      const variant=terrain==='stone'&&biome==='LAVA'?3:0,id=terrain+'|'+variant;
+      if(!surfaceStyles.has(id)) {
+        const {topMat,riserMat}=terrainTileMaterials(terrain,variant);
+        const style={geometry:makeInstancedTerrainCapGeometry(terrain),
+          material:makeInstancedTerrainCapMaterial(topMat,terrain),riserMat,terrain};
+        if(terrain==='snow') {
+          // Instance tint reproduces Territory's blue variant in the same batch.
+          const blue=terrainTileMaterials('snow',1).topMat.color;
+          style.snowTints=[new THREE.Color(0xffffff),new THREE.Color().setRGB(
+            blue.r/topMat.color.r,blue.g/topMat.color.g,blue.b/topMat.color.b)];
+        }
+        surfaceStyles.set(id,style);
+      }
+      return surfaceStyles.get(id);
+    }
     // Preserve the original three rolling ridges and reuse their curved,
     // asymmetric slopes on distant fragments as well.
     const cameraTestRidges = [
@@ -30263,7 +30308,7 @@ function neighborStarVector(edge, index) {
           const angle=hash(sx,sz,3)*Math.PI*2+(count===4?part*Math.PI/2:0),offset=count===4?6.5:count===2?(part?5:-5):0;
           const x=sx*SPACING+(sx===0&&sz===0?0:(hash(sx,sz,4)-.5)*8)+Math.cos(angle)*offset;
           const z=sz*SPACING+(sx===0&&sz===0?0:(hash(sx,sz,5)-.5)*8)+Math.sin(angle)*offset;
-          sites.set(id,{id,sx,sz,x,z,part,style:Math.floor(hash(sx,sz,6+part)*4),
+          sites.set(id,{id,sx,sz,x,z,part,biome:biomeAt(sx,sz),style:Math.floor(hash(sx,sz,6+part)*4),
             gap:count===1&&hash(sx,sz,8)>.88?4.5:.55+hash(sx,sz,9)*.5,
             depth:4+hash(sx,sz,10)*8,phase:hash(sx,sz,11+part)*Math.PI*2});
         }
@@ -30286,7 +30331,7 @@ function neighborStarVector(edge, index) {
         if(cell)floor=Math.max(floor,BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(terrainLevelForCell(cell)));
       }
       const low=sx===0&&sz===0||hash(sx,sz,245)<.7;
-      const site={id,sx,sz,x,z,sky:true,width,length,style:2,phase:hash(sx,sz,246)*Math.PI*2,
+      const site={id,sx,sz,x,z,biome:biomeAt(sx,sz),sky:true,width,length,style:2,phase:hash(sx,sz,246)*Math.PI*2,
         elevation:floor+(low?3.6:9+hash(sx,sz,247)*5),depth:1.7+hash(sx,sz,248)*.7,
         bounds:{minX,maxX:minX+width-1,minZ,maxZ:minZ+length-1},
         polygon:[{x:minX,z:minZ},{x:minX+width,z:minZ},{x:minX+width,z:minZ+length},{x:minX,z:minZ+length}],
@@ -30352,7 +30397,7 @@ function neighborStarVector(edge, index) {
       else relief=Math.max(2,duneHeight(lx*1.5,lz*1.3-25)*.6*Math.max(0,Math.min(1,(lx+2)/8)));
       const blend=Math.min(1,Math.max(0,(edge-1)/4));
       const level=Math.max(1,Math.min(64,3+Math.round(relief*blend)));
-      return {terrain:'stone',terrainFloors:level,kind:null,islandId:site.id};
+      return {terrain:surfaceTerrain(site,x,z,level),biome:site.biome,terrainFloors:level,kind:null,islandId:site.id};
     }
     function getCell(x,z,islandId) {
       const sky=islandId?.endsWith(':sky'),id=sky?islandId+'|'+key(x,z):key(x,z);
@@ -30364,7 +30409,7 @@ function neighborStarVector(edge, index) {
           const {minX,maxX,minZ,maxZ}=site.bounds;
           if(x<minX||x>maxX||z<minZ||z>maxZ)return null;
           const r=((x+.5-site.x)/(site.width/2))**2+((z+.5-site.z)/(site.length/2))**2;
-          cells.set(id,r>1.05?null:{terrain:'stone',terrainFloors:8+Math.round((1-Math.min(1,r))*3),kind:null,islandId});
+          cells.set(id,r>1.05?null:{terrain:surfaceTerrain(site,x,z,8),biome:site.biome,terrainFloors:8+Math.round((1-Math.min(1,r))*3),kind:null,islandId});
         }
       }
       return cells.get(id);
@@ -30442,6 +30487,58 @@ function neighborStarVector(edge, index) {
       const cell=getCell(x,z,body.site.sky?body.site.id:undefined),height=1.4+columnTop(cell);
       dummy.position.set(x+.5-body.site.x,-1.4+height/2,z+.5-body.site.z);
       dummy.scale.set(TILE,height,TILE);dummy.updateMatrix();body.mesh.setMatrixAt(index,dummy.matrix);
+      const surface=body.surfaces?.get(cell.terrain),surfaceIndex=surface?.indices.get(key(x,z));
+      if(surfaceIndex!==undefined) {
+        const top=columnTop(cell),riserHeight=1.4+top-TOP_H;
+        dummy.position.y=-1.4+riserHeight/2;dummy.scale.set(1.04,riserHeight,1.04);dummy.updateMatrix();
+        surface.riser.setMatrixAt(surfaceIndex,dummy.matrix);surface.riser.instanceMatrix.needsUpdate=true;
+        // Same slab, trim, and shader pattern as Home/Territory. Only its
+        // transform comes from the endless world's independent height range.
+        dummy.position.y=top-TOP_H;dummy.scale.set(1,1,1);dummy.updateMatrix();
+        surface.mesh.setMatrixAt(surfaceIndex,dummy.matrix);surface.mesh.instanceMatrix.needsUpdate=true;
+        if(surface.snowTints) {
+          const variant=terrainSnowShadeVariant(cellRand(x,z,4107),terrainLevelForCell(cell));
+          surface.mesh.setColorAt(surfaceIndex,surface.snowTints[variant]);surface.mesh.instanceColor.needsUpdate=true;
+        }
+        const visible=(dx,dz)=>{
+          const neighbor=getCell(x+dx,z+dz,body.site.sky?body.site.id:undefined);
+          return !neighbor||neighbor.islandId!==cell.islandId||columnTop(neighbor)<top?1:0;
+        };
+        surface.edges.setXYZW(surfaceIndex,visible(0,-1),visible(0,1),visible(-1,0),visible(1,0));
+        surface.edges.needsUpdate=true;
+      }
+    }
+    function disposeSurfaces(body) {
+      if(body.surfaces)for(const surface of body.surfaces.values()) {
+        body.root.remove(surface.mesh,surface.riser);
+        surface.mesh.geometry.dispose();surface.mesh.dispose();surface.riser.dispose();
+      }
+    }
+    function buildSurfaces(body) {
+      disposeSurfaces(body);
+      body.surfaces=new Map();
+      for(const {x,z} of body.entries) {
+        const cell=getCell(x,z,body.site.sky?body.site.id:undefined);
+        if(!body.surfaces.has(cell.terrain))body.surfaces.set(cell.terrain,{indices:new Map()});
+        const surface=body.surfaces.get(cell.terrain);surface.indices.set(key(x,z),surface.indices.size);
+      }
+      for(const [terrain,surface] of body.surfaces) {
+        const style=surfaceStyle(terrain,body.site.biome),geometry=style.geometry.clone();
+        // Clone the cached cap so streamed disposal owns its GPU attributes.
+        surface.edges=new THREE.InstancedBufferAttribute(new Float32Array(surface.indices.size*4),4);
+        geometry.setAttribute('capExposedEdges',surface.edges);
+        surface.mesh=new THREE.InstancedMesh(geometry,style.material,surface.indices.size);
+        surface.snowTints=style.snowTints;
+        surface.riser=new THREE.InstancedMesh(box,style.riserMat,surface.indices.size);
+        surface.mesh.name='exploration-surface-'+terrain;surface.riser.name='exploration-riser-'+terrain;
+        for(const mesh of [surface.mesh,surface.riser]) {
+          mesh.frustumCulled=false;mesh.receiveShadow=true;body.root.add(mesh);
+        }
+      }
+      body.entries.forEach(({x,z},i)=>writeInstance(body,x,z,i));
+    }
+    function disposeBody(body) {
+      group.remove(body.root);body.hull.geometry.dispose();body.mesh.dispose();disposeSurfaces(body);
     }
     function convexHull(points) {
       points.sort((a,b)=>a.x-b.x||a.z-b.z);
@@ -30459,10 +30556,11 @@ function neighborStarVector(edge, index) {
         indices.set(key(x,z),entries.length);entries.push({x,z});
       }
       if(!entries.length)return null;
-      if(!materials){const top=terrainVoxelMaterials('stone').base,side=terrainRiserMaterial('stone');materials=[side,side,top,side,side,side];}
+      // Keep the column transform/picking contract; terrain buckets render it.
+      if(!materials)materials=new THREE.MeshBasicMaterial({visible:false});
       const root=new THREE.Group();root.name=(site.sky?'sky-fragment-':'floating-fragment-')+site.id;
       const mesh=new THREE.InstancedMesh(box,materials,entries.length);mesh.name='explorationTerrainWindow';
-      mesh.frustumCulled=false;mesh.receiveShadow=true;root.add(mesh);
+      mesh.frustumCulled=false;root.add(mesh);
       // Trace exposed voxel edges into a faceted, tapered iceberg underside.
       const vertices=[];
       const push=p=>vertices.push(p.x-site.x,p.y,p.z-site.z);
@@ -30479,13 +30577,13 @@ function neighborStarVector(edge, index) {
         for(const point of [p,q,u,q,v,u,u,v,tip])push(point);
       }
       const hullGeometry=new THREE.BufferGeometry();hullGeometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));hullGeometry.computeVertexNormals();
-      const hull=new THREE.Mesh(hullGeometry,materials[0]);hull.name='fractured-rock-underside';root.add(hull);
+      const hull=new THREE.Mesh(hullGeometry,terrainTileMaterials('stone',site.biome==='LAVA'?3:0).riserMat);hull.name='fractured-rock-underside';root.add(hull);
       const saved=sleeping.get(site.id);sleeping.delete(site.id);
       const collisionPolygon=convexHull(entries.flatMap(({x,z})=>[{x,z},{x:x+1,z},{x,z:z+1},{x:x+1,z:z+1}]));
       const body={site,root,mesh,hull,indices,entries,collisionPolygon,ox:saved?.ox||0,oz:saved?.oz||0,
         vx:saved?.vx??Math.cos(site.phase)*(site.sky ? .07 : .025),vz:saved?.vz??Math.sin(site.phase)*(site.sky ? .07 : .025),
         mass:entries.length,dx:0,dz:0};
-      entries.forEach(({x,z},i)=>writeInstance(body,x,z,i));mesh.instanceMatrix.needsUpdate=true;
+      buildSurfaces(body);mesh.instanceMatrix.needsUpdate=true;
       root.position.set(site.x+body.ox,site.elevation||0,site.z+body.oz);group.add(root);islands.set(site.id,body);if(site.sky)skyBodies.add(body);
       return body;
     }
@@ -30512,7 +30610,7 @@ function neighborStarVector(edge, index) {
       if(!islands.has(standing.id))buildIsland(standing);
       for(const [id,body] of islands)if(!wanted.has(id)) {
         sleeping.set(id,{ox:body.ox,oz:body.oz,vx:body.vx,vz:body.vz});
-        group.remove(body.root);body.hull.geometry.dispose();body.mesh.dispose();islands.delete(id);skyBodies.delete(body);
+        disposeBody(body);islands.delete(id);skyBodies.delete(body);
       }
       while(sleeping.size>128)sleeping.delete(sleeping.keys().next().value);
       for(const id of cells.keys()) {const [x,z]=id.slice(id.lastIndexOf('|')+1).split(',').map(Number);if(Math.abs(x-wx)>96||Math.abs(z-wz)>96)cells.delete(id);}
@@ -30526,7 +30624,7 @@ function neighborStarVector(edge, index) {
         const body=islands.get(cell.islandId);
         if(body) {
           sleeping.set(cell.islandId,{ox:body.ox,oz:body.oz,vx:body.vx,vz:body.vz});
-          group.remove(body.root);body.hull.geometry.dispose();body.mesh.dispose();
+          disposeBody(body);
           islands.delete(cell.islandId);skyBodies.delete(body);
           buildIsland(body.site);
         }
@@ -30534,7 +30632,17 @@ function neighborStarVector(edge, index) {
       }
       edits.set(islandId?.endsWith(':sky')?islandId+'|'+key(x,z):key(x,z),{...cell,...patch,islandId:cell.islandId});
       const body=islands.get(cell.islandId),index=body?.indices.get(key(x,z));
-      if(index!==undefined){writeInstance(body,x,z,index);body.mesh.instanceMatrix.needsUpdate=true;}
+      if(index!==undefined){
+        if(patch.terrain&&patch.terrain!==cell.terrain)buildSurfaces(body);
+        else {
+          writeInstance(body,x,z,index);
+          for(const [dx,dz] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const adjacent=body.indices.get(key(x+dx,z+dz));
+            if(adjacent!==undefined)writeInstance(body,x+dx,z+dz,adjacent);
+          }
+        }
+        body.mesh.instanceMatrix.needsUpdate=true;
+      }
       return true;
     }
     function canExcavate(x,z,islandId) {const cell=getCell(x,z,islandId);return !!cell&&!cell.kind&&!cell.extras?.length;}
@@ -30580,6 +30688,11 @@ function neighborStarVector(edge, index) {
       }
     }
     function tick(dt,player,eyeHeight,deployedCharacter) {
+      for(const style of surfaceStyles.values()) {
+        const pattern=style.material.userData.capPattern;
+        pattern.capPatternEnabled.value=renderVoxelTerrain?1:0;
+        pattern.capPatternCells.value=terrainVoxelCellCount(style.terrain);
+      }
       retainedCharacterIsland=deployedCharacter?(sample(deployedCharacter.position.x,deployedCharacter.position.z,deployedCharacter.position.y+.02)?.body?.site.id||retainedCharacterIsland):null;
       ensureAround(player.pos.x,player.pos.z);
       while(pending.length&&islands.has(pending[0].id))pending.shift();
@@ -30620,9 +30733,14 @@ function neighborStarVector(edge, index) {
       }
       starfield.position.set(0,0,0);
       homeWasVisible=xrWorldRoot.visible;xrWorldRoot.visible=false;group.visible=true;explorationActive=true;
+      if(typeof syncMinimapVisibility==='function')syncMinimapVisibility();
       applyDistanceMistSettings(currentSkyBgHex);
     }
-    function deactivate() {group.visible=false;xrWorldRoot.visible=homeWasVisible;explorationActive=false;scene.background=homeBackground;applyDistanceMistSettings(currentSkyBgHex);}
+    function deactivate() {
+      group.visible=false;xrWorldRoot.visible=homeWasVisible;explorationActive=false;
+      if(typeof syncMinimapVisibility==='function')syncMinimapVisibility();
+      scene.background=homeBackground;applyDistanceMistSettings(currentSkyBgHex);
+    }
     // HUD snapshot reads loaded cells only: never invoke collision sampling or
     // generate terrain just to draw the map. Both drawing passes share it.
     function minimapCells(minX,minZ,size) {
@@ -30646,7 +30764,7 @@ function neighborStarVector(edge, index) {
       return result;
     }
     function diagnostics() {return {islands:islands.size,pending:pending.length,cells:cells.size,sites:sites.size,sleeping:sleeping.size,
-      fragments:[...islands.values()].map(b=>({id:b.site.id,sky:!!b.site.sky,elevation:b.site.elevation||0,width:b.site.width,length:b.site.length,style:b.site.style,count:b.mass,ox:b.ox,oz:b.oz,vx:b.vx,vz:b.vz}))};}
+      fragments:[...islands.values()].map(b=>({id:b.site.id,sky:!!b.site.sky,elevation:b.site.elevation||0,width:b.site.width,length:b.site.length,style:b.site.style,biome:b.site.biome,count:b.mass,ox:b.ox,oz:b.oz,vx:b.vx,vz:b.vz}))};}
     return {group,getCell,setCell,worldToCell,cellToWorld,groundYAt,blocksBodyAt,ceilingYAt,nearbyColumns,ensureAround,canExcavate,activate,deactivate,tick,diagnostics,
       minimapCells};
   })();
@@ -41145,10 +41263,9 @@ function neighborStarVector(edge, index) {
     if (!BATTLEBROS_MIGRATION_MODE) initWelcomeDialog();
   }
 
-  // -------- minimap (ported from OWB hud.js redrawMinimap) --------
-  // Repaints a 2D top-down map window from world + generated preview-board
-  // state. The map follows the current camera target, so panning away from
-  // the home board keeps a useful 2D overview instead of a stale home tile.
+  // -------- Endless-world minimap --------
+  // Repaints loaded exploration cells around the player/camera position.
+  // Home and Territory never supply map data or display this widget.
   // Tile colour comes from the terrain palette (matches the 3D scene);
   // a per-kind silhouette is overlaid for any populated cell so trees,
   // houses, animals etc. read as the same shape they do in 3D.
@@ -41220,34 +41337,30 @@ function neighborStarVector(edge, index) {
   }
   let minimapRepaintQueued = false;
   let minimapState = null;
+  function syncMinimapVisibility() {
+    const wrap = document.getElementById('minimap-wrap');
+    if (wrap) wrap.hidden = !explorationActive;
+    if (!explorationActive) minimapState = null;
+    return explorationActive;
+  }
   function requestMinimapRepaint() {
+    if (!syncMinimapVisibility()) return;
     if (minimapRepaintQueued) return;
     minimapRepaintQueued = true;
     requestAnimationFrame(() => { minimapRepaintQueued = false; redrawMinimap(); });
   }
   window.__requestMinimapRepaint = requestMinimapRepaint;
   function minimapViewCellCount() {
-    return explorationActive
-      ? Math.max(GRID, Math.min(HOME_GRID_MAX, Math.ceil(renderVisibleSize || GRID)))
-      : GRID;
+    return Math.max(GRID, Math.min(HOME_GRID_MAX, Math.ceil(renderVisibleSize || GRID)));
   }
   function minimapDrawCellCount(logicalCells) {
     return Math.min(logicalCells, GRID >= 256 ? 192 : (GRID >= 128 ? 224 : logicalCells));
   }
   function minimapGlobalCell(gx, gz, explorationCells) {
-    if (explorationActive) return explorationCells?.get((gx - GRID / 2) + ',' + (gz - GRID / 2)) || null;
-    const bx = Math.floor(gx / GRID);
-    const bz = Math.floor(gz / GRID);
-    const lx = gx - bx * GRID;
-    const lz = gz - bz * GRID;
-    if (lx < 0 || lx >= GRID || lz < 0 || lz >= GRID) return null;
-    if ((bx !== 0 || bz !== 0) && !ghostBoardsEnabledForGrid()) {
-      return world[gx] && world[gx][gz] && world[gx][gz].userEdited ? world[gx][gz] : null;
-    }
-    return ghostCellAt(bx, bz, lx, lz);
+    return explorationCells?.get((gx - GRID / 2) + ',' + (gz - GRID / 2)) || null;
   }
   function minimapWorldFromCanvasPoint(px, py) {
-    if (!minimapState) return null;
+    if (!explorationActive || !minimapState) return null;
     const { startGx, startGz, cells, width, height } = minimapState;
     const gx = startGx + (px / Math.max(1, width)) * cells;
     const gz = startGz + (py / Math.max(1, height)) * cells;
@@ -41318,6 +41431,7 @@ function neighborStarVector(edge, index) {
     status.hidden = false;
   }
   function redrawMinimap() {
+    if (!syncMinimapVisibility()) return;
     const canvas = document.getElementById('minimap-canvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -41329,14 +41443,12 @@ function neighborStarVector(edge, index) {
     const mapCenter = fp.active ? fp.pos : target;
     const centerGx = Math.floor(mapCenter.x + GRID / 2);
     const centerGz = Math.floor(mapCenter.z + GRID / 2);
-    // Home always shows the saved board; the other world follows the player.
-    const startGx = explorationActive ? centerGx - Math.floor(N / 2) : 0;
-    const startGz = explorationActive ? centerGz - Math.floor(N / 2) : 0;
-    const explorationCells = explorationActive
-      ? explorationTerrain.minimapCells(startGx - GRID / 2, startGz - GRID / 2, N) : null;
+    const startGx = centerGx - Math.floor(N / 2);
+    const startGz = centerGz - Math.floor(N / 2);
+    const explorationCells = explorationTerrain.minimapCells(startGx - GRID / 2, startGz - GRID / 2, N);
     minimapState = { startGx, startGz, cells: N, width: W, height: H };
     const sizeEl = document.getElementById('minimap-size');
-    if (sizeEl) sizeEl.textContent = (explorationActive ? 'Other' : 'Home') + ' · ' + N + '×' + N;
+    if (sizeEl) sizeEl.textContent = 'Endless · ' + N + '×' + N;
     ctx.clearRect(0, 0, W, H);
     // Terrain pass.
     for (let x = 0; x < S; x++) {
@@ -41345,7 +41457,7 @@ function neighborStarVector(edge, index) {
         const gz = startGz + Math.floor(z * sampleStep);
         const cell = minimapGlobalCell(gx, gz, explorationCells);
         const terrain = (cell && cell.terrain) || 'grass';
-        let colorHex = explorationActive && !cell ? 0x101522 : minimapTerrainHex(terrain);
+        let colorHex = !cell ? 0x101522 : minimapTerrainHex(terrain);
         // Tint by terrainFloors so hills/mountains read as raised.
         const tf = cell ? (cell.terrainFloors || 1) : 1;
         if (tf > 1 && terrain !== 'water' && terrain !== 'lava') {
@@ -41366,13 +41478,10 @@ function neighborStarVector(edge, index) {
         drawMinimapProp(ctx, cell.kind, x * cw + cw / 2, z * ch + ch / 2, Math.min(cw, ch));
       }
     }
-    // Home-board outline plus current camera target. The map can pan across
-    // preview boards, so this keeps orientation obvious when the 2D window
-    // drifts away from the saved home grid.
+    // Player/camera position in the endless terrain window.
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.70)';
     ctx.lineWidth = Math.max(1, W * 0.006);
-    if (!explorationActive) ctx.strokeRect((0 - startGx) * cw, (0 - startGz) * ch, GRID * cw, GRID * ch);
     const tx = (mapCenter.x + GRID / 2 - startGx) * W / N;
     const tz = (mapCenter.z + GRID / 2 - startGz) * H / N;
     ctx.strokeStyle = 'rgba(42,39,34,0.60)';
@@ -41520,7 +41629,7 @@ function neighborStarVector(edge, index) {
     function paintSize() {
       if (!sizeEl) return;
       const n = (typeof minimapViewCellCount === 'function') ? minimapViewCellCount() : GRID;
-      sizeEl.textContent = (explorationActive ? 'Other' : 'Home') + ' · ' + n + '×' + n;
+      sizeEl.textContent = 'Endless · ' + n + '×' + n;
     }
     paintSize();
     function syncAutoExpandControl() {
@@ -41637,7 +41746,7 @@ function neighborStarVector(edge, index) {
     // or footer if you want to move the minimap widget itself.
     let mapPan = null;
     function panWorldFromMinimapEvent(e) {
-      if (!canvas || !minimapState) return;
+      if (!explorationActive || !canvas || !minimapState) return;
       const r = canvas.getBoundingClientRect();
       const px = Math.max(0, Math.min(r.width, e.clientX - r.left));
       const py = Math.max(0, Math.min(r.height, e.clientY - r.top));

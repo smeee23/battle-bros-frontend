@@ -7,7 +7,8 @@ function setup(){
  const scene=new THREE.Scene(),xrWorldRoot=new THREE.Group();scene.add(xrWorldRoot);
  const context=vm.createContext({THREE,scene,xrWorldRoot,TILE:1,DIRT_H:.5,TOP_H:.18,BUILDABLE_LAND_Y_OFFSET:-.18,currentSkyBgHex:0,
  explorationActive:false,terrainRiseForLevel:n=>Math.max(0,(Math.min(64,n||1)-1)*.2),terrainLevelForCell:c=>c?.terrainFloors||1,
- terrainVoxelMaterials:()=>({base:new THREE.MeshLambertMaterial()}),terrainRiserMaterial:()=>new THREE.MeshLambertMaterial(),applyDistanceMistSettings(){}});
+ applyDistanceMistSettings(){}});
+ require('../tools/terrain-render-fixture')(context,html);
  // Inspect the actual solver without adding a production mutation/debug API.
  vm.runInContext(source.replace('return {group,getCell,','return {test:{islands,contact,simulate},group,getCell,')+'\nthis.terrain=explorationTerrain;',context);
  return {terrain:context.terrain,scene,xrWorldRoot,context};
@@ -77,3 +78,77 @@ const {a,b,nx,nz}=pair;a.vx=nx*.02;a.vz=nz*.02;b.vx=-nx*.02;b.vz=-nz*.02;
 terrain.test.simulate(1/30);
 assert((b.vx-a.vx)*nx+(b.vz-a.vz)*nz>-.039,'Mass-weighted contact slows an approaching pair');
 console.log('floating world: deterministic varied fragments, real void, shared shores, tapered hulls, drift/contact, riders, mining, rescue and bounded streaming OK');
+// Regional themes are coordinate-based, independent of random island shape.
+const regional=setup().terrain;regional.activate();
+const regions=[[0,0,'EARTH',['grass','water','stone']],[192,0,'LAVA',['stone','lava']],
+ [0,-192,'DESERT',['sand']],[192,-192,'ICE',['snow']]];
+for(const [cx,cz,biome,expected] of regions) {
+ regional.ensureAround(cx,cz);
+ const types=new Set(),owners=new Set();
+ for(let x=cx-32;x<cx+32;x++)for(let z=cz-32;z<cz+32;z++) {
+  const cell=regional.getCell(x,z);if(!cell)continue;
+  assert.equal(cell.biome,biome,'A broad section shares one theme across island boundaries');
+  types.add(cell.terrain);owners.add(cell.islandId);
+ }
+ assert(owners.size>4,'Regions span many islands, rather than coloring individual fragments');
+ assert.deepEqual([...types].sort(),expected.sort());
+ for(const fragment of regional.diagnostics().fragments)assert.equal(fragment.biome,biome,'Sky and lower fragments inherit the region');
+}
+regional.ensureAround(0,0);
+const standing={pos:new THREE.Vector3(0,20,0),grounded:false};
+while(regional.diagnostics().pending)regional.tick(0,standing,.6,null);
+const land=regional.test.islands.get(regional.getCell(0,0).islandId);
+regional.setCell(0,0,{terrain:'lava',terrainFloors:4});
+const cap=land.surfaces.get('lava'),capMatrix=new THREE.Matrix4();
+cap.mesh.getMatrixAt(cap.indices.get('0,0'),capMatrix);
+assert(Math.abs(capMatrix.elements[13]+.18-.6)<1e-6,'Surface cap matches edited collision top');
+let capDisposed=false;cap.mesh.addEventListener('dispose',()=>capDisposed=true);
+regional.ensureAround(1000,1000);assert(capDisposed,'Streaming disposes regional surface instances');
+console.log('endless biomes: broad coherent regions, all four palettes, sky inheritance, edited surfaces and GPU cleanup OK');
+
+const styled=setup(),styledTerrain=styled.terrain;styledTerrain.activate();
+const styledBody=styledTerrain.test.islands.get(styledTerrain.getCell(0,0).islandId);
+for(const terrain of ['grass','water','lava','sand','snow','stone']) {
+ styledTerrain.setCell(0,0,{terrain,terrainFloors:12});
+ const surface=styledBody.surfaces.get(terrain),shared=styled.context.terrainTileMaterials(terrain);
+ assert.equal(surface.riser.material,shared.riserMat,'Endless sides use the exact shared material');
+ assert.equal(surface.mesh.material.color.getHex(),shared.topMat.color.getHex());
+ assert(surface.mesh.geometry.attributes.capRequiredEdges,'Use shared detailed cap geometry');
+ assert.equal(surface.mesh.geometry.attributes.capExposedEdges,surface.edges);
+ const shader={uniforms:{},vertexShader:THREE.ShaderLib.lambert.vertexShader,fragmentShader:THREE.ShaderLib.lambert.fragmentShader};
+ surface.mesh.material.onBeforeCompile(shader);
+ assert(shader.fragmentShader.includes('diffuseColor.rgb *= capPatternTint;'),'Shared QR-like sub-tile pattern is present');
+ assert(shader.fragmentShader.includes('totalEmissiveRadiance *= capPatternTint;'),'Lava pattern preserves shared emissive shading');
+ const riser=new THREE.Matrix4();surface.riser.getMatrixAt(surface.indices.get('0,0'),riser);
+ assert(Math.abs(riser.elements[13]+riser.elements[5]/2-(2.2-.18))<1e-6,'Sides meet the shared cap base');
+}
+const shaderMaterial=styledBody.surfaces.get('stone').mesh.material;
+styled.context.renderVoxelTerrain=false;styled.context.renderTerrainVoxelResolution='12';
+styledTerrain.tick(0,{pos:new THREE.Vector3(0,20,0),grounded:false},.6,null);
+assert.equal(shaderMaterial.userData.capPattern.capPatternEnabled.value,0);
+assert.equal(shaderMaterial.userData.capPattern.capPatternCells.value,12);
+console.log('Endless styling: shared patterned caps, exact terrain side materials, mining alignment and live pattern settings passed');
+// The same altitude/random rule and exact snow palette as Territory, batched
+// with instance colors so ice variety does not add draw calls per island.
+styledTerrain.ensureAround(192,-192);
+const iceBody=[...styledTerrain.test.islands.values()].find(b=>b.site.biome==='ICE'&&b.surfaces.has('snow'));
+assert(iceBody,'Ice region is streamed');
+const iceSurface=iceBody.surfaces.get('snow'),iceColors=new Set();let blueCell;
+for(const {x,z} of iceBody.entries) {
+ const cell=styledTerrain.getCell(x,z,iceBody.site.sky?iceBody.site.id:undefined);
+ const variant=styled.context.terrainSnowShadeVariant(styled.context.cellRand(x,z,4107),cell.terrainFloors);
+ const tint=new THREE.Color();iceSurface.mesh.getColorAt(iceSurface.indices.get(x+','+z),tint);
+ const actual=iceSurface.mesh.material.color.clone().multiply(tint);
+ const expected=styled.context.terrainTileMaterials('snow',variant).topMat.color;
+ assert(actual.toArray().every((v,i)=>Math.abs(v-expected.toArray()[i])<1e-6),'Endless ice matches the shared Territory shade');
+ iceColors.add(variant);if(variant===1)blueCell={x,z};
+}
+assert.equal(iceColors.size,2,'Both Territory snow/ice shades appear within the ice region');
+assert(blueCell);
+const iceId=iceBody.site.sky?iceBody.site.id:undefined,iceIndex=iceSurface.indices.get(blueCell.x+','+blueCell.z);
+styledTerrain.setCell(blueCell.x,blueCell.z,{terrainFloors:30},iceId);
+const tint=new THREE.Color();iceSurface.mesh.getColorAt(iceIndex,tint);
+assert.deepEqual(tint.toArray(),[1,1,1],'High peaks use the shared snow shade');
+styledTerrain.setCell(blueCell.x,blueCell.z,{terrainFloors:5},iceId);
+iceSurface.mesh.getColorAt(iceIndex,tint);assert(tint.b>tint.r,'Lowered ice regains its blue shade');
+console.log('Endless ice: exact shared Territory snow/blue palette, altitude selection, stable variation and mining updates passed');

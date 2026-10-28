@@ -12,11 +12,11 @@ const ctx=vm.createContext({THREE,scene,xrWorldRoot:home,worldGroup:home,GRID:50
  fp,transporterObjects:new Set(),fpEyeHeight:()=>.6,fpKeys:new Set(['w']),performance:{now:()=>time},window:{innerWidth:800,innerHeight:600},
  document:{createElement:()=>({style:{},setAttribute(){},getContext:()=>draw}),body:{appendChild(){}}},
  terrainRiseForLevel:n=>(n-1)*.2,terrainLevelForCell:c=>c?.terrainFloors||1,
- terrainVoxelMaterials:()=>({base:new THREE.MeshBasicMaterial()}),terrainRiserMaterial:()=>new THREE.MeshBasicMaterial(),
  applyDistanceMistSettings(){},leaveExcavation(){},resetTransportCube(){},
  worldToCellCoord:v=>Math.floor(v+25),tilePos:(x,z)=>({x:x-24.5,z:z-24.5}),
  getWorldCell:()=>({terrain:'stone',terrainFloors:3}),setCell(){},trainingFacilityTerrainCell:()=>false,
  setCameraMode:value=>{mode=value;if(ctx.exitFP)ctx.exitFP();else {ctx.api.explorationTerrain.deactivate();fp.active=false;}}});
+require('./terrain-render-fixture')(ctx,html);
 vm.runInContext(section('  function stargateLayout(', '  function generateProceduralWorld(')
  +section('  // ---------- exploration terrain ----------','  // ---------- frontend excavation ----------')
  +'\nfunction fpGroundYAt(x,z){return activeFPTerrain().groundYAt(x,z,.6);}\nthis.api={homeFPTerrain,explorationTerrain,fpJourney};',ctx);
@@ -77,6 +77,7 @@ Object.assign(ctx,{FP_FOV:55,FP_NEAR:.02,PERS_FOV_DEFAULT:50,PERS_NEAR_DEFAULT:.
  fpToolMenu:{hidden:true},fpToolsToggle:{setAttribute(){}}});
 ctx.document.body.classList={add(){},remove(){}};
 const walkElements=new Map();ctx.document.getElementById=id=>{if(!walkElements.has(id))walkElements.set(id,{hidden:true});return walkElements.get(id);};
+vm.runInContext('let minimapState=null;\n'+section('  function syncMinimapVisibility()', '  function requestMinimapRepaint()'),ctx);
 ctx.trainingAppearance={active:false};ctx.equipExcavationTool=tool=>{ctx.excavation.equipped=tool;};
 const toolAccess=html.indexOf('  function fpToolsAvailable()');
 vm.runInContext(html.slice(toolAccess,html.indexOf('\n',toolAccess))
@@ -85,10 +86,12 @@ vm.runInContext(section('  function enterFP(',"  document.addEventListener('poin
 ctx.exitFP();ctx.enterFP();assert(fp.active && !ctx.explorationActive,'Normal first person starts at home');
 assert(walkElements.get('fp-tools').hidden,'Home entry hides walking tools');
 ctx.enterFP({world:'other'});assert(ctx.explorationActive,'Testing view switches directly to endless');
+assert(!walkElements.get('minimap-wrap').hidden,'Endless activation shows the minimap without a repaint');
 assert(!walkElements.get('fp-tools').hidden,'Other-world entry shows walking tools');ctx.excavation.equipped='axe';ctx.fpToolMenu.hidden=false;
 ctx.enterFP({world:'home'});assert(!ctx.explorationActive && fp.active,'Testing view switches directly home');
 assert(walkElements.get('fp-tools').hidden&&ctx.fpToolMenu.hidden);assert.equal(ctx.excavation.equipped,'hands');
 ctx.enterFP({world:'other'});ctx.exitFP();assert(!ctx.explorationActive && home.visible,'Exit restores home visibility');
+assert(walkElements.get('minimap-wrap').hidden,'Direct exit hides minimap without needing a repaint');
 ctx.enterFP();assert(!ctx.explorationActive && fp.pos.x===0,'Fresh entry resets to home center');
 console.log('portal travel: actual first-person entry, testing modes, exit and re-entry OK');
 // H returns home without releasing or reacquiring capture; mouse-look works immediately.
@@ -130,6 +133,7 @@ for(const other of [false,true]) {
     if(nativeUnlock) {ctx.document.pointerLockElement=null;inputHandlers.pointerlockchange();}
     else inputHandlers.keydown({key:'Escape',repeat:false});
     assert(!fp.active && !ctx.explorationActive && home.visible,'Escape restores building world');
+    assert(walkElements.get('minimap-wrap').hidden,'Escape and native unlock hide the minimap immediately');
     assert.equal(mode,'perspective');
     assert.equal(ctx.document.pointerLockElement,null,'Exit releases capture');
     assert.equal(ctx.api.fpJourney.warp,0,'Exit cancels portal travel');
@@ -159,5 +163,7 @@ ctx.tickFPJourney(.7);assert(ctx.explorationActive,'Territory warp midpoint ente
 ctx.cancelFPWarp();ctx.switchFPWorld(false);
 assert(fp.pos.distanceTo(new THREE.Vector3(outside.x,fp.pos.y,outside.z))<1e-8,'Return is outside entry volume');
 assert(!ctx.tickFPJourney(.016),'Safe return does not immediately retrigger');
-ctx.exitFP();
+ctx.enterFP({world:'other'});
+assert(!walkElements.get('minimap-wrap').hidden);ctx.exitFP();
+assert(walkElements.get('minimap-wrap').hidden,'Endless exit restores Territory with no minimap');
 console.log('Territory travel: actual entry, animated warp, Endless departure, same-board return and no immediate retrigger passed.');
