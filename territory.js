@@ -1,4 +1,5 @@
 import ABI from './assets/territory-abi.json' with {type:'json'};
+import { wallet, assertTrustedPublication } from './build/wallet.js';
 
 const $=id=>document.getElementById(id), cfg=window.__battleBrosPublicData??{}, params=new URLSearchParams(location.search);
 const status=$('status');let manifestUrl=params.get('manifestUrl')||cfg.manifestUrl,manifest,doc,account=null;
@@ -30,24 +31,25 @@ export function encode(abiName,fnName,args){
 }
 async function transact(key,name,args,value='0x0'){
   if(!account)throw new Error('Connect your wallet first.');
-  const chain=await window.ethereum.request({method:'eth_chainId'});
+  assertTrustedPublication(wallet.settings,doc);
+  const session=await wallet.session();
+  const provider=session.provider;
+  const chain=await provider.request({method:'eth_chainId'});
   if(BigInt(chain)!==u(doc.chainId))throw new Error(`Switch wallet to chain ${doc.chainId} before submitting.`);
   const data=encode(key,name,args),to=contract(({TerritoryCombat:'combat',TerritoryMatchmaker:'matchmaker',TerritoryBro:'bros',NeedsOracle:'needs',StETH:'stETH'})[key]);
-  const tx={from:account,to,data,...(value!=='0x0'?{value}: {})};
-  await window.ethereum.request({method:'eth_call',params:[tx,'latest']});
-  const hash=await window.ethereum.request({method:'eth_sendTransaction',params:[tx]});
+  const tx={from:session.address,to,data,...(value!=='0x0'?{value}: {})};
+  await provider.request({method:'eth_call',params:[tx,'latest']});
+  await session.assertCurrent();
+  const hash=await provider.request({method:'eth_sendTransaction',params:[tx]});
   setStatus(`Transaction submitted: ${hash}`);
   for(let i=0;i<90;i++){
-    const receipt=await window.ethereum.request({method:'eth_getTransactionReceipt',params:[hash]});
+    try { await session.assertCurrent(); }
+    catch { setStatus(`Transaction submitted: ${hash}. Wallet changed; monitoring paused. Check the transaction before submitting again.`);return hash; }
+    const receipt=await provider.request({method:'eth_getTransactionReceipt',params:[hash]});
     if(receipt){if(receipt.status==='0x0')throw new Error(`Transaction reverted: ${hash}`);if(name==='challenge')submittedRegistrations.set(String(args[1]),BigInt(receipt.blockNumber));await refresh();setStatus(name==='challenge'?'Registration submitted; awaiting confirmed game state.':'Transaction included; awaiting confirmed game state.');return hash;}
     await new Promise(r=>setTimeout(r,1500));
   }
   setStatus(`Transaction is still pending: ${hash}`);return hash;
-}
-async function connect(){
-  if(!window.ethereum)throw new Error('No injected wallet was found.');
-  const [address]=await window.ethereum.request({method:'eth_requestAccounts'});account=address;
-  $('connect').textContent=short(account);await refresh();
 }
 function broLabel(b){return b.name ? `${b.name} (#${b.tokenId})` : `#${b.tokenId}`;}
 function broBy(id){return doc.battleBros.find(b=>String(b.tokenId)===String(id));}
@@ -156,9 +158,11 @@ async function refresh(){
     render();setStatus(`Showing confirmed block ${doc.snapshot.blockNumber}. Transactions are checked against the live contract before submission.`);
   }catch(e){setStatus(e.message||String(e),true);}
 }
-$('connect').addEventListener('click',()=>connect().catch(e=>setStatus(e.message,true)));
 $('refresh').addEventListener('click',()=>refresh());
-window.ethereum?.on?.('accountsChanged',accounts=>{account=accounts[0]??null;$('connect').textContent=account?short(account):'Connect wallet';refresh();});
-window.ethereum?.on?.('chainChanged',()=>refresh());refresh();
+wallet.subscribe(state=>{
+  const previous=account;account=state.address;
+  if(doc && previous!==account)render();
+});
+refresh();
 
 setInterval(updateCountdowns,1000);

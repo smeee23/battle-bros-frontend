@@ -27,7 +27,8 @@ for(const form of [1,2,3,4,5,6,7]) {
     for(const expression of Object.keys(api.BATTLEBRO_EXPRESSIONS))assert(api.setBattleBroExpression(root,expression));
     api.setBattleBroExpression(root,'neutral');mover.pauseRemaining=0;mover.juggernautJogCooldown=1000;
     const start=root.position.clone();
-    for(let frame=0;frame<720;frame++)api.tickLavaMonsterMovers(frame/60,1/60);
+    // Form I needs about 17.1 seconds to finish a 180-degree turn before walking.
+    for(let frame=0;frame<19*60;frame++)api.tickLavaMonsterMovers(frame/60,1/60);
     assert(root.position.distanceTo(start)>.05,`${variant} ${form} walks`);
     root.traverse(n=>assert(Number.isFinite(n.position.x+n.position.y+n.position.z+n.quaternion.w)));
     if(form>=5)assert(root.userData.upperArmMotion.arms.length>=1,'Upper-arm animation enabled');
@@ -96,7 +97,7 @@ for(let form=1;form<=7;form++){
     assert(mover.terrainContacts && Number.isFinite(root.position.x+root.position.y+root.position.z));
     if(form===3){
       const start=root.position.clone();mover.pauseRemaining=0;
-      for(let i=0;i<240;i++)api.tickLavaMonsterMovers(i/60,1/60);
+      for(let i=0;i<19*60;i++)api.tickLavaMonsterMovers(i/60,1/60);
       assert(root.position.distanceTo(start)>.05,'Smaller Monster uses the established support gait');
     }
   }

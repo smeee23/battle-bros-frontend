@@ -4527,6 +4527,7 @@
     document.head.appendChild(script);
   }());
 </script>
+<link rel="stylesheet" href="assets/wallet.css">
 </head>
 <body>
   <div id="app"></div>
@@ -4597,6 +4598,7 @@
     <span>Stats</span>
   </button>
   <aside class="battlebro-panel" id="battlebro-panel" aria-label="BattleBro overview">
+    <div data-wallet-controls><span>Wallet controls loading…</span></div>
     <h2 id="battlebro-name">BattleBro #—</h2>
     <p class="battlebro-panel-note" id="battlebro-data-status">Persistent creature overview. Public read model is not connected yet.</p>
     <div class="battlebro-panel-grid" id="battlebro-core-stats"></div>
@@ -5630,6 +5632,7 @@
   <script defer src="assets/character-battle-actions.js"></script>
   <script defer src="assets/battle-arena.js"></script>
   <script src="runtime-config.js"></script>
+  <script type="module" src="build/wallet.js"></script>
   <script src="vendor/three/three.r128.min.js"></script>
   <script src="vendor/three/GLTFLoader.r128.js"></script>
   <script src="assets/battlebro-encounter.js"></script>
@@ -7744,8 +7747,8 @@
     grass:     new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.grass, side: THREE.FrontSide }),
     grassEdge: new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.grassEdge, side: THREE.FrontSide }),
     grassHi:   new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.grassHi, side: THREE.FrontSide }),
-    dirt:      new THREE.MeshLambertMaterial({ color: 0x7d4519, side: THREE.FrontSide }),
-    dirtRich:  new THREE.MeshLambertMaterial({ color: 0x462b15, side: THREE.FrontSide }),
+    dirt:      new THREE.MeshLambertMaterial({ color: 0x705146, side: THREE.FrontSide }),
+    dirtRich:  new THREE.MeshLambertMaterial({ color: 0x62473d, side: THREE.FrontSide }),
     path:      new THREE.MeshLambertMaterial({ color: 0xf2d29c, side: THREE.FrontSide }),
     pathTrim:  new THREE.MeshLambertMaterial({ color: 0xd9b780, side: THREE.FrontSide }),
     pathScuff: new THREE.MeshLambertMaterial({ color: 0xc9aa70, side: THREE.FrontSide }),
@@ -12084,7 +12087,7 @@
       : makeFence(normalized, level, span);
   }
 
-  function makeVoxelCropKind(kind, level = 1, visibleSides = null) {
+  function makeVoxelCropKind(kind, level = 1, visibleSides = null, withGreenhouse = true) {
     const g = new THREE.Group();
     const extra = Math.max(0, Math.min(MAX_FLOORS, level || 1) - 1);
     const positions = [
@@ -12125,7 +12128,7 @@
         vbox(g, 0.18, 0.16, 0.18, x, 0.17, z, M.cropLeaf);
       }
     }
-    if (isGreenhouseCropKind(kind)) addGridAlignedCropGreenhouseDome(g, visibleSides);
+    if (withGreenhouse && isGreenhouseCropKind(kind)) addGridAlignedCropGreenhouseDome(g, visibleSides);
     g.userData = { kind };
     castReceive(g);
     return g;
@@ -28348,7 +28351,7 @@ function neighborStarVector(edge, index) {
     { id: 'select', label: 'Select', select: true, color: '#c8b06f', shortcut: 'v', group: 'tools' },
     { id: 'grass',  label: 'Grass',  terrain: 'grass', color: '#9ec74b', shortcut: '1', group: 'plants' },
     { id: 'path',   label: 'Path',   terrain: 'path',  color: '#e8d5a8', shortcut: '2', group: 'terrain' },
-    { id: 'dirt',   label: 'Dirt',   terrain: 'dirt',  color: '#5a3b27', shortcut: '3', group: 'plants' },
+    { id: 'dirt',   label: 'Dirt',   terrain: 'dirt',  color: '#62473d', shortcut: '3', group: 'plants' },
     { id: 'water',  label: 'Water',  terrain: 'water', color: '#4a90c2', shortcut: '4', group: 'plants' },
     { id: 'stone',  label: 'Stone',  terrain: 'stone', color: '#8f8a82', group: 'terrain' },
     { id: 'lava',   label: 'Lava',   terrain: 'lava',  color: '#e7592b', group: 'terrain' },
@@ -30298,9 +30301,67 @@ function neighborStarVector(edge, index) {
         // jumping shelves solid and preserve every original column height.
         return !site.sky&&level>5&&Math.abs(Math.sin(x*.17+Math.sin(z*.13)*1.8))<.23?'lava':'stone';
       }
-      if(level>18)return 'stone';
-      if(!site.sky&&level<=8&&Math.sin(x*.16+1)*Math.cos(z*.14)>.58)return 'water';
-      return 'grass';
+      // Plant-region mountains and former pools share grass and exposed soil.
+      return level>18||Math.sin(x*.16+1)*Math.cos(z*.14)>.35?'dirt':'grass';
+    }
+    const plantKinds=['tuft','tuft','bush','flower','flower','crop','corn','wheat','pumpkin','carrot','sunflower'];
+    const desertPlantKinds=['bush','tuft','tuft','flower'];
+    function vegetationForCell(site,x,z) {
+      // Scenery is visual: keep existing walkable cells, mining and resident routes.
+      // Leave the arrival area and its mountain approach clear.
+      if(site.sky||Math.hypot(x,z)<7||(Math.abs(x)<2&&z<0&&z>-62))return null;
+      const kinds=site.biome==='EARTH'?plantKinds:site.biome==='DESERT'?desertPlantKinds:null;
+      if(!kinds||hash(x,z,310)>(site.biome==='EARTH'?.16:.022))return null;
+      return kinds[Math.floor(hash(x,z,311)*kinds.length)];
+    }
+    const vegetationGeometries=new Map();
+    const vegetationMaterial=new THREE.MeshLambertMaterial({vertexColors:true});
+    function vegetationGeometry(kind) {
+      if(vegetationGeometries.has(kind))return vegetationGeometries.get(kind);
+      // Flatten each existing plant once, retaining its shapes and alien colors.
+      // Vertex colors let all its surfaces render in a single instanced batch.
+      const prototype=makeVoxelCropKind(kind,1,null,false),positions=[],normals=[],colors=[];
+      prototype.updateMatrixWorld(true);
+      prototype.traverse(node=>{
+        if(!node.isMesh)return;
+        const geometry=node.geometry.index?node.geometry.toNonIndexed():node.geometry.clone();
+        geometry.applyMatrix4(node.matrixWorld);
+        const p=geometry.attributes.position,n=geometry.attributes.normal,c=node.material.color;
+        for(let i=0;i<p.count;i++) {
+          positions.push(p.getX(i),p.getY(i),p.getZ(i));
+          normals.push(n.getX(i),n.getY(i),n.getZ(i));colors.push(c.r,c.g,c.b);
+        }
+        geometry.dispose();
+      });
+      const geometry=new THREE.BufferGeometry();
+      geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+      geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+      geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+      vegetationGeometries.set(kind,geometry);return geometry;
+    }
+    function disposeVegetation(body) {
+      for(const mesh of body.vegetation?.values()||[]) {body.root.remove(mesh);mesh.dispose();}
+    }
+    function buildVegetation(body) {
+      disposeVegetation(body);body.vegetation=new Map();
+      const buckets=new Map();
+      for(const {x,z} of body.entries) {
+        const cell=getCell(x,z,body.site.sky?body.site.id:undefined);
+        if(!cell.vegetation||cell.kind||!['grass','dirt','sand'].includes(cell.terrain))continue;
+        if(!buckets.has(cell.vegetation))buckets.set(cell.vegetation,[]);
+        buckets.get(cell.vegetation).push({x,z,cell});
+      }
+      for(const [kind,entries] of buckets) {
+        const mesh=new THREE.InstancedMesh(vegetationGeometry(kind),vegetationMaterial,entries.length);
+        mesh.name='exploration-vegetation-'+kind;mesh.frustumCulled=false;mesh.receiveShadow=true;
+        entries.forEach(({x,z,cell},i)=>{
+          dummy.position.set(x+.5-body.site.x,columnTop(cell),z+.5-body.site.z);
+          dummy.rotation.y=Math.floor(hash(x,z,312)*4)*Math.PI/2;
+          dummy.scale.setScalar(body.site.biome==='DESERT'?.65:1);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
+        });
+        dummy.rotation.y=0;dummy.scale.set(1,1,1);
+        mesh.instanceMatrix.needsUpdate=true;body.root.add(mesh);body.vegetation.set(kind,mesh);
+      }
     }
     function surfaceStyle(terrain,biome) {
       const variant=terrain==='stone'&&biome==='LAVA'?3:0,id=terrain+'|'+variant;
@@ -30437,7 +30498,9 @@ function neighborStarVector(edge, index) {
       else relief=Math.max(2,duneHeight(lx*1.5,lz*1.3-25)*.6*Math.max(0,Math.min(1,(lx+2)/8)));
       const blend=Math.min(1,Math.max(0,(edge-1)/4));
       const level=Math.max(1,Math.min(64,3+Math.round(relief*blend)));
-      return {terrain:surfaceTerrain(site,x,z,level),biome:site.biome,terrainFloors:level,kind:null,islandId:site.id};
+      const vegetation=vegetationForCell(site,x,z);
+      const terrain=vegetation&&isGreenhouseCropKind(vegetation)?'dirt':surfaceTerrain(site,x,z,level);
+      return {terrain,biome:site.biome,terrainFloors:level,kind:null,vegetation,islandId:site.id};
     }
     function getCell(x,z,islandId) {
       const sky=islandId?.endsWith(':sky'),id=sky?islandId+'|'+key(x,z):key(x,z);
@@ -30578,7 +30641,7 @@ function neighborStarVector(edge, index) {
       body.entries.forEach(({x,z},i)=>writeInstance(body,x,z,i));
     }
     function disposeBody(body) {
-      group.remove(body.root);body.hull.geometry.dispose();body.mesh.dispose();disposeSurfaces(body);
+      group.remove(body.root);body.hull.geometry.dispose();body.mesh.dispose();disposeSurfaces(body);disposeVegetation(body);
     }
     function convexHull(points) {
       points.sort((a,b)=>a.x-b.x||a.z-b.z);
@@ -30623,7 +30686,7 @@ function neighborStarVector(edge, index) {
       const body={site,root,mesh,hull,indices,entries,collisionPolygon,ox:saved?.ox||0,oz:saved?.oz||0,
         vx:saved?.vx??Math.cos(site.phase)*(site.sky ? .07 : .025),vz:saved?.vz??Math.sin(site.phase)*(site.sky ? .07 : .025),
         mass:entries.length,dx:0,dz:0};
-      buildSurfaces(body);mesh.instanceMatrix.needsUpdate=true;
+      buildSurfaces(body);buildVegetation(body);mesh.instanceMatrix.needsUpdate=true;
       root.position.set(site.x+body.ox,site.elevation||0,site.z+body.oz);group.add(root);islands.set(site.id,body);if(site.sky)skyBodies.add(body);
       return body;
     }
@@ -30670,7 +30733,9 @@ function neighborStarVector(edge, index) {
         }
         return true;
       }
-      edits.set(islandId?.endsWith(':sky')?islandId+'|'+key(x,z):key(x,z),{...cell,...patch,islandId:cell.islandId});
+      const next={...cell,...patch,islandId:cell.islandId};
+      if(patch.terrain!==undefined||patch.terrainFloors!==undefined||patch.kind!==undefined)next.vegetation=null;
+      edits.set(islandId?.endsWith(':sky')?islandId+'|'+key(x,z):key(x,z),next);
       const body=islands.get(cell.islandId),index=body?.indices.get(key(x,z));
       if(index!==undefined){
         if(patch.terrain&&patch.terrain!==cell.terrain)buildSurfaces(body);
@@ -30682,6 +30747,7 @@ function neighborStarVector(edge, index) {
           }
         }
         body.mesh.instanceMatrix.needsUpdate=true;
+        if(cell.vegetation!==next.vegetation)buildVegetation(body);
       }
       return true;
     }
@@ -31415,6 +31481,7 @@ function neighborStarVector(edge, index) {
     landingDip: 0,
   };
   const fpKeys = new Set();
+  if (typeof document !== 'undefined') document.addEventListener('battlebros:wallet-open', () => fpKeys.clear());
 
   // Sparse local scenery inhabitants, anchored to logical cells as islands drift.
   const explorationResidents = new Map();
@@ -41324,7 +41391,7 @@ function neighborStarVector(edge, index) {
   const MINIMAP_FALLBACK_COLORS = {
     grass: 0x9ec74b,
     path:  0xe8d5a8,
-    dirt:  0x7d4519,
+    dirt:  0x62473d,
     water: 0x3a8fcc,
     stone: 0x8f8a82,
     lava:  0xe7592b,

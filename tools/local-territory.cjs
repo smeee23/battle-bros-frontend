@@ -8,6 +8,7 @@ function localRuntime(root,runOverride) {
   if(manifest.schemaVersion!==4||manifest.projectionVersion!==5)throw Error('Unsupported local territory publication');
   const game=JSON.parse(fs.readFileSync(path.resolve(root,path.dirname(relative),manifest.paths.gameState),'utf8'));
   if(game.deploymentId!==manifest.deploymentId||JSON.stringify(game.snapshot)!==JSON.stringify(manifest.snapshot))throw Error('Local territory publication mismatch');
-  return {schemaVersion:4,manifestUrl:'/'+relative,tokenId:game.battleBros.find(b=>b.active)?.tokenId??null};
+  return {schemaVersion:4,manifestUrl:'/'+relative,tokenId:game.battleBros.find(b=>b.active)?.tokenId??null,
+    ...(game.chainId && game.contracts ? {wallet:{chainId:game.chainId,deployment:{chainId:game.chainId,deploymentId:game.deploymentId,contracts:game.contracts}}}: {})};
 }
 module.exports={localRuntime};

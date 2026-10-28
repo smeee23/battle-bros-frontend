@@ -5,7 +5,10 @@ output_dir="dist"
 mkdir -p "$output_dir"
 node scripts/generate-runtime-config.mjs --output runtime-config.js
 node scripts/export-territory-abi.mjs
+node scripts/build-wallet.mjs
 cp index.html "$output_dir/index.html"
+mkdir -p "$output_dir/build"
+cp build/wallet.js "$output_dir/build/wallet.js"
 cp territory.html territory.js "$output_dir/"
 cp runtime-config.js "$output_dir/runtime-config.js"
 for asset_dir in vendor models sounds crowd schemas assets; do

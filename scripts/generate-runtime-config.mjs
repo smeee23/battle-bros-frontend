@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { walletSettings } from '../wallet/config.mjs';
 const root=path.resolve(import.meta.dirname,'..'),args=process.argv.slice(2),env=process.env;
 const option=(name,fallback)=>{const i=args.indexOf(name);return i<0?fallback:args[i+1];};
 const configPath=path.resolve(root,option('--config',env.BATTLEBROS_PUBLIC_DATA_CONFIG||'deployment/public-data.json'));
@@ -18,6 +19,12 @@ if(!manifestUrl && deployment){
   manifestUrl=`${origin.replace(/\/+$/,'')}/${prefix}/v2/${chainId}/${combat}/manifest.json`;
 }
 const runtime={};
+if(config.wallet || env.BATTLEBROS_WALLET_CHAIN_ID || env.BATTLEBROS_WALLET_RPC_URL) {
+  runtime.wallet={...config.wallet,
+    ...(env.BATTLEBROS_WALLET_CHAIN_ID?{chainId:env.BATTLEBROS_WALLET_CHAIN_ID}:{}),
+    ...(env.BATTLEBROS_WALLET_RPC_URL?{rpcUrl:env.BATTLEBROS_WALLET_RPC_URL}:{})};
+  walletSettings(runtime);
+}
 if(manifestUrl){
   const parsed=new URL(manifestUrl);
   if(!['http:','https:'].includes(parsed.protocol))throw Error('Manifest URL must use HTTP or HTTPS');

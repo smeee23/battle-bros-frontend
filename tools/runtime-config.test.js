@@ -7,6 +7,8 @@ const config=path.join(temp,'config.json'),output=path.join(temp,'runtime.js');
 const generate=env=>{execFileSync(process.execPath,['scripts/generate-runtime-config.mjs','--config',config,'--output',output],{cwd:root,env:{...clean,...env}});const ctx={window:{}};vm.runInNewContext(fs.readFileSync(output,'utf8'),ctx);return ctx.window.__battleBrosPublicData;};
 try {
  fs.writeFileSync(config,'{}');assert.equal(generate().manifestUrl,undefined,'No fake deployment by default');
+ assert.equal(generate({BATTLEBROS_WALLET_CHAIN_ID:'11155111'}).wallet.chainId,'11155111','Wallet target requires no RPC or deployment');
+ assert.equal(generate({BATTLEBROS_WALLET_CHAIN_ID:'31337',BATTLEBROS_WALLET_RPC_URL:'http://127.0.0.1:8545'}).wallet.rpcUrl,'http://127.0.0.1:8545');
  assert.equal(generate({BATTLEBROS_MANIFEST_URL:'http://localhost:1234/manifest.json'}).manifestUrl,'http://localhost:1234/manifest.json','Explicit URL needs no deployment file or S3 settings');
  const deployment={schemaVersion:2,chainId:'31337',combat:'0x'+'a'.repeat(40),bros:'0x'+'b'.repeat(40),vault:'0x'+'c'.repeat(40),needs:'0x'+'d'.repeat(40)};
  fs.writeFileSync(path.join(temp,'deployment.json'),JSON.stringify(deployment));

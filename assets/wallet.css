@@ -1,0 +1,18 @@
+.bb-wallet { position:relative; color:#f3f4e9; font:13px/1.5 system-ui,sans-serif; text-align:left; }
+.bb-wallet details { position:relative; }
+.bb-wallet summary { cursor:pointer; list-style:none; padding:8px 12px; border:1px solid #67816b; border-radius:10px; background:#172c23; color:#ecf4de; font-weight:650; }
+.bb-wallet summary::-webkit-details-marker { display:none; }
+.bb-wallet summary:focus-visible,.bb-wallet button:focus-visible,.bb-wallet select:focus-visible { outline:2px solid #c8ee83; outline-offset:3px; }
+.bb-wallet-panel { position:absolute; right:0; top:calc(100% + 8px); z-index:2000; width:min(320px,calc(100vw - 32px)); box-sizing:border-box; padding:16px; background:#172c23; border:1px solid #67816b; border-radius:12px; box-shadow:0 12px 40px #0006; }
+.bb-wallet p { margin:0 0 12px; }
+.bb-wallet label { display:grid; gap:5px; }
+.bb-wallet button,.bb-wallet select { font:inherit; border-radius:7px; padding:7px 9px; color:#f3f4e9; background:#314b38; border:1px solid #67816b; cursor:pointer; }
+.bb-wallet select { width:100%; }
+.bb-wallet .bb-wallet-actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.bb-wallet button:disabled { opacity:.6; cursor:wait; }
+.bb-wallet-address { overflow-wrap:anywhere; }
+.bb-wallet-note { font-size:11px; color:#b6c6b7; }
+.bb-wallet-error { color:#ffb3a7; }
+.bb-wallet [hidden] { display:none !important; }
+.battlebro-panel > .bb-wallet { margin-bottom:14px; }
+.battlebro-panel > .bb-wallet .bb-wallet-panel { position:static; width:100%; margin-top:8px; }

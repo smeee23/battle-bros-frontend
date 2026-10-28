@@ -17,7 +17,7 @@ const contentTypes = {
 
 const server = http.createServer((request, response) => {
   const urlPath = new URL(request.url, `http://${request.headers.host || 'localhost'}`).pathname;
-  if(urlPath==='/runtime-config.js' && !process.env.BATTLEBROS_MANIFEST_URL && !process.env.BATTLEBROS_DEPLOYMENT_MANIFEST) {
+  if(urlPath==='/runtime-config.js' && !process.env.BATTLEBROS_PUBLIC_DATA_CONFIG && !process.env.BATTLEBROS_MANIFEST_URL && !process.env.BATTLEBROS_DEPLOYMENT_MANIFEST && !process.env.BATTLEBROS_WALLET_CHAIN_ID && !process.env.BATTLEBROS_WALLET_RPC_URL) {
     try {
       const config=localRuntime(root,process.env.BATTLEBROS_LOCAL_RUN);
       if(config){response.writeHead(200,{'Content-Type':contentTypes['.js'],'Cache-Control':'no-store'});response.end('window.__battleBrosPublicData = Object.freeze('+JSON.stringify(config)+');');return;}

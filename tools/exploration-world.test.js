@@ -80,24 +80,55 @@ assert((b.vx-a.vx)*nx+(b.vz-a.vz)*nz>-.039,'Mass-weighted contact slows an appro
 console.log('floating world: deterministic varied fragments, real void, shared shores, tapered hulls, drift/contact, riders, mining, rescue and bounded streaming OK');
 // Regional themes are coordinate-based, independent of random island shape.
 const regional=setup().terrain;regional.activate();
-const regions=[[0,0,'EARTH',['grass','water','stone']],[192,0,'LAVA',['stone','lava']],
+const vegetationCounts=new Map();
+const regions=[[0,0,'EARTH',['grass','dirt']],[192,0,'LAVA',['stone','lava']],
  [0,-192,'DESERT',['sand']],[192,-192,'ICE',['snow']]];
 for(const [cx,cz,biome,expected] of regions) {
  regional.ensureAround(cx,cz);
- const types=new Set(),owners=new Set();
+ const types=new Set(),owners=new Set(),plants=new Map();let landCells=0;
  for(let x=cx-32;x<cx+32;x++)for(let z=cz-32;z<cz+32;z++) {
   const cell=regional.getCell(x,z);if(!cell)continue;
   assert.equal(cell.biome,biome,'A broad section shares one theme across island boundaries');
-  types.add(cell.terrain);owners.add(cell.islandId);
+  types.add(cell.terrain);owners.add(cell.islandId);landCells++;
+  if(cell.vegetation){plants.set(cell.vegetation,(plants.get(cell.vegetation)||0)+1);assert.equal(cell.kind,null,'Scenery preserves walking and mining');}
  }
  assert(owners.size>4,'Regions span many islands, rather than coloring individual fragments');
  assert.deepEqual([...types].sort(),expected.sort());
  for(const fragment of regional.diagnostics().fragments)assert.equal(fragment.biome,biome,'Sky and lower fragments inherit the region');
+ vegetationCounts.set(biome,{plants,density:[...plants.values()].reduce((a,b)=>a+b,0)/landCells});
 }
+const plantWorld=vegetationCounts.get('EARTH'),sandWorld=vegetationCounts.get('DESERT');
+for(const kind of ['tuft','bush','flower','crop','corn','wheat','pumpkin','carrot','sunflower'])assert(plantWorld.plants.has(kind),'Plant region contains '+kind);
+assert(plantWorld.density>.1&&plantWorld.density<.2,'Varied planting leaves open ground');
+assert(sandWorld.density>0&&sandWorld.density<plantWorld.density/4,'Desert has much sparser planting');
+assert([...sandWorld.plants.keys()].every(kind=>['bush','tuft','flower'].includes(kind)),'Desert has only small plants and no trees or crops');
+for(const biome of ['LAVA','ICE'])assert.equal(vegetationCounts.get(biome).plants.size,0,'Other biomes preserve their scenery');
 regional.ensureAround(0,0);
 const standing={pos:new THREE.Vector3(0,20,0),grounded:false};
 while(regional.diagnostics().pending)regional.tick(0,standing,.6,null);
-const land=regional.test.islands.get(regional.getCell(0,0).islandId);
+let land=regional.test.islands.get(regional.getCell(0,0).islandId);
+const vegetationBody=[...regional.test.islands.values()].find(b=>b.vegetation.size),plantEntry=vegetationBody.entries.find(({x,z})=>regional.getCell(x,z).vegetation);
+const plantedCell=regional.getCell(plantEntry.x,plantEntry.z),plantKind=plantedCell.vegetation,batch=vegetationBody.vegetation.get(plantKind);
+assert(batch.isInstancedMesh&&batch.parent===vegetationBody.root,'Plants share the drifting island transform');
+assert(batch.material.vertexColors&&batch.geometry.attributes.color,'Alien colors share one batched material');
+assert(vegetationBody.vegetation.size<=9,'At most one draw batch per plant kind');
+assert(regional.canExcavate(plantEntry.x,plantEntry.z),'Decorative vegetation keeps mining available');
+const matrix=new THREE.Matrix4();batch.getMatrixAt(0,matrix);
+const firstPlant=vegetationBody.entries.find(({x,z})=>regional.getCell(x,z).vegetation===plantKind);
+assert(Math.abs(matrix.elements[13]-(regional.getCell(firstPlant.x,firstPlant.z).terrainFloors-1)*.2)<1e-6,'Plants sit on actual terrain tops');
+const oldCount=batch.count,sharedGeometry=batch.geometry;let sharedGeometryDisposed=false;
+sharedGeometry.addEventListener('dispose',()=>sharedGeometryDisposed=true);
+regional.setCell(plantEntry.x,plantEntry.z,{terrainFloors:plantedCell.terrainFloors+1});
+assert.equal(regional.getCell(plantEntry.x,plantEntry.z).vegetation,null,'Terrain edits clear the affected plant');
+assert.equal(vegetationBody.vegetation.get(plantKind)?.count||0,oldCount-1,'Editing refreshes the scenery batch');
+assert([...vegetationBody.vegetation.values()].every(m=>m.geometry.attributes.position),'Other plants remain rendered');
+const savedPlant=JSON.stringify(regional.getCell(plantEntry.x,plantEntry.z));
+regional.ensureAround(1000,1000);regional.ensureAround(0,0);
+assert.equal(JSON.stringify(regional.getCell(plantEntry.x,plantEntry.z)),savedPlant,'Cleared plants stay cleared after streaming');
+assert.equal(sharedGeometryDisposed,false,'Eviction preserves shared vegetation geometry');
+console.log('Endless planting: grass/dirt only, all crops, sparse treeless desert, visual-only instancing, terrain edits and streaming persistence passed');
+
+land=regional.test.islands.get(regional.getCell(0,0).islandId);
 regional.setCell(0,0,{terrain:'lava',terrainFloors:4});
 const cap=land.surfaces.get('lava'),capMatrix=new THREE.Matrix4();
 cap.mesh.getMatrixAt(cap.indices.get('0,0'),capMatrix);

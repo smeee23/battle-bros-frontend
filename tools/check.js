@@ -30,6 +30,8 @@ for (const relativePath of [
   'schemas/manifest.schema.json',
   'assets/territory-abi.json',
   'territory.js',
+  'build/wallet.js',
+  'assets/wallet.css',
 ]) {
   if (!fs.existsSync(path.join(root, relativePath))) {
     throw new Error(`Missing runtime asset: ${relativePath}`);

@@ -12,4 +12,11 @@ module.exports=function installTerrainRendering(context,html) {
   +section('  function getBoxGeometry(','  function getVoxelBoxGeometry(')
   +section('  function getOpenBoxGeometry(','  // A rounded extruded slab')
   +section('  function terrainTileMaterials(','  function updateHomeCapEdges('),context);
+ const fn=name=>{const a=html.indexOf('  function '+name+'(');return html.slice(a,html.indexOf('\n  }',a)+4);};
+ vm.runInContext('Object.assign(M,{'+section('    trunk:     new','    wallCream:')
+  +section('    cropLeaf:  new','    greenhouseGlass:')+'});'
+  +section('  const M_PLANT =','  const M_ANIMAL =')
+  +['getVoxelBoxGeometry','roundedBox','castReceive','voxelBoxGeometryForSize','vbox','isGreenhouseCropKind','makeVoxelCropKind'].map(fn).join('\n')
+  +'\nconst MAX_FLOORS=8; let renderVoxelGap=0,renderVoxelBevel=0;',context);
+
 };
