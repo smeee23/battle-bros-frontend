@@ -7699,10 +7699,51 @@
     }
   }
 
+  // Shared by Home, Territory and Endless factories, including voxel stamps.
+  // Color-only: retain cached materials, geometry, instancing and lighting.
+  const ALIEN_VEGETATION = Object.freeze({
+    grass: 0xa766ce,
+    grassEdge: 0x78469e,
+    grassHi: 0xcf95ed,
+    rockMoss: 0x9561bc,
+    trunk: 0x503352,
+    leaves: 0xd65bc5,
+    leavesDk: 0x843cac,
+    cropLeaf: 0xbf75ec,
+    cropStem: 0x694093,
+    cornStalk: 0x7951b0,
+    cornCob: 0xffb3dc,
+    cornLeaf: 0xd67fdf,
+    wheatStalk: 0x9980d8,
+    wheatHead: 0xf4b9ed,
+    pumpkin: 0xe76bb5,
+    pumpkinDk: 0xa13e85,
+    pumpkinStem: 0x633884,
+    carrotBody: 0xf58ec8,
+    sunflowerStalk: 0x734397,
+    sunflowerPetal: 0xff99df,
+    sunflowerCenter: 0x65346e,
+    petalRed: 0xf06bb5,
+    petalYellow: 0xffca93,
+    petalPurple: 0xa583f0,
+    petalWhite: 0xf6dafa,
+    bushBerry: 0x82def0,
+    vine: 0x653780,
+    leaf: 0xc879df,
+    flower: 0xffc1e9,
+    bamboo: 0xad70d4,
+    bambooD: 0x754695,
+    blossom: 0xf598d3,
+    blossomDk: 0xbd60ae,
+  });
+  function alienVegetationHex(name) {
+    return "#" + ALIEN_VEGETATION[name].toString(16).padStart(6, "0");
+  }
+
   const M = {
-    grass:     new THREE.MeshLambertMaterial({ color: 0xb0d949, side: THREE.FrontSide }),
-    grassEdge: new THREE.MeshLambertMaterial({ color: 0x95c138, side: THREE.FrontSide }),
-    grassHi:   new THREE.MeshLambertMaterial({ color: 0xc6ee68, side: THREE.FrontSide }),
+    grass:     new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.grass, side: THREE.FrontSide }),
+    grassEdge: new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.grassEdge, side: THREE.FrontSide }),
+    grassHi:   new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.grassHi, side: THREE.FrontSide }),
     dirt:      new THREE.MeshLambertMaterial({ color: 0x7d4519, side: THREE.FrontSide }),
     dirtRich:  new THREE.MeshLambertMaterial({ color: 0x462b15, side: THREE.FrontSide }),
     path:      new THREE.MeshLambertMaterial({ color: 0xf2d29c, side: THREE.FrontSide }),
@@ -7717,7 +7758,7 @@
     rock:      new THREE.MeshLambertMaterial({ color: 0x9b9a8f, side: THREE.FrontSide }),
     rockDk:    new THREE.MeshLambertMaterial({ color: 0x707066, side: THREE.FrontSide }),
     rockHi:    new THREE.MeshLambertMaterial({ color: 0xc3c0b2, side: THREE.FrontSide }),
-    rockMoss:  new THREE.MeshLambertMaterial({ color: 0x6f8a3a, side: THREE.FrontSide }),
+    rockMoss:  new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.rockMoss, side: THREE.FrontSide }),
 
     // New terrains (stone / lava / sand / snow).
     stone:     new THREE.MeshLambertMaterial({ color: 0x8f8a82, side: THREE.FrontSide }),
@@ -7726,17 +7767,18 @@
     stoneDk:   new THREE.MeshLambertMaterial({ color: 0x5e5a52 }),
     lava:      new THREE.MeshLambertMaterial({ color: 0xe7592b, emissive: 0xb02410, emissiveIntensity: 0.8 }),
     lavaCrust: new THREE.MeshLambertMaterial({ color: 0x3a201a }),
-    sand:      new THREE.MeshLambertMaterial({ color: 0xe6cc7c }),
-    sandDk:    new THREE.MeshLambertMaterial({ color: 0xc6a64b }),
+    // Rust-red Martian sand; all worlds share these cap and shadow materials.
+    sand:      new THREE.MeshLambertMaterial({ color: 0xc66b4e }),
+    sandDk:    new THREE.MeshLambertMaterial({ color: 0x914634 }),
     sandAccent: new THREE.MeshLambertMaterial({ color:  0xff2020}),
     snow:      new THREE.MeshLambertMaterial({ color: 0xf2f5fa }),
     snowDk:    new THREE.MeshLambertMaterial({ color: 0xc9d1dc }),
     bridgeWood:  new THREE.MeshLambertMaterial({ color: 0x8b5a32 }),
     bridgeWoodD: new THREE.MeshLambertMaterial({ color: 0x5f3a20 }),
 
-    trunk:     new THREE.MeshLambertMaterial({ color: 0x5c3818 }),
-    leaves:    new THREE.MeshLambertMaterial({ color: 0x86d139 }),
-    leavesDk:  new THREE.MeshLambertMaterial({ color: 0x5fab26 }),
+    trunk:     new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.trunk }),
+    leaves:    new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.leaves }),
+    leavesDk:  new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.leavesDk }),
 
     wallCream: new THREE.MeshLambertMaterial({ color: 0xf2dfb0 }),
     wallTrim:  new THREE.MeshLambertMaterial({ color: 0xe5cf99 }),
@@ -7774,21 +7816,21 @@
     towerStoneD:   new THREE.MeshLambertMaterial({ color: 0x7e776e }),
     towerRoof:     new THREE.MeshLambertMaterial({ color: 0x5d6268 }),
     towerRoofD:    new THREE.MeshLambertMaterial({ color: 0x3f444a }),
-    cropLeaf:  new THREE.MeshLambertMaterial({ color: 0x96d943 }),
-    cropStem:  new THREE.MeshLambertMaterial({ color: 0x5e9c2e }),
+    cropLeaf:  new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.cropLeaf }),
+    cropStem:  new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.cropStem }),
 
-    cornStalk: new THREE.MeshLambertMaterial({ color: 0x6fa848 }),
-    cornCob:   new THREE.MeshLambertMaterial({ color: 0xf2c849 }),
-    cornLeaf:  new THREE.MeshLambertMaterial({ color: 0xa8c948 }),
-    wheatStalk:new THREE.MeshLambertMaterial({ color: 0xc9b76e }),
-    wheatHead: new THREE.MeshLambertMaterial({ color: 0xe6c354 }),
-    pumpkin:   new THREE.MeshLambertMaterial({ color: 0xe07c2a }),
-    pumpkinDk: new THREE.MeshLambertMaterial({ color: 0xb35a18 }),
-    pumpkinStem: new THREE.MeshLambertMaterial({ color: 0x4d6a18 }),
-    carrotBody:new THREE.MeshLambertMaterial({ color: 0xe06a2a }),
-    sunflowerStalk:  new THREE.MeshLambertMaterial({ color: 0x4d8a2a }),
-    sunflowerPetal:  new THREE.MeshLambertMaterial({ color: 0xf2c849 }),
-    sunflowerCenter: new THREE.MeshLambertMaterial({ color: 0x5a3a18 }),
+    cornStalk: new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.cornStalk }),
+    cornCob:   new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.cornCob }),
+    cornLeaf:  new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.cornLeaf }),
+    wheatStalk:new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.wheatStalk }),
+    wheatHead: new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.wheatHead }),
+    pumpkin:   new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.pumpkin }),
+    pumpkinDk: new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.pumpkinDk }),
+    pumpkinStem: new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.pumpkinStem }),
+    carrotBody:new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.carrotBody }),
+    sunflowerStalk:  new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.sunflowerStalk }),
+    sunflowerPetal:  new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.sunflowerPetal }),
+    sunflowerCenter: new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.sunflowerCenter }),
     greenhouseGlass: makeForceShieldMaterial(),
     greenhouseFrame: new THREE.MeshLambertMaterial({ color: 0x8f979d }),
 
@@ -7898,27 +7940,25 @@
     return root;
   }
 
+  const ALIEN_SEASON_BASE = {
+    grass: ALIEN_VEGETATION.grass,
+    grassEdge: ALIEN_VEGETATION.grassEdge,
+    grassHi: ALIEN_VEGETATION.grassHi,
+    leaves: ALIEN_VEGETATION.leaves,
+    leavesDk: ALIEN_VEGETATION.leavesDk,
+    cropLeaf: ALIEN_VEGETATION.cropLeaf,
+    cropStem: ALIEN_VEGETATION.cropStem,
+    cornStalk: ALIEN_VEGETATION.cornStalk,
+    cornLeaf: ALIEN_VEGETATION.cornLeaf,
+    pumpkinStem: ALIEN_VEGETATION.pumpkinStem,
+    sunflowerStalk: ALIEN_VEGETATION.sunflowerStalk,
+    rockMoss: ALIEN_VEGETATION.rockMoss,
+  };
   const SEASON_FOLIAGE = {
-    spring: {
-      grass: 0xa7cf58, grass2: 0x7fb03d, leaves: 0x86d139, leavesDk: 0x5fab26,
-      cropLeaf: 0x96d943, cropStem: 0x5e9c2e, cornStalk: 0x6fa848, cornLeaf: 0xa8c948,
-      pumpkinStem: 0x4d6a18, sunflowerStalk: 0x4d8a2a, rockMoss: 0x6f8a3a,
-    },
-    summer: {
-      grass: 0x9ec74b, grass2: 0x78a83b, leaves: 0x86d139, leavesDk: 0x5fab26,
-      cropLeaf: 0x96d943, cropStem: 0x5e9c2e, cornStalk: 0x6fa848, cornLeaf: 0xa8c948,
-      pumpkinStem: 0x4d6a18, sunflowerStalk: 0x4d8a2a, rockMoss: 0x6f8a3a,
-    },
-    autumn: {
-      grass: 0xb0ad5a, grass2: 0x8c9240, leaves: 0xc07a2f, leavesDk: 0x8f5b24,
-      cropLeaf: 0xb99638, cropStem: 0x8a7d2d, cornStalk: 0xa27c32, cornLeaf: 0xb99738,
-      pumpkinStem: 0x6f5a20, sunflowerStalk: 0x8a6b24, rockMoss: 0x7b7336,
-    },
-    winter: {
-      grass: 0x9fb27f, grass2: 0x7f9668, leaves: 0x7ba66d, leavesDk: 0x5f874f,
-      cropLeaf: 0x8eb278, cropStem: 0x6f8f5a, cornStalk: 0x8e9154, cornLeaf: 0xa6a96a,
-      pumpkinStem: 0x65743e, sunflowerStalk: 0x6f864e, rockMoss: 0x687c4e,
-    },
+    spring: { ...ALIEN_SEASON_BASE, grass: 0xb879da, grassEdge: 0x8753ad, grassHi: 0xdda3f1, leaves: 0xec81d2, leavesDk: 0xa050b9 },
+    summer: { ...ALIEN_SEASON_BASE },
+    autumn: { ...ALIEN_SEASON_BASE, grass: 0xa65ba5, grassEdge: 0x793f80, grassHi: 0xd28bc6, leaves: 0xe462ac, leavesDk: 0x943b88 },
+    winter: { ...ALIEN_SEASON_BASE, grass: 0x9b88c7, grassEdge: 0x736297, grassHi: 0xc3b3e6, leaves: 0xb393df, leavesDk: 0x7960a8 },
   };
   const weatherMaterialBase = new Map();
   const WEATHER_MATERIAL_SKIP = new Set(['surroundingLandTop', 'surroundingLandSide', 'borderShade', 'borderOccupied', 'hover', 'hoverErase', 'waterFoam', 'cloud', 'cloudShade']);
@@ -10491,7 +10531,7 @@
     return g;
   }
 
-  // Carrot rows — orange tips poking out of the dirt with green leafy tops.
+  // Carrot rows — pink tips poking out of the dirt with violet leafy tops.
   function makeCarrot(visibleSides = null) {
     const g = new THREE.Group();
     const positions = [
@@ -10504,7 +10544,7 @@
       const tip = new THREE.Mesh(getBoxGeometry(0.06, 0.05, 0.06), M.carrotBody);
       tip.position.set(x, 0.025, z);
       g.add(tip);
-      // 3 green leafy blades fanning out
+      // 3 violet leafy blades fanning out
       for (let i = 0; i < 3; i++) {
         const blade = new THREE.Mesh(getBoxGeometry(0.035, 0.13, 0.035), M.cropStem);
         blade.position.set(x + (i - 1) * 0.025, 0.10, z);
@@ -10518,7 +10558,7 @@
     return g;
   }
 
-  // Sunflowers — 3 tall stalks with yellow discs and brown centers.
+  // Sunflowers — 3 tall violet stalks with pink discs and plum centers.
   function makeSunflower(visibleSides = null) {
     const g = new THREE.Group();
     const positions = [
@@ -10569,11 +10609,11 @@
   // materials but pick different palettes; animals are tiny box-stack
   // primitives so they render through the standard kind dispatch.
   const M_PLANT = {
-    petalRed:    new THREE.MeshLambertMaterial({ color: 0xd24a4f }),
-    petalYellow: new THREE.MeshLambertMaterial({ color: 0xf2c849 }),
-    petalPurple: new THREE.MeshLambertMaterial({ color: 0x9d6ad1 }),
-    petalWhite:  new THREE.MeshLambertMaterial({ color: 0xf3eee0 }),
-    bushBerry:   new THREE.MeshLambertMaterial({ color: 0xc94a4f }),
+    petalRed:    new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.petalRed }),
+    petalYellow: new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.petalYellow }),
+    petalPurple: new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.petalPurple }),
+    petalWhite:  new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.petalWhite }),
+    bushBerry:   new THREE.MeshLambertMaterial({ color: ALIEN_VEGETATION.bushBerry }),
   };
   const M_ANIMAL = {
     cowWhite:  new THREE.MeshLambertMaterial({ color: 0xf2eee0 }),
@@ -10774,12 +10814,12 @@
       paper: '#F6F1E2',
       gold: '#C7A858',
       red: '#A04030',
-      green: '#8FAE5D',
-      greenD: '#6E8848',
-      bamboo: '#789C65',
-      bambooD: '#5D7448',
-      pink: '#DDB8BE',
-      pinkD: '#C99EA7',
+      green: alienVegetationHex("grass"),
+      greenD: alienVegetationHex("grassEdge"),
+      bamboo: alienVegetationHex("bamboo"),
+      bambooD: alienVegetationHex("bambooD"),
+      pink: alienVegetationHex("blossom"),
+      pinkD: alienVegetationHex("blossomDk"),
       water: '#8DB8C5',
       dirt: '#8B6F4A',
     };
@@ -10982,8 +11022,8 @@
   const VOXEL_BUILD_CUSTOM_LS = 'tinyworld:voxel-build-stamps.v1';
   const VOXEL_BUILD_STAMPS = makeVoxelBuildStampLibrary();
   const VOXEL_PART_COLORS = {
-    grass: '#8FAE5D',
-    grass2: '#6E8848',
+    grass: alienVegetationHex("grass"),
+    grass2: alienVegetationHex("grassEdge"),
     dirt: '#8B6F4A',
     dirtDark: '#5F4630',
     path: '#CDB98A',
@@ -11001,9 +11041,9 @@
     roofEdge: '#536166',
     gold: '#C7A858',
     red: '#A04030',
-    pink: '#DDB8BE',
-    green: '#8FAE5D',
-    crop: '#E6A440',
+    pink: alienVegetationHex("blossom"),
+    green: alienVegetationHex("leaves"),
+    crop: alienVegetationHex("cropLeaf"),
   };
 
   function normalizeVoxelCustomParts(parts) {
@@ -12911,8 +12951,8 @@
       stoneLight: rockMaterial(0x8a9080), stoneDeep: rockMaterial(0x303a34),
       core: rockMaterial(0x343f29), crack: rockMaterial(0x4e7038),
       accent: rockMaterial(0x7c963e), eye: rockMaterial(0xd2ec8c, 0x7baf38, 0.55),
-      moss: rockMaterial(0x59743b), vine: rockMaterial(0x364e2e),
-      leaf: rockMaterial(0x86a84e), flower: rockMaterial(0xd7c58b),
+      moss: rockMaterial(ALIEN_VEGETATION.rockMoss), vine: rockMaterial(ALIEN_VEGETATION.vine),
+      leaf: rockMaterial(ALIEN_VEGETATION.leaf), flower: rockMaterial(ALIEN_VEGETATION.flower),
     }),
     // Retain the internal key for existing skin selections; displayed as Polk-a-dot.
     cheetah: Object.freeze({
@@ -12958,7 +12998,7 @@
       stoneLight: rockMaterial(0xb49a74), stoneDeep: rockMaterial(0x403326),
       core: rockMaterial(0x79613c), crack: rockMaterial(0xa28751),
       accent: rockMaterial(0xbca36a), eye: rockMaterial(0xffd792,0xc48a35,.55),
-      moss: rockMaterial(0x60653c), cap: rockMaterial(0xc92e28),
+      moss: rockMaterial(ALIEN_VEGETATION.rockMoss), cap: rockMaterial(0xc92e28),
       stem: rockMaterial(0xe6d8b8), spots: rockMaterial(0xfff8e9),
     }),
   });
@@ -15490,7 +15530,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       terrainConsumePool.push(batch);
     }
     if(!terrainConsumeMaterials.has(a.material)) {
-      const colors={rock:[0x696565,0xaaa39a],sand:[0xc5a063,0xe9cd8b],lava:[0x382620,0xff7428],plant:[0x775337,0x7ba344]}[a.material];
+      const colors={rock:[0x696565,0xaaa39a],sand:[0x914634,0xe8a080],lava:[0x382620,0xff7428],plant:[0x775337,0x7ba344]}[a.material];
       terrainConsumeMaterials.set(a.material,colors.map((color,i)=>new THREE.MeshLambertMaterial({color,
         emissive:a.material==='lava'&&i ? 0xb83708 : 0x000000})));
     }
@@ -28312,7 +28352,7 @@ function neighborStarVector(edge, index) {
     { id: 'water',  label: 'Water',  terrain: 'water', color: '#4a90c2', shortcut: '4', group: 'plants' },
     { id: 'stone',  label: 'Stone',  terrain: 'stone', color: '#8f8a82', group: 'terrain' },
     { id: 'lava',   label: 'Lava',   terrain: 'lava',  color: '#e7592b', group: 'terrain' },
-    { id: 'sand',   label: 'Sand',   terrain: 'sand',  color: '#e6cc7c', group: 'terrain' },
+    { id: 'sand',   label: 'Sand',   terrain: 'sand',  color: '#c66b4e', group: 'terrain' },
     { id: 'snow',   label: 'Snow',   terrain: 'snow',  color: '#f2f5fa', group: 'terrain' },
     { id: 'house',  label: 'House',  kind: 'house', color: '#3a72c8', shortcut: '5', group: 'build',
       variants: [
@@ -39230,11 +39270,11 @@ function neighborStarVector(edge, index) {
       } else if (primary === 'tree') {
         rows.push(
           { key: 'topColor', label: 'Leaves', color: true, options: [
-            { label: 'Pine', value: '#4f8a2c', color: '#4f8a2c' },
-            { label: 'Bright', value: '#86d139', color: '#86d139' },
-            { label: 'Autumn', value: '#c07a2f', color: '#c07a2f' },
+            { label: 'Violet', value: '#843cac', color: '#843cac' },
+            { label: 'Magenta', value: '#d65bc5', color: '#d65bc5' },
+            { label: 'Rose', value: '#e462ac', color: '#e462ac' },
             { label: 'Blossom', value: '#e9a3bd', color: '#e9a3bd' },
-            { label: 'Winter', value: '#7ba66d', color: '#7ba66d' },
+            { label: 'Lavender', value: '#b393df', color: '#b393df' },
           ] },
           { key: 'bodyColor', label: 'Trunk', color: true, options: [
             { label: 'Brown', value: '#5c3818', color: '#5c3818' },
@@ -41288,7 +41328,7 @@ function neighborStarVector(edge, index) {
     water: 0x3a8fcc,
     stone: 0x8f8a82,
     lava:  0xe7592b,
-    sand:  0xe6cc7c,
+    sand:  0xc66b4e,
     snow:  0xf2f5fa,
   };
   function minimapHexToCss(hex) {

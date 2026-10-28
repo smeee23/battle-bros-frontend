@@ -4,7 +4,7 @@ const vm=require('node:vm');
 module.exports=function installTerrainRendering(context,html) {
  const section=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)));
  Object.assign(context,{GRID:50,geomCache:new Map(),renderVoxelTerrain:true,renderTerrainVoxelResolution:'mixed'});
- vm.runInContext(section('  const M = {','    bridgeWood:')+'\n};\n'
+ vm.runInContext(section('  const ALIEN_VEGETATION =','  const M = {')+section('  const M = {','    bridgeWood:')+'\n};\n'
   +section('  const customMaterialCache =','  function normalizeAppearance(')
   +section('  function cellRand(','  function edgeBand(')
   +section('  function materialHex(','  function voxelTreeLeafMaterials(')

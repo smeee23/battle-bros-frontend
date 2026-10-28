@@ -16,11 +16,12 @@ const seededMath = Object.create(Math);
 seededMath.random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
 const context = vm.createContext({ createSpecterAnimationSystem:require('../assets/specter-animation.js'), createMonsterAnimationSystem:require('../assets/monster-animation.js'), battleBroTerrain:require('../assets/battlebro-terrain.js'), createJuggernautAnimationSystem:require('../assets/juggernaut-animation.js'), createLongneckAnimation:require('../assets/longneck-animation.js'), createBattleBroJump:require('../assets/battlebro-jump.js'), THREE, assert, performance, console, Math: seededMath });
 vm.runInContext(`
+  ${section('  const ALIEN_VEGETATION =', '  function alienVegetationHex(')}
   const geomCache = new Map();
   ${section('  function getBoxGeometry(', '  // Variant of getBoxGeometry')}
   ${section('  function roundedBox(', '  // -------- materials --------')}
-  const M = { sand: new THREE.MeshLambertMaterial({color: 0xe6cc7c}),
-    sandDk: new THREE.MeshLambertMaterial({color: 0xc6a64b}),
+  const M = { sand: new THREE.MeshLambertMaterial({color: 0xc66b4e}),
+    sandDk: new THREE.MeshLambertMaterial({color: 0x914634}),
     sandAccent: new THREE.MeshLambertMaterial({color: 0xff2020}),
     lava: new THREE.MeshLambertMaterial({color: 0xe7592b}),
     lavaCrust: new THREE.MeshLambertMaterial({color: 0x3a201a}) };
@@ -121,7 +122,7 @@ for (const side of ['left', 'right']) {
 }
 assert.throws(() => api.createRockBattleBro({variant: 'unknown'}), /Unknown/);
 assert.equal(api.createLavaMonsterBattleBro().userData.visualVariant, 'lava');
-assert.equal(api.ROCK_BATTLEBRO_M.sand.stoneLight.color.getHex(), 0xe6cc7c);
+assert.equal(api.ROCK_BATTLEBRO_M.sand.stoneLight.color.getHex(), 0xc66b4e);
 assert.equal(api.ROCK_BATTLEBRO_M.sand.crack.emissiveIntensity, 0);
 
 // Populate on flat terrain, then exercise a complete gait for every form.
