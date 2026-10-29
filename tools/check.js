@@ -14,6 +14,7 @@ new vm.Script(inlineApp, { filename: 'index.inline.js' });
 for (const relativePath of [
   'vendor/three/three.r128.min.js',
   'assets/battlebro-encounter.js',
+  'assets/endless-pursuit.js',
   'assets/territory-world.js',
   'assets/longneck-animation.js',
   'assets/juggernaut-animation.js',
@@ -21,6 +22,7 @@ for (const relativePath of [
   'assets/specter-animation.js',
   'assets/battlebro-jump.js',
   'assets/transport-cube.js',
+  'assets/unhatched-home.js',
   'assets/battlebro-terrain.js',
   'runtime-config.js',
   'vendor/three/GLTFLoader.r128.js',
@@ -31,6 +33,7 @@ for (const relativePath of [
   'assets/territory-abi.json',
   'territory.js',
   'build/wallet.js',
+  'build/transactions.js',
   'assets/wallet.css',
 ]) {
   if (!fs.existsSync(path.join(root, relativePath))) {
@@ -38,7 +41,7 @@ for (const relativePath of [
   }
 }
 
-for(const name of ['territory-world','battlebro-encounter','longneck-animation','juggernaut-animation','monster-animation','specter-animation','battlebro-jump','transport-cube','battlebro-terrain'])
+for(const name of ['territory-world','battlebro-encounter','endless-pursuit','longneck-animation','juggernaut-animation','monster-animation','specter-animation','battlebro-jump','transport-cube','unhatched-home','battlebro-terrain'])
   new vm.Script(fs.readFileSync(path.join(root,'assets/'+name+'.js'),'utf8'),{filename:name+'.js'});
 
 console.log('check: inline JavaScript syntax and runtime assets OK');

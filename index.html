@@ -4527,6 +4527,15 @@
     document.head.appendChild(script);
   }());
 </script>
+<style>
+  #local-transactions-link[hidden] { display:none !important; }
+  #unhatched-home-controls[hidden] { display:none; }
+  #unhatched-home-controls label { display:grid; gap:5px; margin:10px 0; font-size:12px; }
+  #unhatched-home-controls input, #unhatched-home-controls select { box-sizing:border-box; width:100%; padding:9px; border:1px solid #b9ad96; border-radius:8px; background:#fffaf0; color:inherit; font:inherit; }
+  #unhatched-home-controls fieldset { margin:12px 0; border:1px solid #b9ad96; border-radius:8px; padding:8px 12px; }
+  #unhatched-home-controls legend { font-size:12px; padding:0 4px; }
+  body.bro-unhatched #battlebro-character-preview, body.bro-unhatched #battlebro-arena-action { display:none !important; }
+</style>
 <link rel="stylesheet" href="assets/wallet.css">
 </head>
 <body>
@@ -4599,8 +4608,25 @@
   </button>
   <aside class="battlebro-panel" id="battlebro-panel" aria-label="BattleBro overview">
     <div data-wallet-controls><span>Wallet controls loading…</span></div>
+    <a id="local-transactions-link" class="btn" href="local-transactions.html" hidden>Local transaction harness</a>
     <h2 id="battlebro-name">BattleBro #—</h2>
     <p class="battlebro-panel-note" id="battlebro-data-status">Persistent creature overview. Public read model is not connected yet.</p>
+    <button class="btn" id="unhatched-preview-toggle" type="button" aria-pressed="false">Test unhatched mode</button>
+    <p class="battlebro-panel-note" id="unhatched-preview-status" role="status" hidden>Local preview · Published BattleBro data is unchanged.</p>
+    <section class="battlebro-panel-section" id="unhatched-home-controls" hidden aria-label="Unhatched BattleBro">
+      <h3>Unhatched BattleBro</h3>
+      <p class="battlebro-panel-note">Your BattleBro is growing inside the violet cube. You can keep building at Home; transport and the training building unlock after hatching.</p>
+      <label>Name<input id="hatch-name" type="text" autocomplete="off" placeholder="Name your BattleBro"></label>
+      <label>Character type<select id="hatch-character"><option value="juggernaut">Juggernaut</option><option value="monsters">Monster</option><option value="specter">Specter</option><option value="longneck">Longneck</option></select></label>
+      <fieldset><legend>Training weights · Total 100%</legend>
+        <label>Attack %<input id="hatch-attack" type="number" min="0" max="100" step="0.01" value="33.34"></label>
+        <label>Defend %<input id="hatch-defend" type="number" min="0" max="100" step="0.01" value="33.33"></label>
+        <label>Counter %<input id="hatch-counter" type="number" min="0" max="100" step="0.01" value="33.33"></label>
+      </fieldset>
+      <p class="battlebro-panel-note">Choices are saved on this device. Preparing them does not hatch your BattleBro.</p>
+      <p class="battlebro-panel-note" id="hatch-draft-status" role="status" aria-live="polite"></p>
+      <button class="btn" id="hatch-refresh" type="button">Refresh hatch status</button>
+    </section>
     <div class="battlebro-panel-grid" id="battlebro-core-stats"></div>
     <div class="battlebro-panel-section">
       <h3>Combat reserves</h3>
@@ -5629,6 +5655,9 @@
       <button type="button" data-bro-choice="no" style="padding:10px 28px">No</button>
     </div>
   </div>
+  <div id="endless-catch-overlay" hidden style="position:fixed;inset:0;z-index:9998;pointer-events:none">
+    <p id="endless-catch-status" role="status" aria-live="polite" style="position:absolute;top:18%;width:100%;text-align:center;color:white;font:600 20px system-ui;text-shadow:0 2px 8px #000"></p>
+  </div>
   <script defer src="assets/character-battle-actions.js"></script>
   <script defer src="assets/battle-arena.js"></script>
   <script src="runtime-config.js"></script>
@@ -5636,6 +5665,7 @@
   <script src="vendor/three/three.r128.min.js"></script>
   <script src="vendor/three/GLTFLoader.r128.js"></script>
   <script src="assets/battlebro-encounter.js"></script>
+  <script src="assets/endless-pursuit.js"></script>
   <script src="assets/territory-world.js"></script>
   <script src="assets/longneck-animation.js"></script>
   <script src="assets/juggernaut-animation.js"></script>
@@ -5643,6 +5673,7 @@
   <script src="assets/specter-animation.js"></script>
   <script src="assets/battlebro-jump.js"></script>
   <script src="assets/transport-cube.js"></script>
+  <script src="assets/unhatched-home.js"></script>
   <script src="assets/battlebro-terrain.js"></script>
   <script src="vendor/tiny-crowd-layer.js"></script>
   <script>
@@ -5882,7 +5913,11 @@
       const {manifest,game,manifestUrl}=publication;
       const tokenId=battleBrosPublicDataConfig().tokenId;
       const bro=game.battleBros.find(b=>tokenId===null?b.active:String(b.tokenId)===String(tokenId));
-      if(bro)renderBattleBroReadModel(normalizeBattleBrosPublicDocuments(manifest,game,bro,BigInt(bro.tokenId)),'Territory publication.');
+      if(bro){
+        const model=normalizeBattleBrosPublicDocuments(manifest,game,bro,BigInt(bro.tokenId));
+        renderBattleBroReadModel(model,'Territory publication.');
+        window.updateUnhatchedHome?.(model,{chainId:game.chainId,deploymentId:game.deploymentId});
+      }
       else {status.textContent='No matching BattleBro in the confirmed territory publication. Use token lookup to browse.';badge.textContent='CONFIRMED TERRITORY V2';}
       battleBrosPublicationContext=publication;
       document.getElementById('battlebro-territory-action').href='territory.html?manifestUrl='+encodeURIComponent(manifestUrl.href);
@@ -7324,6 +7359,7 @@
     document.getElementById('training-appearance-done').onclick=()=>leaveTrainingAppearance();
   }
   function enterTrainingAppearance() {
+    if (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched()) return false;
     if(trainingAppearance.active||!baseBattleBroPrototype||!trainingFacility)return false;
     const state=trainingAppearance,building=trainingFacility.getObjectByName('Training Center');
     setupTrainingAppearanceControls();
@@ -9749,22 +9785,24 @@
     return g;
   }
 
-  function addSlidingBuildingDoor(root, hatch, windowPane) {
+  function addSlidingBuildingDoor(root, hatch, windowPane, scale = 1) {
     const doorway = new THREE.Group();
     doorway.position.copy(hatch.position);
     doorway.rotation.copy(hatch.rotation);
     root.add(doorway);
-    const width = hatch.geometry.parameters.width;
-    const height = hatch.geometry.parameters.height;
-    const recess = new THREE.Mesh(getBoxGeometry(width, height, .018), M.habitatBand);
+    const width = hatch.geometry.parameters.width * scale;
+    const height = hatch.geometry.parameters.height * scale;
+    // Grow upward from the existing threshold rather than into the ground.
+    doorway.position.y += (height - hatch.geometry.parameters.height) / 2;
+    const recess = new THREE.Mesh(getBoxGeometry(width, height, .018 * scale), M.habitatBand);
     doorway.add(recess);
     const leaves = [-1, 1].map(side => {
       const leaf = new THREE.Group();
-      const panel = new THREE.Mesh(getBoxGeometry(width / 2, height, .025), M.habitatTrim);
-      panel.position.z = .025;
+      const panel = new THREE.Mesh(getBoxGeometry(width / 2, height, .025 * scale), M.habitatTrim);
+      panel.position.z = .025 * scale;
       leaf.add(panel);
-      const glass = new THREE.Mesh(getBoxGeometry(.035, .06, .012), M.habitatWindow);
-      glass.position.set(0, .045, .045);
+      const glass = new THREE.Mesh(getBoxGeometry(.035 * scale, .06 * scale, .012 * scale), M.habitatWindow);
+      glass.position.set(0, .045 * scale, .045 * scale);
       leaf.add(glass);
       leaf.position.x = side * width / 4;
       doorway.add(leaf);
@@ -9784,7 +9822,8 @@
   // off-world habitats, but scaled and simplified for one BattleBros tile.
   function makeSpaceHabitat(floors = 1) {
     const g = new THREE.Group();
-    const f = Math.max(1, floors);
+    // Six local levels retain the previous level 3–8 building sizes.
+    const f = Math.max(1, Math.min(6, floors || 1)) + 2;
     const extraH = Math.min(0.22, (f - 1) * 0.045);
     const bodyLen = 0.98;
     const bodyR = 0.31 + extraH;
@@ -9817,16 +9856,16 @@
     const hatchOuterX = 0.57;
     const hatchY = bodyY - bodyR + 0.20;
     const hatch = new THREE.Mesh(getBoxGeometry(0.20, 0.24, 0.035), M.habitatBand);
-    hatch.position.set(hatchOuterX + 0.030, hatchY, 0.12);
+    hatch.position.set(hatchOuterX + 0.030, hatchY, 0);
     hatch.rotation.y = Math.PI / 2;
     g.add(hatch);
     const hatchWindow = new THREE.Mesh(getBoxGeometry(0.09, 0.07, 0.018), M.habitatWindow);
-    hatchWindow.position.set(hatchOuterX + 0.060, hatchY + 0.05, 0.12);
+    hatchWindow.position.set(hatchOuterX + 0.060, hatchY + 0.05, 0);
     hatchWindow.rotation.y = Math.PI / 2;
     g.add(hatchWindow);
-    addSlidingBuildingDoor(g, hatch, hatchWindow);
+    addSlidingBuildingDoor(g, hatch, hatchWindow, 1.5);
     const step = new THREE.Mesh(getBoxGeometry(0.24, 0.05, 0.16), M.step);
-    step.position.set(0.60, 0.03, 0.18);
+    step.position.set(0.60, 0.03, 0);
     g.add(step);
 
     const panelGeo = getBoxGeometry(0.34, 0.045, 0.18);
@@ -9965,9 +10004,9 @@
   // Space laser tower — visual replacement for the Tower house variant.
   // Gameplay still uses the same house placement/floors/buildingType paths;
   // this only changes the mesh.
-  function makeStoneTower(floors = 2, palette = null) {
+  function makeStoneTower(floors = 1, palette = null) {
     const g = new THREE.Group();
-    const f = Math.max(SPACE_TOWER_MIN_LEVEL, Math.min(MAX_FLOORS, floors || 1));
+    const f = Math.max(SPACE_TOWER_MIN_LEVEL, Math.min(MAX_FLOORS - 2, floors || 1)) + 2;
     const bodyH = SPACE_TOWER_BASE_H + f * SPACE_TOWER_LEVEL_H;
     // Allow callers to override the tower's wall + roof palette. When the
     // tower is merged with another building, the caller passes that building's
@@ -10031,7 +10070,7 @@
     const hatchWindow = new THREE.Mesh(getBoxGeometry(0.09, 0.07, 0.018), matGlass);
     hatchWindow.position.set(0, 0.43, SPACE_TOWER_RADIUS + 0.04);
     g.add(hatchWindow);
-    addSlidingBuildingDoor(g, hatch, hatchWindow);
+    addSlidingBuildingDoor(g, hatch, hatchWindow, 1.5);
 
     const domeRing = new THREE.Mesh(new THREE.CylinderGeometry(SPACE_TOWER_DOME_R * 1.08, SPACE_TOWER_DOME_R * 1.08, 0.08, 14), matTrim);
     domeRing.position.y = topY + 0.07;
@@ -12556,6 +12595,7 @@
     if (isTrainingCenter(cell)) return 1;
     if (kind === 'house' && cell?.buildingType === 'transporter') return 1;
     if (kind === 'house' && normalizeBuildingType(cell && cell.buildingType) === 'air-command') return AIR_COMMAND_MAX_LEVEL;
+    if (kind === 'house' && ['tower', 'habitat'].includes(normalizeBuildingType(cell?.buildingType) || 'tower')) return 6;
     if (kind === 'voxel-build' && cell && cell.appearance
       && cell.appearance.voxelBuildId === 'crystal-mining-rig') return CRYSTAL_RIG_MAX_LEVEL;
     return maxFloorsForKind(kind);
@@ -18362,6 +18402,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
 
   // One selected preview, independent of future NFT type/level rules.
   function selectBattleBroCharacterPreview(variant, form, character = 'monsters') {
+    if (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched()) return {ok:false,reason:'unhatched'};
     if (!BATTLEBRO_CHARACTER_FORMS[character]?.includes(form) || !Object.prototype.hasOwnProperty.call(ROCK_BATTLEBRO_M,variant))
       return {ok:false,reason:'invalid-appearance'};
     const center=Math.floor(GRID/2), footprint=character==='specter'?1:(form>=5?3:1);
@@ -20605,6 +20646,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     };
     if (cell.kind !== 'house') cell.buildingType = null;
     else if (!cell.buildingType) cell.buildingType = 'tower';
+    cell.floors = Math.min(cell.floors, maxFloorsForCell(cell));
     if (isTrainingCenter(cell)) {
       cell.floors = 1; cell.offsetX = 0; cell.offsetZ = 0;
       cell.rotationY = Math.round(cell.rotationY / (Math.PI / 2)) * (Math.PI / 2);
@@ -26026,7 +26068,7 @@ function neighborStarVector(edge, index) {
     const maxFloors = (kind === 'tree' || (kind === 'house' && buildingType === 'transporter')) ? 1
       : kind === 'bridge' ? 4
       : (kind === 'voxel-build' && voxelBuildId === 'crystal-mining-rig') ? CRYSTAL_RIG_MAX_LEVEL
-      : (kind === 'oxygen-plant' || kind === 'water-plant' || (kind === 'house' && buildingType === 'air-command')) ? 6
+      : (kind === 'oxygen-plant' || kind === 'water-plant' || (kind === 'house' && ['air-command', 'tower', 'habitat'].includes(buildingType))) ? 6
       : 8;
     if (floors > maxFloors) throw new Error(label + ' exceeds its level cap of ' + maxFloors + '.');
     if (kind === 'house' ? !buildingType : buildingType !== null) throw new Error(label + ' has inconsistent buildingType.');
@@ -27452,7 +27494,7 @@ function neighborStarVector(edge, index) {
     if (terrainConsumeLocks.has(x+','+z) && setCellMutationAuthority !== 'terrain-consume') return false;
     if (neighborInspectionState.active && !neighborInspectionState.applying) return false;
     const { terrain, terrainFloors, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, impactDust = true, forceTile = false, rotationY, offsetX, offsetZ, appearance } = opts;
-    if (setCellMutationAuthority !== 'restore' && (trainingFacilityOccupiesCell(x, z) || stargateOccupiesCell(x, z))) return false;
+    if (setCellMutationAuthority !== 'restore' && (trainingFacilityOccupiesCell(x, z) || stargateOccupiesCell(x, z) || (typeof window!=='undefined' && window.unhatchedHomeOccupiesCell?.(x,z)))) return false;
     if (kind === 'house' && buildingType === 'skyscraper') return false;
     const prev = ensureWorldCell(x, z);
     const prevVehicleDrivable = isVehicleDrivableCell(prev);
@@ -30222,6 +30264,7 @@ function neighborStarVector(edge, index) {
   function setCameraMode(mode, modeOpts = {}) {
     const requested = mode === 'soft' ? 'perspective' : mode;
     const effective = ['ortho', 'topdown', 'perspective', 'fp', 'flight'].includes(requested) ? requested : 'ortho';
+    if ((effective==='flight'||modeOpts.world==='other') && (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched())) return false;
     const switchingFirstPersonMode = effective === 'fp' || effective === 'flight';
     if (effective === 'flight' && !flight.active) captureFlightCameraState();
     if (effective !== 'fp' && fp.active) exitFP({ releasePointerLock: !switchingFirstPersonMode });
@@ -30876,6 +30919,7 @@ function neighborStarVector(edge, index) {
   })();
   const homeFPTerrain = {
     get group() { return worldGroup; },
+    blocksBodyAt: (x,z,low,high) => typeof unhatchedHomeBlocksBody==='function' && unhatchedHomeBlocksBody(x,z,low,high),
     worldToCell: (x,z) => ({x:worldToCellCoord(x),z:worldToCellCoord(z)}),
     cellToWorld: (x,z) => tilePos(x,z),
     getCell: (x,z) => x>=0 && z>=0 && x<GRID && z<GRID ? getWorldCell(x,z) : null,
@@ -30897,6 +30941,8 @@ function neighborStarVector(edge, index) {
 
   const fpJourney = {home:null, previous:null, warp:0, transferred:false, overlay:null};
   function switchFPWorld(other) {
+    if (other && (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched())) return false;
+    if(typeof endlessPursuit!=='undefined')endlessPursuit.reset();
     leaveExcavation();
     resetTransportCube();
     fpKeys.clear();
@@ -30944,6 +30990,7 @@ function neighborStarVector(edge, index) {
     return true;
   }
   function tickFPJourney(dt) {
+    if (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched()) { cancelFPWarp(); return false; }
     if(!fp.active)return false;
     if(fpJourney.warp>0) {
       fpJourney.warp+=dt;
@@ -30989,7 +31036,7 @@ function neighborStarVector(edge, index) {
 
   // ---------- frontend excavation ----------
   // Local terrain edits use the active first-person terrain provider.
-  function fpToolsAvailable(){return fp.active&&explorationActive&&!trainingAppearance.active;}
+  function fpToolsAvailable(){return !(typeof isHomeBroUnhatched==='function'&&isHomeBroUnhatched())&&fp.active&&explorationActive&&!trainingAppearance.active&&!(typeof endlessPursuit!=='undefined'&&endlessPursuit.locked);}
   const EXCAVATION_GEMS = Object.freeze({
     blue: { label: 'Gems', color: '#62b5ff' },
   });
@@ -31396,6 +31443,7 @@ function neighborStarVector(edge, index) {
       ?transportCube.root?.userData.transportActor:null,
     npcs:()=>[...explorationResidents.values()],
     available:actor=>!!actor?.root.parent&&actor.root.visible&&!!actor.motion
+      &&!actor.pursuit&&!actor.pursuitCaught
       &&!actor.root.userData.characterJumping&&!actor.root.userData.rockThrow&&!actor.root.userData.terrainConsume,
     controller:actor=>actor.character==='specter'?ensureSpecterAnimation(actor.mover)
       :actor.character==='longneck'?ensureLongneckAnimation(actor.mover):ensureSupportAnimation(actor.mover),
@@ -31536,6 +31584,27 @@ function neighborStarVector(edge, index) {
     const shape=battleBroTerrain.profile(actor.root);
     return battleBroTerrain.point(explorationTerrain,x,z,(actor.supportY??actor.root.position.y)+shape.step)?.y;
   }
+  function residentPursuitStep(actor,mover=actor.mover){
+    if(!actor.pursuit)return null;
+    const target=actor.pursuit.target,root=actor.root;
+    const distance=Math.hypot(target.x-root.position.x,target.z-root.position.z);
+    const candidates=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]
+      .map(([dx,dz])=>{const x=(mover.cellX??actor.x)+dx,z=(mover.cellZ??actor.z)+dz;
+        const point=explorationTerrain.cellToWorld(x,z,actor.islandId);
+        const vx=point.x-root.position.x,vz=point.z-root.position.z;
+        const travel=Math.max(0,Math.min(1,((target.x-root.position.x)*vx+(target.z-root.position.z)*vz)/(vx*vx+vz*vz||1)));
+        return {x,z,point,distance:Math.hypot(point.x-target.x,point.z-target.z),
+          approach:Math.hypot(root.position.x+vx*travel-target.x,root.position.z+vz*travel-target.z)};})
+      .sort((a,b)=>(distance<=1?a.approach-b.approach:0)||a.distance-b.distance);
+    for(const candidate of candidates){
+      // A player near a cell corner can be closer than every neighboring
+      // center. The last step must still sweep past their actual position.
+      if(candidate.distance>=distance-.01&&distance>1)continue;
+      const support=residentRoute(actor,candidate.x,candidate.z);if(!support)continue;
+      return {...candidate,support,yaw:Math.atan2(candidate.point.x-root.position.x,candidate.point.z-root.position.z)};
+    }
+    return null;
+  }
   // Resident navigation adapter only. All poses/phases/IK come from the home core.
   function juggernautResidentNavigation(actor){
     const point=(x,z)=>{const p=explorationTerrain.cellToWorld(x,z,actor.islandId);
@@ -31547,6 +31616,7 @@ function neighborStarVector(edge, index) {
       return patch?desired.clone().setY(patch.max):null;
     };
     return {point,contact,
+      runTargetValid:m=>!!actor.pursuit&&!!residentRoute(actor,m.targetCellX,m.targetCellZ),
       swing(m,start,desired,index,yaw,lift,startYaw){
         const end=contact(m,desired,yaw,index);if(!end)return null;
         const probe=start.clone();let highest=Math.max(start.y,end.y);
@@ -31559,6 +31629,15 @@ function neighborStarVector(edge, index) {
           clearance:highest+lift,adjustment:0};
       },
       selectRoute(m){
+        if(actor.pursuit){
+          const route=residentPursuitStep(actor,m);if(!route)return null;
+          const plan=planLavaTerrainMove(m,route.x,route.z,route.yaw);if(!plan)return null;
+          if(lavaMovementForm(m.root)>=4){
+            m.juggernautJog={remaining:2,total:2,support:m.juggernautJog?.support||0};
+            return {...route,plan,jog:true};
+          }
+          return {...route,plan};
+        }
         const motion=actor.motion,directions=[[1,0],[-1,0],[0,1],[0,-1]],offset=Math.floor(Math.random()*4);
         for(let i=0;i<4;i++){
           const [dx,dz]=directions[(offset+i)%4],x=m.cellX+dx,z=m.cellZ+dz;
@@ -31590,6 +31669,7 @@ function neighborStarVector(edge, index) {
     const drift=new THREE.Vector3(point.x-motion.pointX,0,point.z-motion.pointZ);
     root.position.add(drift);animation.carry(drift);motion.pointX=point.x;motion.pointZ=point.z;
     if(motion.mode==='idle'&&motion.pause===0)mover.pauseRemaining=0;
+    if(actor.pursuit&&mover.state==='IDLE')mover.pauseRemaining=0;
     if(mover.state!=='IDLE'&&!residentSupport(actor,mover.targetCellX,mover.targetCellZ,mover.desiredYaw)){
       animation.reset();mover.pauseRemaining=2;
       // Preserve the current position; discard the unsafe destination, not the Bro.
@@ -31597,7 +31677,7 @@ function neighborStarVector(edge, index) {
     }
     if(root.userData.characterJumping){animation.interrupt();return;}
     restoreTelekineticBody(root);tickBattleBroWorldExpression(root,t);
-    const proposal=animation.prepare({},step,t);
+    const proposal=animation.prepare({},actor.pursuit&&lavaMovementForm(root)<4?step*3:step,t);
     root.position.copy(proposal.position);root.rotation.y=proposal.yaw;
     animation.commit({grounded:true},t,step);
     if(mover.cellX!==actor.x||mover.cellZ!==actor.z){
@@ -31611,8 +31691,10 @@ function neighborStarVector(edge, index) {
   function chooseSpecterResidentDestination(actor,mover){
     const motion=actor.motion,directions=[[1,0],[-1,0],[0,1],[0,-1]],first=Math.floor(Math.random()*4);
     for(let i=0;i<4;i++){
-      const [dx,dz]=directions[(first+i)%4],x=actor.x+dx,z=actor.z+dz;
-      if(Math.hypot(x-motion.homeX,z-motion.homeZ)>5)continue;
+      const chase=actor.pursuit?residentPursuitStep(actor,mover):null;
+      if(actor.pursuit&&!chase)break;
+      const [dx,dz]=directions[(first+i)%4],x=chase?chase.x:actor.x+dx,z=chase?chase.z:actor.z+dz;
+      if(!chase&&Math.hypot(x-motion.homeX,z-motion.homeZ)>5)continue;
       const support=residentRoute(actor,x,z);if(!support)continue;
       const target=explorationTerrain.cellToWorld(x,z,actor.islandId),root=actor.root;
       const yaw=Math.atan2(target.x-root.position.x,target.z-root.position.z);
@@ -31620,7 +31702,7 @@ function neighborStarVector(edge, index) {
         targetX:target.x,targetZ:target.z,targetBaseY:support.y+SPECTER_HOVER_CLEARANCE,
         targetCellX:x,targetCellZ:z,startYaw:root.rotation.y,desiredYaw:yaw,
         yawTravel:battleBroYawDelta(yaw-root.rotation.y),curve:0,
-        fastFloat:!!motion.fastFloat,travelDuration:motion.travelDuration||(motion.fastFloat?.9:2.4),
+        fastFloat:!!actor.pursuit||!!motion.fastFloat,travelDuration:actor.pursuit?.42:motion.travelDuration||(motion.fastFloat?.9:2.4),
         progress:0,state:SPECTER_MOVE_STATE.START_FLOAT});
       return true;
     }
@@ -31658,7 +31740,7 @@ function neighborStarVector(edge, index) {
     }
     if(proposal.finished){
       actor.x=mover.cellX=mover.targetCellX;actor.z=mover.cellZ=mover.targetCellZ;
-      actor.supportY=mover.baseY-SPECTER_HOVER_CLEARANCE;mover.idleRemaining=1.5+Math.random()*3;
+      actor.supportY=mover.baseY-SPECTER_HOVER_CLEARANCE;mover.idleRemaining=actor.pursuit?0:1.5+Math.random()*3;
       const end=explorationTerrain.cellToWorld(actor.x,actor.z,actor.islandId);motion.pointX=end.x;motion.pointZ=end.z;
     }
     animation.commit({grounded:true},t,step);
@@ -31667,6 +31749,7 @@ function neighborStarVector(edge, index) {
   }
   function tickExplorationResidentMotion(actor,t,dt) {
     if(actor.encounter)return;
+    if(actor.pursuitCaught)return;
     actor.terrainTime=t;
     if(actor.character==='juggernaut')return tickJuggernautResidentMotion(actor,t,dt);
     if(actor.character==='monsters')return tickSupportResidentMotion(actor,t,dt);
@@ -31709,20 +31792,24 @@ function neighborStarVector(edge, index) {
         mover.juggernautStride[key].x+=driftX;mover.juggernautStride[key].z+=driftZ;
       }
     } else {
-      root.position.set(point.x,ground+(actor.character==='specter'?SPECTER_HOVER_CLEARANCE:0),point.z);
+      if(actor.pursuit||motion.pursuitOffset){root.position.x+=driftX;root.position.z+=driftZ;root.position.y=ground;}
+      else root.position.set(point.x,ground,point.z);
       motion.pause-=step;
       if(motion.pause<=0) {
-        motion.pause=2+Math.random()*3;
+        motion.pause=actor.pursuit?0:2+Math.random()*3;
         const directions=[[1,0],[-1,0],[0,1],[0,-1]];
         const offset=Math.floor(Math.random()*4);
         for(let i=0;i<4;i++) {
-          const [dx,dz]=directions[(offset+i)%4],x=actor.x+dx,z=actor.z+dz;
-          if(Math.hypot(x-motion.homeX,z-motion.homeZ)>5)continue;
+          const chase=actor.pursuit?residentPursuitStep(actor,mover):null;
+          if(actor.pursuit&&!chase)break;
+          const [dx,dz]=directions[(offset+i)%4],x=chase?chase.x:actor.x+dx,z=chase?chase.z:actor.z+dz;
+          if(!chase&&Math.hypot(x-motion.homeX,z-motion.homeZ)>5)continue;
           const support=residentRoute(actor,x,z);if(!support)continue;
           const destination=explorationTerrain.cellToWorld(x,z,actor.islandId);
-          Object.assign(mover,{startX:point.x,startZ:point.z,startY:root.position.y,
+          Object.assign(mover,{startX:actor.pursuit||motion.pursuitOffset?root.position.x:point.x,
+            startZ:actor.pursuit||motion.pursuitOffset?root.position.z:point.z,startY:root.position.y,
             targetX:destination.x,targetZ:destination.z,targetY:support.y+(actor.character==='specter'?SPECTER_HOVER_CLEARANCE:0),
-            targetCellX:x,targetCellZ:z,desiredYaw:Math.atan2(dx,dz),progress:0});
+            targetCellX:x,targetCellZ:z,desiredYaw:chase?chase.yaw:Math.atan2(dx,dz),progress:0});
           motion.mode='turn';motion.elapsed=0;motion.startYaw=root.rotation.y;
           break;
         }
@@ -31731,7 +31818,7 @@ function neighborStarVector(edge, index) {
     if(actor.character==='longneck') {
       const animation=ensureLongneckAnimation(mover),active=motion.mode!=='idle';
       const proposal=animation.prepareTravel({x:active?mover.targetX:root.position.x,
-        z:active?mover.targetZ:root.position.z,speed:active?1/1.35:0,running:false,
+        z:active?mover.targetZ:root.position.z,speed:active?(actor.pursuit?2.4:1/1.35):0,running:!!actor.pursuit,
         groundY:ground,targetY:active?mover.targetY:ground,supportId:actor.islandId,
         sampleFootGround:(x,z)=>residentHeight(actor,x,z)},step);
       // The resident planner has already validated the destination and flat path.
@@ -31740,9 +31827,10 @@ function neighborStarVector(edge, index) {
       if(active && mover.state!=='TURNING'
         && Math.hypot(root.position.x-mover.targetX,root.position.z-mover.targetZ)<.005) {
         actor.x=mover.targetCellX;actor.z=mover.targetCellZ;actor.supportY=mover.targetY;
+        mover.cellX=actor.x;mover.cellZ=actor.z;
         const end=explorationTerrain.cellToWorld(actor.x,actor.z,actor.islandId);
-        motion.pointX=end.x;motion.pointZ=end.z;motion.mode='idle';motion.pause=1.5+Math.random()*3;
-        animation.reset();
+        motion.pointX=end.x;motion.pointZ=end.z;motion.mode='idle';motion.pause=actor.pursuit?0:1.5+Math.random()*3;
+        if(!actor.pursuit){animation.reset();motion.pursuitOffset=false;}
       }
       tickBattleBroWorldExpression(root,t);tickBattleBroExpression(root,step);
       tickLooseRockAttachments(root,t,step,mover);
@@ -31751,6 +31839,7 @@ function neighborStarVector(edge, index) {
   }
 
   function removeExplorationResident(id,actor) {
+    if(typeof endlessPursuit!=='undefined')endlessPursuit.cancel(actor);
     if(typeof broEncounter!=='undefined')broEncounter.cancel(actor);
     const field=actor.root.userData.looseRocks?.orbitField;
     actor.root.parent?.remove(actor.root);
@@ -31957,6 +32046,7 @@ function neighborStarVector(edge, index) {
     return transportCubeController;
   }
   function throwTransportCube(){
+    if (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched()) return false;
     if(!fpToolsAvailable())return false;
     if(!baseBattleBroPrototype){excavationStatus.textContent='Choose your BattleBro at home first';excavationHud.hidden=false;return false;}
     return ensureTransportCube().throw();
@@ -32040,6 +32130,7 @@ function neighborStarVector(edge, index) {
     homeFPTerrain.activate();
     fp.active = true;
     fp.pos.set(0, fpGroundYAt(0,0), 0);
+    if(typeof placeOutsideUnhatchedCube==='function')placeOutsideUnhatchedCube();
     fp.yaw = 0;
     fp.pitch = 0;
     fp.vy = 0;
@@ -32060,6 +32151,7 @@ function neighborStarVector(edge, index) {
   }
   function exitFP(opts = {}) {
     if (!fp.active) return;
+    if(typeof endlessPursuit!=='undefined')endlessPursuit.reset();
     if(typeof trainingAppearance!=='undefined' && trainingAppearance.active)leaveTrainingAppearance(false);
     if (typeof leaveExcavation === 'function') leaveExcavation();
     excavation.equipped='hands';
@@ -32094,6 +32186,7 @@ function neighborStarVector(edge, index) {
     if (document.pointerLockElement !== renderer.domElement) return;
     if (trainingAppearance.active) return;
     if (fp.active) {
+      if(typeof endlessPursuit!=='undefined'&&endlessPursuit.locked)return;
       markCameraMoving();
       fp.yaw -= e.movementX * 0.0022;
       fp.pitch = Math.max(-1.4, Math.min(1.4, fp.pitch - e.movementY * 0.0022));
@@ -32113,7 +32206,7 @@ function neighborStarVector(edge, index) {
       }
       return;
     }
-    if(fpJourney.warp>0)return;
+    if(fpJourney.warp>0||(typeof endlessPursuit!=='undefined'&&endlessPursuit.locked))return;
     if (e.code === 'Space') {
       e.preventDefault();
       if(e.repeat||fpKeys.has('space'))return;
@@ -32350,6 +32443,7 @@ function neighborStarVector(edge, index) {
   }
 
   function enterFlightMode(opts = {}) {
+    if (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched()) return false;
     if (flight.active) return;
     captureFlightCameraState();
     const spawn = findFlightSpawnPosition(opts);
@@ -36578,10 +36672,97 @@ function neighborStarVector(edge, index) {
     }
   }
 
+  // ---------- Endless NPC pursuit ----------
+  function resetResidentPursuitMotion(actor){
+    if(!actor.motion)return;
+    const root=actor.root,mover=actor.mover,shape=battleBroTerrain.profile(root);
+    const hover=actor.character==='specter'?SPECTER_HOVER_CLEARANCE:0;
+    const support=battleBroTerrain.stand(explorationTerrain,shape,root.position.x,root.position.z,
+      root.rotation.y,root.position.y-hover+shape.step,actor.islandId);
+    if(support){root.position.y=support.y+hover;actor.supportY=support.y;}
+    const cell=explorationTerrain.worldToCell(root.position.x,root.position.z,root.position.y-hover+.05);
+    actor.x=cell.x;actor.z=cell.z;
+    const animation=actor.character==='longneck'?ensureLongneckAnimation(mover)
+      :actor.character==='specter'?ensureSpecterAnimation(mover):ensureSupportAnimation(mover);
+    animation.reset();
+    Object.assign(mover,{cellX:actor.x,cellZ:actor.z,targetCellX:actor.x,targetCellZ:actor.z,
+      juggernautJog:null,pauseRemaining:actor.pursuit?0:1.5,idleRemaining:actor.pursuit?0:1.5});
+    const point=explorationTerrain.cellToWorld(actor.x,actor.z,actor.islandId);
+    Object.assign(actor.motion,{mode:'idle',pause:actor.pursuit?0:1.5,pointX:point.x,pointZ:point.z,pursuitOffset:true});
+    if(!actor.pursuit){actor.motion.homeX=actor.x;actor.motion.homeZ=actor.z;}
+  }
+  function endlessPlayerPosition(){
+    const cell=explorationTerrain.worldToCell(fp.pos.x,fp.pos.z,fp.pos.y-FP_EYE_H+.05);
+    const islandId=cell.void?undefined:explorationTerrain.getCell(cell.x,cell.z,cell.islandId)?.islandId;
+    return {x:fp.pos.x,y:fp.pos.y,z:fp.pos.z,eyeHeight:FP_EYE_H,islandId};
+  }
+  function endlessPursuitClear(actor,player){
+    const root=actor.root,hover=actor.character==='specter'?SPECTER_HOVER_CLEARANCE:0;
+    const route=battleBroTerrain.route(explorationTerrain,battleBroTerrain.profile(root),{
+      x:root.position.x,y:root.position.y-hover,z:root.position.z,yaw:root.rotation.y,islandId:actor.islandId},player);
+    return !!route&&Math.abs(player.y-FP_EYE_H-route.y)<3;
+  }
+  function regenerateEndlessPlayer(){
+    const origin=endlessPlayerPosition(),cell=explorationTerrain.worldToCell(origin.x,origin.z,origin.y-FP_EYE_H+.05);
+    const shape={halfWidth:.18,halfDepth:.18,height:.85,step:.2,spread:.2,legClearance:0};
+    let best=null;
+    // Bound the search to nearby loaded cells on the player's current island.
+    for(let radius=3;radius<=10;radius++)for(let i=0;i<24;i++){
+      const angle=i*Math.PI/12,x=cell.x+Math.round(Math.cos(angle)*radius),z=cell.z+Math.round(Math.sin(angle)*radius);
+      if(explorationTerrain.getCell(x,z,cell.islandId)?.islandId!==origin.islandId)continue;
+      const point=explorationTerrain.cellToWorld(x,z,origin.islandId);
+      const safe=battleBroTerrain.stand(explorationTerrain,shape,point.x,point.z,0,origin.y-FP_EYE_H+FP_MAX_HEIGHT_DIFFERENCE,origin.islandId);
+      if(!safe)continue;
+      let clearance=Infinity;
+      for(const actor of explorationResidents.values()){
+        if(actor.islandId!==origin.islandId)continue;
+        const body=battleBroTerrain.profile(actor.root);
+        clearance=Math.min(clearance,Math.hypot(point.x-actor.root.position.x,point.z-actor.root.position.z)-Math.hypot(body.halfWidth,body.halfDepth));
+      }
+      if(clearance<.75||residentBodyOccupied(null,point.x,safe.y,point.z))continue;
+      const score=Math.min(5,clearance)-radius*.1;
+      if(!best||score>best.score)best={x:point.x,y:safe.y+FP_EYE_H,z:point.z,score};
+    }
+    // A tiny island may have no distant safe patch; protection still applies.
+    if(best)fp.pos.set(best.x,best.y,best.z);
+    fp.vy=0;fp.grounded=true;fp.terrainLift=0;fp.landingTime=0;fp.landingDip=0;
+    fpKeys.clear();fpJourney.previous=null;
+    if(typeof requestMinimapRepaint==='function')requestMinimapRepaint();
+    markCameraMoving();
+  }
+  let endlessFeedbackLabel='';
+  const endlessPursuit=EndlessPursuit.create({
+    enabled:()=>fp.active&&explorationActive&&!trainingAppearance.active&&broEncounterMenu.hidden&&fpJourney.warp===0,
+    player:endlessPlayerPosition,npcs:()=>[...explorationResidents.values()],
+    available:actor=>!!actor.motion&&!!actor.root.parent&&actor.root.visible&&!actor.encounter
+      &&!actor.root.userData.characterJumping&&!actor.root.userData.rockThrow&&!actor.root.userData.terrainConsume,
+    shape:actor=>battleBroTerrain.profile(actor.root),
+    body:actor=>({x:actor.root.position.x,y:actor.root.position.y-(actor.character==='specter'?SPECTER_HOVER_CLEARANCE:0),z:actor.root.position.z}),
+    clear:endlessPursuitClear,start:resetResidentPursuitMotion,stop:resetResidentPursuitMotion,
+    regenerate:regenerateEndlessPlayer,
+    lookAt:(actor,dt)=>{
+      const root=actor.root,shape=battleBroTerrain.profile(root);
+      const dx=root.position.x-fp.pos.x,dz=root.position.z-fp.pos.z;
+      const yaw=Math.atan2(-dx,-dz),pitch=Math.atan2(root.position.y+shape.height*.5-fp.pos.y,Math.max(.05,Math.hypot(dx,dz)));
+      const follow=1-Math.exp(-dt*6);
+      fp.yaw+=battleBroYawDelta(yaw-fp.yaw)*follow;fp.pitch+=(Math.max(-1.4,Math.min(1.4,pitch))-fp.pitch)*follow;
+      fpKeys.clear();markCameraMoving();
+    },
+    feedback:(mode,remaining)=>{
+      const overlay=document.getElementById('endless-catch-overlay');
+      overlay.hidden=mode==='idle';
+      overlay.style.background=mode==='caught'?'radial-gradient(ellipse,rgba(180,0,0,.16),rgba(185,0,0,.72))':'none';
+      const label=mode==='caught'?'Caught! Regenerating…':mode==='grace'?'Regenerated · Protected for '+Math.ceil(remaining)+'s':'';
+      if(label!==endlessFeedbackLabel){document.getElementById('endless-catch-status').textContent=label;endlessFeedbackLabel=label;}
+      if(mode==='caught')fpKeys.clear();
+    }
+  });
+
   // -------- animation loop --------
   // Isolated environment preview. Training state/camera are never repurposed.
   const battleArenaView = { active:false, view:null, size:new THREE.Vector2(), time:0, drag:null };
   function enterBattleArena() {
+    if (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched()) return false;
     if (renderer.xr.isPresenting || !window.createBattleArena) return;
     if (!battleArenaView.view) {
       const actions=window.createBattleBroBattleActions(THREE,{throwRock:telekineticRockThrow,cancelThrow:cancelTelekineticRockThrow,
@@ -36738,8 +36919,10 @@ function neighborStarVector(edge, index) {
     tickSquashAnims(dt);
     if (rippleAnims.length) tickRippleAnims(dt);
     const inTrainingAppearance=tickTrainingAppearance(dt,t);
-    if (fp.active && !inTrainingAppearance) {if(broEncounterMenu.hidden&&!tickFPJourney(dt))tickFP(dt);}
+    const caughtByResident=endlessPursuit.tick(t,dt);
+    if (fp.active && !inTrainingAppearance) {if(broEncounterMenu.hidden&&!tickFPJourney(dt))tickFP(caughtByResident?0:dt);}
     tickTransportCube(t,dt);
+    if(unhatchedHome)unhatchedHome.tick(t);
     tickExplorationResidents(t,dt);
     broEncounter.tick(t,dt);
     tickExcavation(dt);
@@ -37368,7 +37551,7 @@ function neighborStarVector(edge, index) {
       'Required home board edge length: include "gridSize": ' + size + ' in the JSON object.',
       'Grid coordinates: x in 0..' + maxCoord + ' (left-right), z in 0..' + maxCoord + ' (front-back). Default cell is grass with no object.',
       'Only emit cells that differ from defaults — the renderer fills the rest.',
-      'House cells must set buildingType to tower|air-command|habitat|transporter. Transporter floors must be 1. Do not emit null/default house buildingType.',
+      'House cells must set buildingType to tower|air-command|habitat|transporter. Tower and Habitat floors must be 1–6. Transporter floors must be 1. Do not emit null/default house buildingType.',
       'Buildings must sit directly on flat grass or dirt. Do not put houses on path, water, lava, raised terrain, decks, bridges, platforms, posts, or stilts.',
       'Repeat-tapping the same object increases floors/intensity: houses grow upward; trees, rocks, bridges, fences, tufts, and crops become larger, denser, or more detailed.',
       'A fence is a single side/leaf, not a full square. Set fenceSide to n|s|e|w for tile edges or center-x|center-z for centre-line walls.',
@@ -37912,6 +38095,7 @@ function neighborStarVector(edge, index) {
     root.rotation.y=layout.yaw;
     Object.assign(root.userData,{nonInteractive:true,visualHome:true,permanentEnvironment:true});
     worldGroup.add(root);registerRuntimeObject(root);stargateLandmark=root;
+    if(typeof window!=='undefined')window.refreshUnhatchedHome?.();
   }
 
   async function generateWorld(provider, model, key, userPrompt, gridSize) {
@@ -37973,6 +38157,7 @@ function neighborStarVector(edge, index) {
     else if (CROP_KINDS.has(kind)) terrain = 'dirt';
     else if (terrain === 'water') kind = null;
 
+    floors = Math.min(floors, maxFloorsForCell({kind, buildingType}));
     return { terrain, kind, floors, buildingType };
   }
 
@@ -37984,7 +38169,7 @@ function neighborStarVector(edge, index) {
     const normalized = normalizeAutoAction(action);
     const cell = getWorldCell(x, z);
     if (normalized.kind && cell.kind === normalized.kind) {
-      normalized.floors = Math.min((cell.floors || 1) + 1, maxFloorsForKind(normalized.kind));
+      normalized.floors = Math.min((cell.floors || 1) + 1, maxFloorsForCell(normalized));
     }
       if (normalized.kind === 'house' && (cell.terrain === 'water' || cell.terrain === 'path' || cell.terrain === 'lava')) normalized.terrain = 'grass';
     return normalized;
@@ -41331,6 +41516,97 @@ function neighborStarVector(edge, index) {
     });
   }
 
+  // -------- publication-driven unhatched Home --------
+  let unhatchedHome = null;
+  let unhatchedHiddenActor = null;
+  function isHomeBroUnhatched() { return !!unhatchedHome?.active; }
+  function unhatchedHomeBlocksBody(x,z,low,high) {
+    if(!isHomeBroUnhatched() || explorationActive || territoryWorldState.active)return false;
+    const cell=homeFPTerrain.worldToCell(x,z);
+    if(trainingFacilityOccupiesCell(cell.x,cell.z))return true;
+    const cube=unhatchedHome.cube;
+    if(!cube?.visible)return false;
+    const half=.1*cube.scale.x;
+    return Math.abs(x-cube.position.x)<half+.18 && Math.abs(z-cube.position.z)<half+.18
+      && high>cube.position.y-half && low<cube.position.y+half;
+  }
+  function placeOutsideUnhatchedCube() {
+    const cube=unhatchedHome?.cube;
+    if(!isHomeBroUnhatched()||!fp.active||explorationActive||territoryWorldState.active||!cube?.visible)return;
+    const half=.1*cube.scale.x+.4;
+    if(Math.abs(fp.pos.x-cube.position.x)>half||Math.abs(fp.pos.z-cube.position.z)>half)return;
+    const candidates=[[half+1,0],[-half-1,0],[0,half+1],[0,-half-1]]
+      .map(([x,z])=>({x:cube.position.x+x,z:cube.position.z+z}))
+      .sort((a,b)=>Math.hypot(a.x-fp.pos.x,a.z-fp.pos.z)-Math.hypot(b.x-fp.pos.x,b.z-fp.pos.z));
+    for(const point of candidates){
+      const y=homeFPTerrain.groundYAt(point.x,point.z,fpEyeHeight());
+      if(Number.isFinite(y)){fp.pos.set(point.x,y,point.z);fp.vy=0;fp.grounded=true;break;}
+    }
+  }
+  function setupUnhatchedHome() {
+    let storage;
+    try{storage=localStorage;}catch(_){}
+    const controls={section:document.getElementById('unhatched-home-controls'),name:document.getElementById('hatch-name'),
+      character:document.getElementById('hatch-character'),weights:['attack','defend','counter'].map(lane=>document.getElementById('hatch-'+lane)),
+      status:document.getElementById('hatch-draft-status')};
+    unhatchedHome=BattleBrosUnhatchedHome.create(THREE,{
+      controls,storage,group:worldGroup,onRefresh:placeOutsideUnhatchedCube,
+      makeCube:()=>createTransportCube.createModel(THREE,getBoxGeometry),
+      characterSize:()=>baseBattleBroPrototype?Math.max(...new THREE.Box3().setFromObject(baseBattleBroPrototype).getSize(new THREE.Vector3()).toArray())+1:4.4,
+      isHome:()=>!explorationActive&&!territoryWorldState.active,
+      center:()=>({...tilePos((GRID-1)/2,(GRID-1)/2),cellX:(GRID-1)/2,cellZ:(GRID-1)/2}),
+      ground:(x,z)=>{
+        if(x<0||z<0||x>=GRID||z>=GRID)return -Infinity;
+        const cell=getWorldCell(x,z),height={house:Math.max(1,Number(cell.floors)||1)*.6,tree:2,rock:.8,fence:1,bush:.5};
+        return battleBroGroundHeight(x,z)+(height[cell.kind]||0);
+      },
+      setModeClass:active=>document.body.classList.toggle('bro-unhatched',active),
+      onModeChange:active=>{
+        if(active) {
+          if(battleArenaView.active)exitBattleArena();
+          if(trainingAppearance.active)leaveTrainingAppearance(false);
+          cancelFPWarp();
+          if(explorationActive)switchFPWorld(false);
+          if(flight.active)setCameraMode('perspective');
+          if(territoryWorldState.active)window.__toggleTerritoryWorld().then(()=>unhatchedHome.refresh()).catch(()=>{controls.status.textContent='Return to Home to see your unhatched BattleBro.';});
+          resetTransportCube(false);transportHomePlacement=null;
+          const root=baseBattleBroPrototype;
+          if(root){
+            unhatchedHiddenActor={root,visible:root.visible,fieldVisible:root.userData.looseRocks?.orbitField?.visible};
+            pauseTransportBattleBro(root);root.visible=false;root.parent?.remove(root);
+            if(root.userData.looseRocks?.orbitField)root.userData.looseRocks.orbitField.visible=false;
+          }
+        } else if(unhatchedHiddenActor) {
+          const saved=unhatchedHiddenActor;unhatchedHiddenActor=null;
+          if(saved.root===baseBattleBroPrototype){
+            const root=saved.root;root.visible=saved.visible;worldGroup.add(root);bindTransportBattleBro(root);
+            const field=root.userData.looseRocks?.orbitField;if(field)field.visible=saved.fieldVisible??true;
+          }
+        }
+        const travel=document.getElementById('territory-world-toggle');
+        travel.disabled=active&&!territoryWorldState.active;travel.title=active?'Hatch your BattleBro to travel.':'';
+      }
+    });
+    window.updateUnhatchedHome=(model,scope)=>unhatchedHome.update(model,scope);
+    window.refreshUnhatchedHome=()=>unhatchedHome.refresh();
+    window.unhatchedHomeOccupiesCell=(x,z)=>unhatchedHome.occupies(x,z);
+    const previewButton=document.getElementById('unhatched-preview-toggle');
+    previewButton.addEventListener('click',()=>{
+      unhatchedHome.setPreview(!unhatchedHome.previewing);
+      previewButton.textContent=unhatchedHome.previewing?'Exit unhatched preview':'Test unhatched mode';
+      previewButton.setAttribute('aria-pressed',String(unhatchedHome.previewing));
+      document.getElementById('unhatched-preview-status').hidden=!unhatchedHome.previewing;
+      fpKeys.clear();if(document.pointerLockElement)document.exitPointerLock?.();
+    });
+    document.getElementById('hatch-refresh').addEventListener('click',async event=>{
+      event.currentTarget.disabled=true;
+      const button=event.currentTarget;
+      try{await hydrateBattleBrosReadModel();}finally{button.disabled=false;}
+    });
+    controls.section.addEventListener('keydown',event=>event.stopPropagation());
+    controls.section.addEventListener('focusin',()=>{fpKeys.clear();if(document.pointerLockElement)document.exitPointerLock?.();});
+  }
+
   // -------- boot --------
   let appBooted = false;
   function bootApp() {
@@ -41348,6 +41624,7 @@ function neighborStarVector(edge, index) {
     setupBattleBroExpressionDemo();
     ensureGhostBoardsAroundTarget();
     initCrowdLayer();
+    setupUnhatchedHome();
     renderBattleBroPanel();
     hydrateBattleBrosReadModel();
     if (!BATTLEBROS_MIGRATION_MODE) {
@@ -42402,6 +42679,7 @@ function neighborStarVector(edge, index) {
     return 'w_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
   }
   async function toggleTerritoryWorld() {
+    if (!territoryWorldState.active && (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched())) return false;
     const state = territoryWorldState;
     if (state.switching || neighborInspectionState.active || explorationActive || trainingAppearance.active) return false;
     state.switching = true;

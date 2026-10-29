@@ -11,7 +11,8 @@ export function createInjectedDriver(settings, storage) {
   };
   // No default public RPC: connecting only uses the selected wallet's provider.
   const unavailable = custom({ request: async () => { throw Error('No application RPC configured.'); } });
-  const chains = [mainnet, sepolia, hoodi, hardhat];
+  const chains = [mainnet, sepolia, hoodi, hardhat].map(chain=>chain.id===settings.chainId&&settings.rpcUrl
+    ?{...chain,rpcUrls:{default:{http:[settings.rpcUrl]}}}:chain);
   const config = createConfig({
     chains,
     connectors: [injected({ shimDisconnect: true })],

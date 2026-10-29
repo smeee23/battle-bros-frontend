@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BattleBros · Local transaction harness</title><link rel="stylesheet" href="assets/wallet.css">
+<style>body{font:15px/1.6 system-ui;background:#102018;color:#edf3e5;margin:24px auto;max-width:960px;padding:0 20px}button,a{font:inherit;color:inherit}button{padding:8px 12px;background:#294333;border:1px solid #78927b;border-radius:8px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}section,article{border:1px solid #365643;border-radius:12px;padding:18px;margin:18px 0}nav,.actions{display:flex;gap:10px;flex-wrap:wrap}code{overflow-wrap:anywhere}#notice{white-space:pre-wrap}.bb-wallet{max-width:320px}</style></head>
+<body><h1>Local transaction harness</h1><p>Hardhat chain 31337 · Test ETH only · Isolated local publications</p>
+<nav><div data-wallet-controls></div><a href="index.html">Open Home</a><a href="territory.html">Territory dashboard</a></nav>
+<section><h2>Mint testing</h2><p>Connect a browser wallet and switch to the local network. Fund that address here with test ETH; no test private key import is needed.</p>
+<div class="actions"><button id="fund">Fund connected wallet</button><button id="mint">Mint with 1 test ETH</button><button id="invalid">Test invalid mint (0 ETH)</button></div></section>
+<section><h2>Development controls</h2><p>Hold mining to test pending/replacement/cancellation. Pause publication to test the gap between confirmation and game-state visibility.</p><div class="actions">
+<button data-command="holdMining">Hold mining</button><button data-command="mine">Mine one block</button><button data-command="resumeMining">Resume mining</button>
+<button data-command="pausePublisher">Pause publisher</button><button data-command="resumePublisher">Resume publisher</button>
+<button data-command="pauseIndexer">Pause indexer</button><button data-command="resumeIndexer">Resume indexer</button></div></section>
+<p id="notice" role="status" aria-live="polite"></p><section><h2>Transaction history</h2><p>Tracking survives navigation, reloads, wallet disconnects and account changes. Never resubmit solely because a transaction is taking longer than expected.</p><div id="transactions"></div></section>
+<script src="runtime-config.js"></script><script type="module" src="build/local-harness.js"></script></body></html>

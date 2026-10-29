@@ -24,11 +24,19 @@ const context=vm.createContext({URL,URLSearchParams,console,document:{getElement
 }});
 vm.runInContext(html.slice(html.indexOf('  const BATTLEBRO_FRONTEND_EMPTY'),html.indexOf('  const resources = {')),context);
 (async()=>{
+ const hatchPublications=[];
+ context.window.updateUnhatchedHome=(model,scope)=>hatchPublications.push({hatched:model.identity.hatched,scope});
  await context.hydrateBattleBrosReadModel();
  assert.match(el('battlebro-name').text,/9007199254740993/);
  assert.match(el('battlebro-territory').text,/#2/);
  assert.equal(el('battlebro-source-badge').textContent,'CONFIRMED TERRITORY V2');
  assert(!el('battlebro-data-status').text.includes('unavailable'));
+ assert.equal(hatchPublications.at(-1).hatched,true);
+ bro.hatchedAt='0';await context.hydrateBattleBrosReadModel();
+ assert.equal(hatchPublications.at(-1).hatched,false,'Published unhatched flag drives Home mode');
+ assert.equal(hatchPublications.at(-1).scope.deploymentId,address);
+ bro.hatchedAt='1';await context.hydrateBattleBrosReadModel();
+ assert.equal(hatchPublications.at(-1).hatched,true,'Confirmed hatch updates Home mode');
  const result=await context.loadBattleBroHistory(token),s=context.summarizeBattleHistory(result.model,result.game);
  assert.equal(s.battles.length,4);assert.equal(s.attacks,2);assert.equal(s.defenses,2);
  assert.equal(s.wins,1);assert.equal(s.losses,1);assert.equal(s.resolved,2);assert.equal(s.expired,1);assert.equal(s.pending,1);
@@ -51,7 +59,9 @@ vm.runInContext(html.slice(html.indexOf('  const BATTLEBRO_FRONTEND_EMPTY'),html
  // A slower old search cannot overwrite a more recent one.
  let release;pending=new Promise(r=>release=r);const old=context.showBattleHistory(token);
  await context.showBattleHistory('2');release();await old;assert.equal(el('battle-history-title').textContent,'Other #2');
+ const acceptedHatchUpdates=hatchPublications.length;
  game.snapshot={...snapshot,blockNumber:'124'};await context.hydrateBattleBrosReadModel();
+ assert.equal(hatchPublications.length,acceptedHatchUpdates,'Unverified/failed data cannot unlock Home');
  assert.equal(el('battlebro-source-badge').textContent,'DATA UNAVAILABLE');
  assert.equal(el('battlebro-name').textContent,'No BattleBro selected');
  game.snapshot=snapshot;fail=true;await context.showBattleHistory(token);

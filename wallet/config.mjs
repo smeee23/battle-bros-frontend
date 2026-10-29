@@ -20,7 +20,11 @@ export function walletSettings(runtime = {}, hostname = '') {
         deployment.deploymentId.toLowerCase() !== deployment.contracts.combat.toLowerCase() ||
         Object.values(deployment.contracts).some(value => !address(value))) throw Error('Invalid trusted wallet deployment.');
   }
-  return { chainId, rpcUrl, deployment };
+  const confirmations=Number(input.confirmations??12);
+  if(!Number.isInteger(confirmations)||confirmations<1||confirmations>64)throw Error('Invalid transaction confirmation count.');
+  if(input.instanceId&&!/^[a-zA-Z0-9-]{1,80}$/.test(input.instanceId))throw Error('Invalid wallet instance ID.');
+  if(input.anchor&&(!/^\d+$/.test(input.anchor.number)||!/^0x[0-9a-fA-F]{64}$/.test(input.anchor.hash)))throw Error('Invalid deployment anchor.');
+  return { chainId, rpcUrl, deployment, confirmations, instanceId:input.instanceId, anchor:input.anchor };
 }
 
 export function assertTrustedPublication(settings, publication) {

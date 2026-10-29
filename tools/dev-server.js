@@ -15,8 +15,26 @@ const contentTypes = {
   '.png': 'image/png',
 };
 
-const server = http.createServer((request, response) => {
+const server = http.createServer(async (request, response) => {
   const urlPath = new URL(request.url, `http://${request.headers.host || 'localhost'}`).pathname;
+  const localFile=process.env.BATTLEBROS_LOCAL_RUNTIME_FILE;
+  if(['/local-transactions.html','/build/local-harness.js','/api/local-dev'].includes(urlPath)&&!localFile){response.writeHead(404).end('Local development stack required');return;}
+  if(urlPath==='/runtime-config.js'&&localFile){
+    try{const config=JSON.parse(fs.readFileSync(localFile,'utf8'));if(config.wallet?.chainId!=='31337'||!config.localDev?.instanceId)throw Error('Invalid local runtime');
+      response.writeHead(200,{'Content-Type':contentTypes['.js'],'Cache-Control':'no-store'}).end('window.__battleBrosPublicData = Object.freeze('+JSON.stringify(config)+');');
+    }catch{response.writeHead(503).end('Local runtime unavailable');}return;
+  }
+  if(urlPath==='/api/local-dev'){
+    try{
+      const target=new URL(process.env.BATTLEBROS_LOCAL_CONTROL_ORIGIN);
+      const allowed=[`127.0.0.1:${server.address().port}`,`localhost:${server.address().port}`];
+      if(target.protocol!=='http:'||target.hostname!=='127.0.0.1'||!allowed.includes(request.headers.host)||request.method!=='POST'||!request.headers['content-type']?.startsWith('application/json')||
+        request.headers.origin&&!allowed.map(host=>'http://'+host).includes(request.headers.origin))throw Error('Local JSON request required');
+      let body='';for await(const part of request){body+=part;if(body.length>2048)throw Error('Request too large');}
+      const result=await fetch(new URL('/control',target),{method:'POST',headers:{'Content-Type':'application/json'},body});
+      response.writeHead(result.status,{'Content-Type':'application/json','Cache-Control':'no-store'}).end(await result.text());
+    }catch{response.writeHead(400).end('{"error":"Local command rejected"}');}return;
+  }
   if(urlPath==='/runtime-config.js' && !process.env.BATTLEBROS_PUBLIC_DATA_CONFIG && !process.env.BATTLEBROS_MANIFEST_URL && !process.env.BATTLEBROS_DEPLOYMENT_MANIFEST && !process.env.BATTLEBROS_WALLET_CHAIN_ID && !process.env.BATTLEBROS_WALLET_RPC_URL) {
     try {
       const config=localRuntime(root,process.env.BATTLEBROS_LOCAL_RUN);
