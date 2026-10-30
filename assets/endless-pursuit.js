@@ -24,8 +24,8 @@
     return true;
   }
   function create(host,options={}){
-    const tuning={range:10,releaseRange:14,probeInterval:.25,caughtDuration:1.25,graceDuration:5,...options};
-    const chasing=new Map();let caught=null,grace=0;
+    const tuning={range:10,releaseRange:14,probeInterval:.25,maxProbesPerTick:4,caughtDuration:1.25,graceDuration:5,...options};
+    const chasing=new Map(),nextProbes=new Map();let caught=null,grace=0,probeCursor=0;
     function stop(actor){
       if(!chasing.delete(actor))return;
       delete actor.pursuit;host.stop(actor);
@@ -33,11 +33,12 @@
     function reset(){
       const hadActivity=caught||grace||chasing.size;
       for(const actor of chasing.keys())stop(actor);
+      nextProbes.clear();
       if(caught)delete caught.actor.pursuitCaught;
       caught=null;grace=0;if(hadActivity)host.feedback('idle',0);
     }
     function cancel(actor){
-      stop(actor);
+      stop(actor);nextProbes.delete(actor);
       if(caught?.actor===actor){delete actor.pursuitCaught;caught=null;grace=tuning.graceDuration;host.feedback('grace',grace);}
     }
     return {reset,cancel,get locked(){return !!caught;},get grace(){return grace;},
@@ -58,28 +59,44 @@
         }
         if(grace>0){grace=Math.max(0,grace-step);host.feedback(grace?'grace':'idle',grace);return false;}
         const actors=host.npcs(),present=new Set(actors);
-        for(const actor of chasing.keys())if(!present.has(actor))stop(actor);
-        for(const actor of actors){
+        for(const actor of nextProbes.keys())if(!present.has(actor))cancel(actor);
+        let probes=0;
+        const first=probeCursor%Math.max(1,actors.length);
+        for(let offset=0;offset<actors.length;offset++){
+          const index=(first+offset)%actors.length,actor=actors[index];
           let state=chasing.get(actor);
-          const body=host.body(actor),distance=Math.hypot(body.x-player.x,body.z-player.z);
-          if(!host.available(actor)||actor.islandId!==player.islandId||player.islandId===undefined
-            ||distance>(state?tuning.releaseRange:tuning.range)){
-            if(state)stop(actor);continue;
+          if(actor.islandId!==player.islandId||player.islandId===undefined||!host.available(actor)){
+            if(state)stop(actor);nextProbes.delete(actor);continue;
           }
-          if(!state||t>=state.nextProbe){
-            if(!host.clear(actor,player)){if(state)stop(actor);continue;}
+          const body=host.body(actor),dx=body.x-player.x,dz=body.z-player.z;
+          const range=state?tuning.releaseRange:tuning.range;
+          if(dx*dx+dz*dz>range*range){
+            if(state)stop(actor);nextProbes.delete(actor);continue;
+          }
+          let checkedClear=false;
+          if(probes<tuning.maxProbesPerTick&&t>=(nextProbes.get(actor)??-Infinity)){
+            probes++;probeCursor=index+1;
+            // Failed paths need the same cooldown as successful ones.
+            nextProbes.set(actor,t+tuning.probeInterval);
+            if(!host.clear(actor,state?actor.pursuit.target:player)){if(state)stop(actor);continue;}
+            checkedClear=!state;
             if(!state){
               state={previousPlayer:{...player},previousBody:{...body}};
-              chasing.set(actor,state);actor.pursuit={target:{...player}};host.start(actor);
+              chasing.set(actor,state);actor.pursuit={target:{...player},origin:{...body}};host.start(actor);
             }
-            state.nextProbe=t+tuning.probeInterval;
           }
-          actor.pursuit.target={...player};
-          if(contact(player,state.previousPlayer,body,state.previousBody,host.shape(actor),actor.root.rotation.y)
-            &&host.clear(actor,player)){
+          if(!state)continue;
+          // Keep the launch target fixed until navigation finishes the charge.
+          if(contact(player,state.previousPlayer,body,state.previousBody,host.shape(actor),actor.root.rotation.y)){
+            if(!checkedClear&&!host.clear(actor,player)){
+              stop(actor);nextProbes.set(actor,t+tuning.probeInterval);continue;
+            }
             for(const other of chasing.keys())stop(other);
             caught={actor,elapsed:0};actor.pursuitCaught=true;
             host.feedback('caught',0);host.lookAt(actor,step);return true;
+          }
+          if(actor.pursuit.finished){
+            stop(actor);nextProbes.set(actor,t+tuning.probeInterval);continue;
           }
           state.previousPlayer={...player};state.previousBody={...body};
         }

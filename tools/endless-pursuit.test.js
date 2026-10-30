@@ -5,24 +5,38 @@ const pursuit=require('../assets/endless-pursuit');
 function fixture(){
   const actor={root:{rotation:{y:0}},islandId:'a'},body={x:5,y:0,z:0};
   const player={x:0,y:.6,z:0,eyeHeight:.6,islandId:'a'};
-  const events=[];let enabled=true,clear=true,available=true;
+  const events=[];let enabled=true,clear=true,available=true,checks=0;
   const system=pursuit.create({enabled:()=>enabled,player:()=>({...player}),npcs:()=>[actor],
     available:()=>available,shape:()=>({halfWidth:.5,halfDepth:.4,height:2}),body:()=>({...body}),
-    clear:()=>clear,start:()=>events.push('start'),stop:()=>events.push('stop'),
+    clear:()=>{checks++;return clear;},start:()=>events.push('start'),stop:()=>events.push('stop'),
     lookAt:()=>events.push('look'),regenerate:()=>{player.x=7;events.push('regenerate');},
     feedback:mode=>events.push(mode)});
-  return {actor,body,player,system,events,setEnabled:v=>enabled=v,setClear:v=>clear=v,setAvailable:v=>available=v};
+  return {actor,body,player,system,events,get checks(){return checks;},setEnabled:v=>enabled=v,setClear:v=>clear=v,setAvailable:v=>available=v};
 }
 {
   const f=fixture();f.actor.islandId='b';f.system.tick(0,.05);assert(!f.actor.pursuit,'Other islands cannot trigger pursuit');
   f.actor.islandId='a';f.player.x=-20;f.system.tick(.1,.05);assert(!f.actor.pursuit,'Outside awareness range');
   f.player.x=0;f.setClear(false);f.system.tick(.2,.05);assert(!f.actor.pursuit,'Blocked path cannot trigger pursuit');
-  f.setClear(true);f.system.tick(.3,.05);assert(f.actor.pursuit);
-  f.setClear(false);f.system.tick(.6,.05);assert(!f.actor.pursuit,'Terrain edits cancel pursuit');
-  f.setClear(true);f.system.tick(.7,.05);assert(f.actor.pursuit);
-  f.setAvailable(false);f.system.tick(.8,.05);assert(!f.actor.pursuit,'An encounter or other action cancels pursuit');
-  f.setAvailable(true);f.system.tick(.9,.05);f.player.islandId='b';f.system.tick(1,.05);
+  f.setClear(true);f.system.tick(.3,.05);assert(!f.actor.pursuit,'Blocked path waits for its probe cooldown');
+  f.system.tick(.5,.05);assert(f.actor.pursuit,'A reopened path is detected after the cooldown');
+  f.setClear(false);f.system.tick(.8,.05);assert(!f.actor.pursuit,'Terrain edits cancel pursuit');
+  f.setClear(true);f.system.tick(1.1,.05);assert(f.actor.pursuit);
+  f.setAvailable(false);f.system.tick(1.2,.05);assert(!f.actor.pursuit,'An encounter or other action cancels pursuit');
+  f.setAvailable(true);f.system.tick(1.3,.05);f.player.islandId='b';f.system.tick(1.4,.05);
   assert(!f.actor.pursuit,'Leaving the island cancels pursuit');
+}
+{
+  const f=fixture();f.setClear(false);
+  for(let frame=0;frame<120;frame++)f.system.tick(frame/60,1/60);
+  assert(f.checks>=7&&f.checks<=8,'Unreachable NPCs perform at most four path checks per second, not one per frame');
+  assert(!f.actor.pursuit);
+  f.system.cancel(f.actor);f.setClear(true);f.system.tick(2,1/60);
+  assert(f.actor.pursuit,'Cancellation clears a stale negative probe');
+  f.player.x=f.body.x;f.setClear(false);f.system.tick(2.01,1/60);
+  assert(!f.actor.pursuit&&!f.system.locked,'A blocked contact cannot catch the player');
+  const checks=f.checks;
+  for(let frame=1;frame<15;frame++)f.system.tick(2.01+frame/60,1/60);
+  assert.equal(f.checks,checks,'Failed catch checks also respect the cooldown');
 }
 {
   const f=fixture();f.system.tick(0,.05);f.player.x=10;
@@ -73,6 +87,52 @@ function realFixture(){
   }
   return {context,actor,overlay,status,terrain,THREE};
 }
+{
+  const f=realFixture(),a=f.actor('juggernaut'),m=a.mover;
+  a.pursuit={target:{x:.5,y:.6,z:.5,islandId:'a'}};
+  Object.assign(m,{targetCellX:4,targetCellZ:0,juggernautRun:{}});
+  const route=f.context.residentRoute;let checks=0;
+  f.context.residentRoute=(...args)=>{checks++;return route(...args);};
+  for(let frame=0;frame<120;frame++){
+    a.terrainTime=frame/60;
+    assert(m.animationNavigation.runTargetValid(m));
+  }
+  assert(checks>=7&&checks<=8,'Unchanged run destinations avoid frame-by-frame full-route scans');
+  m.targetCellX=3;m.animationNavigation.runTargetValid(m);
+  assert.equal(checks,9,'A changed destination is checked immediately');
+  m.juggernautRun={};m.animationNavigation.runTargetValid(m);
+  assert.equal(checks,10,'A new running step is checked immediately');
+  const get=f.terrain.getCell;
+  f.terrain.getCell=(x,z)=>x===3?{...get(x,z),kind:'rock'}:get(x,z);
+  a.terrainTime+=.3;
+  assert(!m.animationNavigation.runTargetValid(m),'Periodic scans still notice changed terrain ahead');
+}
+{
+  const f=realFixture(),a=f.actor('juggernaut');let checks=0;
+  a.pursuit={target:{x:.5,y:.6,z:.5,islandId:'a'}};
+  f.context.residentRoute=()=>{checks++;return null;};
+  for(let frame=0;frame<120;frame++){
+    a.terrainTime=frame/60;
+    assert.equal(a.mover.animationNavigation.selectRoute(a.mover),null);
+  }
+  assert(checks>0&&checks<=8*8,'Unusable local routes are retried at most four times per second');
+}
+for(const family of ['juggernaut','monsters'])for(const obstacle of ['rock','water','void']){
+  const f=realFixture(),a=f.actor(family);let time=0;
+  for(let frame=0;frame<120;frame++){
+    time=frame/60;f.context.pursuitSystem.tick(time,1/60);
+    f.context.tickExplorationResidentMotion(a,time,1/60);
+    if(a.mover.state==='JUGGERNAUT_RUN'&&a.root.position.x<5.4999)break;
+  }
+  assert.equal(a.mover.state,'JUGGERNAUT_RUN');
+  const before=a.root.position.clone(),get=f.terrain.getCell,cell=Math.floor(before.x);
+  f.terrain.getCell=(x,z)=>x===cell?(obstacle==='void'?null:{...get(x,z),kind:obstacle==='rock'?'rock':null,terrain:obstacle==='water'?'water':'stone'}):get(x,z);
+  // Do not advance the global awareness probe: the local sweep must catch
+  // this edit while the previous full-route result is still cached.
+  f.context.tickExplorationResidentMotion(a,time+1/60,1/60);
+  assert(a.root.position.equals(before),family+' does not advance through a fresh '+obstacle);
+  assert(a.pursuit.blockedUntil>time+1/60,'Rejected movement backs off before replanning');
+}
 for(const obstacle of ['rock','water','void']){
   const f=realFixture(),a=f.actor('juggernaut'),get=f.terrain.getCell;
   f.terrain.getCell=(x,z)=>x===3?(obstacle==='void'?null:{...get(x,z),kind:obstacle==='rock'?'rock':null,terrain:obstacle==='water'?'water':'stone'}):get(x,z);
@@ -104,3 +164,57 @@ for(const [family,form] of ['juggernaut','monsters','longneck','specter'].flatMa
   assert(f.status.textContent.includes('Protected'));assert(!f.context.pursuitSystem.locked);
 }
 console.log('Endless production adapters: shared Juggernaut/Monster runs, Longneck gallop, Specter fast float, juvenile support gait, camera pan, red cue and safe island regeneration passed.');
+
+// Crowded landing: bound expensive awareness sweeps and give every NPC a turn.
+{
+  const actors=Array.from({length:24},()=>({islandId:'a',root:{rotation:{y:0}}}));
+  const seen=new Set();let checks=0,peak=0;
+  const system=pursuit.create({enabled:()=>true,player:()=>({x:0,y:.6,z:0,islandId:'a'}),
+    npcs:()=>actors,available:()=>true,body:()=>({x:5,y:0,z:0}),
+    clear:actor=>{checks++;seen.add(actor);return false;},
+    stop:()=>{},feedback:()=>{}});
+  for(let frame=0;frame<6;frame++){
+    checks=0;system.tick(frame/60,1/60);peak=Math.max(peak,checks);
+  }
+  assert.equal(peak,4);
+  assert.equal(seen.size,24,'All 24 NPCs are checked within six frames');
+  console.log('Crowded landing: peak awareness sweeps 24 -> 4; 24 NPCs checked within 83 ms.');
+}
+
+{
+  const f=fixture();f.system.tick(0,.016);
+  const target={...f.actor.pursuit.target};
+  f.player.z=4;f.system.tick(.3,.016);
+  assert.deepEqual(f.actor.pursuit.target,target,'Dodging does not redirect an active charge');
+  f.actor.pursuit.finished=true;f.system.tick(.31,.016);
+  assert(!f.actor.pursuit,'A missed charge finishes');
+  f.system.tick(.4,.016);assert(!f.actor.pursuit,'Brief recovery before another charge');
+  f.setClear(false);f.system.tick(.6,.016);
+  assert(!f.actor.pursuit,'A new charge requires a clear path');
+  f.setClear(true);f.system.tick(.9,.016);
+  assert.equal(f.actor.pursuit.target.z,4,'Next charge aims at the new player position');
+}
+{
+  const f=realFixture(),a=f.actor('juggernaut');
+  a.pursuit={origin:{x:5.5,z:.5},target:{x:2.5,y:.6,z:.5}};
+  f.context.carryResidentCharge(a,2,3);
+  assert.equal(a.pursuit.target.x,4.5);
+  assert.equal(a.pursuit.origin.z,3.5);
+  a.root.position.set(4.4,0,3.5);
+  assert.equal(f.context.residentPursuitStep(a),null);
+  assert(a.pursuit.finished,'Passing the committed endpoint ends the charge');
+}
+for(const family of ['juggernaut','monsters','longneck','specter']){
+  const f=realFixture(),a=f.actor(family);
+  f.context.pursuitSystem.tick(0,1/60);
+  const charge=a.pursuit;
+  f.context.fp.pos.z=5.5;
+  for(let frame=1;frame<1800&&a.pursuit===charge;frame++){
+    f.context.pursuitSystem.tick(frame/60,1/60);
+    f.context.tickExplorationResidentMotion(a,frame/60,1/60);
+    assert(!f.context.pursuitSystem.locked,'A sidestep misses the charge');
+  }
+  assert.notEqual(a.pursuit,charge,family+' completes a missed charge');
+  assert(Math.abs(a.root.position.z-.5)<.1,family+' stays on its committed charge');
+}
+console.log('Committed charges: fixed targets, missed endpoints, recovery, fresh path checks and island drift passed.');

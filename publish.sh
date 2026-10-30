@@ -10,7 +10,7 @@ cp index.html "$output_dir/index.html"
 mkdir -p "$output_dir/build"
 cp build/wallet.js "$output_dir/build/wallet.js"
 cp build/transactions.js "$output_dir/build/transactions.js"
-cp territory.html territory.js "$output_dir/"
+cp landing.html territory.html territory.js "$output_dir/"
 cp runtime-config.js "$output_dir/runtime-config.js"
 for asset_dir in vendor models sounds crowd schemas assets; do
   rm -rf "$output_dir/$asset_dir"

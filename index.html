@@ -31584,10 +31584,21 @@ function neighborStarVector(edge, index) {
     const shape=battleBroTerrain.profile(actor.root);
     return battleBroTerrain.point(explorationTerrain,x,z,(actor.supportY??actor.root.position.y)+shape.step)?.y;
   }
+  function carryResidentCharge(actor,dx,dz){
+    if(!actor.pursuit)return;
+    for(const point of [actor.pursuit.target,actor.pursuit.origin]){
+      if(point){point.x+=dx;point.z+=dz;}
+    }
+  }
   function residentPursuitStep(actor,mover=actor.mover){
     if(!actor.pursuit)return null;
     const target=actor.pursuit.target,root=actor.root;
     const distance=Math.hypot(target.x-root.position.x,target.z-root.position.z);
+    const origin=actor.pursuit.origin;
+    if(origin&&((target.x-root.position.x)*(target.x-origin.x)
+      +(target.z-root.position.z)*(target.z-origin.z)<=0||distance<.1)){
+      actor.pursuit.finished=true;return null;
+    }
     const candidates=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]
       .map(([dx,dz])=>{const x=(mover.cellX??actor.x)+dx,z=(mover.cellZ??actor.z)+dz;
         const point=explorationTerrain.cellToWorld(x,z,actor.islandId);
@@ -31607,6 +31618,7 @@ function neighborStarVector(edge, index) {
   }
   // Resident navigation adapter only. All poses/phases/IK come from the home core.
   function juggernautResidentNavigation(actor){
+    let runValidation=null;
     const point=(x,z)=>{const p=explorationTerrain.cellToWorld(x,z,actor.islandId);
       return {...p,y:explorationTerrain.groundYAt(p.x,p.z,0,actor.supportY===undefined?undefined:actor.supportY+.1)};};
     const contact=(m,desired,yaw,index)=>{
@@ -31616,7 +31628,16 @@ function neighborStarVector(edge, index) {
       return patch?desired.clone().setY(patch.max):null;
     };
     return {point,contact,
-      runTargetValid:m=>!!actor.pursuit&&!!residentRoute(actor,m.targetCellX,m.targetCellZ),
+      runTargetValid(m){
+        if(!actor.pursuit)return false;
+        const time=actor.terrainTime||0,run=m.juggernautRun;
+        if(!runValidation||runValidation.run!==run||runValidation.x!==m.targetCellX
+          ||runValidation.z!==m.targetCellZ||time>=runValidation.until){
+          runValidation={run,x:m.targetCellX,z:m.targetCellZ,until:time+.25,
+            valid:!!residentRoute(actor,m.targetCellX,m.targetCellZ)};
+        }
+        return runValidation.valid;
+      },
       swing(m,start,desired,index,yaw,lift,startYaw){
         const end=contact(m,desired,yaw,index);if(!end)return null;
         const probe=start.clone();let highest=Math.max(start.y,end.y);
@@ -31630,8 +31651,10 @@ function neighborStarVector(edge, index) {
       },
       selectRoute(m){
         if(actor.pursuit){
-          const route=residentPursuitStep(actor,m);if(!route)return null;
-          const plan=planLavaTerrainMove(m,route.x,route.z,route.yaw);if(!plan)return null;
+          if((actor.pursuit.blockedUntil||0)>(actor.terrainTime||0))return null;
+          const route=residentPursuitStep(actor,m);
+          const plan=route&&planLavaTerrainMove(m,route.x,route.z,route.yaw);
+          if(!plan){actor.pursuit.blockedUntil=(actor.terrainTime||0)+.25;return null;}
           if(lavaMovementForm(m.root)>=4){
             m.juggernautJog={remaining:2,total:2,support:m.juggernautJog?.support||0};
             return {...route,plan,jog:true};
@@ -31667,9 +31690,10 @@ function neighborStarVector(edge, index) {
     }
     const mover=actor.mover,motion=actor.motion,animation=ensureSupportAnimation(mover);
     const drift=new THREE.Vector3(point.x-motion.pointX,0,point.z-motion.pointZ);
+    carryResidentCharge(actor,drift.x,drift.z);
     root.position.add(drift);animation.carry(drift);motion.pointX=point.x;motion.pointZ=point.z;
     if(motion.mode==='idle'&&motion.pause===0)mover.pauseRemaining=0;
-    if(actor.pursuit&&mover.state==='IDLE')mover.pauseRemaining=0;
+    if(actor.pursuit&&mover.state==='IDLE'&&(actor.pursuit.blockedUntil||0)<=t)mover.pauseRemaining=0;
     if(mover.state!=='IDLE'&&!residentSupport(actor,mover.targetCellX,mover.targetCellZ,mover.desiredYaw)){
       animation.reset();mover.pauseRemaining=2;
       // Preserve the current position; discard the unsafe destination, not the Bro.
@@ -31678,6 +31702,19 @@ function neighborStarVector(edge, index) {
     if(root.userData.characterJumping){animation.interrupt();return;}
     restoreTelekineticBody(root);tickBattleBroWorldExpression(root,t);
     const proposal=animation.prepare({},actor.pursuit&&lavaMovementForm(root)<4?step*3:step,t);
+    if(actor.pursuit&&(root.position.distanceToSquared(proposal.position)>1e-10
+      ||Math.abs(battleBroYawDelta(proposal.yaw-root.rotation.y))>1e-6)){
+      // Sweep only this frame's movement. Long routes are checked on a timer;
+      // fresh obstacles, gaps and other Bros still reject movement immediately.
+      const clear=battleBroTerrain.route(explorationTerrain,battleBroTerrain.profile(root),{
+        x:root.position.x,y:root.position.y,z:root.position.z,yaw:root.rotation.y,islandId:actor.islandId},
+        {x:proposal.position.x,z:proposal.position.z,yaw:proposal.yaw});
+      if(!clear||residentBodyOccupied(root,proposal.position.x,proposal.position.y,proposal.position.z,actor)){
+        animation.commit({accepted:0,grounded:true},t,step);animation.reset();
+        actor.pursuit.blockedUntil=t+.25;mover.pauseRemaining=.25;
+        motion.mode='idle';motion.pause=.25;return;
+      }
+    }
     root.position.copy(proposal.position);root.rotation.y=proposal.yaw;
     animation.commit({grounded:true},t,step);
     if(mover.cellX!==actor.x||mover.cellZ!==actor.z){
@@ -31725,6 +31762,7 @@ function neighborStarVector(edge, index) {
     }
     const mover=actor.mover,motion=actor.motion,animation=ensureSpecterAnimation(mover);
     const drift=new THREE.Vector3(point.x-motion.pointX,0,point.z-motion.pointZ);
+    carryResidentCharge(actor,drift.x,drift.z);
     root.position.add(drift);animation.carry(drift);motion.pointX=point.x;motion.pointZ=point.z;
     if(root.userData.characterJumping){animation.interrupt();return;}
     if(mover.state!==SPECTER_MOVE_STATE.IDLE_HOVER&&!residentSupport(actor,mover.targetCellX,mover.targetCellZ,mover.desiredYaw)){
@@ -31777,6 +31815,7 @@ function neighborStarVector(edge, index) {
       if(actor.limbRest)parts.limbs.forEach((limb,i)=>limb.position.copy(actor.limbRest[i]));
     }
     const driftX=point.x-motion.pointX,driftZ=point.z-motion.pointZ;
+    carryResidentCharge(actor,driftX,driftZ);
     motion.pointX=point.x;motion.pointZ=point.z;
     if(actor.character==='longneck')ensureLongneckAnimation(mover).carry(new THREE.Vector3(driftX,0,driftZ));
     // Home gait contacts are world anchored: carry them with the floating island.
