@@ -102,6 +102,11 @@ for(const character of ['monsters','juggernaut','longneck','specter'])for(let fo
  const actor={root,mover:{root,parts:root.userData.locomotionRig||root.userData.rig,
   state:'IDLE',progress:0,ikTarget:new THREE.Vector3()},x:200,z:200,character,phase:0};
  context.actor=actor;
+ // Standing inside an NPC's awareness/contact range must not affect the player.
+ const player=context.fp;
+ player.pos.set(root.position.x+.05,root.position.y+.6,root.position.z+.05);
+ Object.assign(player,{yaw:.37,pitch:.2,vy:.6});
+ const playerPose=[...player.pos.toArray(),player.yaw,player.pitch,player.vy];
  let completedStep=false;
  for(let frame=0;frame<(['juggernaut','monsters'].includes(character)?1800:600);frame++) {
   vm.runInContext(`tickExplorationResidentMotion(actor,${frame/60},1/60)`,context);
@@ -115,6 +120,12 @@ for(const character of ['monsters','juggernaut','longneck','specter'])for(let fo
  }
  assert(Number.isFinite(root.position.x)&&Number.isFinite(root.position.y),`${character} ${form}: finite roaming pose`);
  assert(completedStep,`${character} ${form}: completes an animated step`);
+ assert.deepEqual([...player.pos.toArray(),player.yaw,player.pitch,player.vy],playerPose,
+  character+' '+form+': nearby NPC leaves player position, camera and velocity alone');
+ assert(!actor.pursuit&&!actor.pursuitCaught,character+' '+form+': nearby player triggers no chase or catch');
+ assert(Math.hypot(actor.x-actor.motion.homeX,actor.z-actor.motion.homeZ)<=5,
+  character+' '+form+': proximity preserves local roaming');
+
  group.remove(root);
 }
 console.log('exploration residents: all four families and seven forms complete animated roaming steps');

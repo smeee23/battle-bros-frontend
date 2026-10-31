@@ -6,20 +6,11 @@ Run npm test and npm run build. Build only writes dist; it does not publish. Con
 
 From contracts, npm run interfaces:sync regenerates canonical ABIs, backend copies, frontend selectors, and public schemas. npm run interfaces:check checks all consumers.
 
-## Endless NPC pursuit
+## Endless NPC residents
 
-NPC BattleBros detect the player within 10 world units on the same island when
-their full body has a clear, supported path. They pursue using the shared Home
-run, gallop, fast-float or juvenile support controller. Leaving the island,
-blocking the path or exceeding 14 units ends pursuit.
-
-Body contact briefly locks movement, pans the camera toward the Bro and shows a
-red screen cue. The player regenerates on safe terrain about 3–10 units away on
-the same island, with five seconds of protection from every NPC. Tiny islands
-without another safe patch retain the current spot and still grant protection.
-H and Escape remain available during the catch. These are local exploration
-effects; they do not change territory contract state. Timing and range defaults
-live in `assets/endless-pursuit.js`.
+Wild BROs idle and roam locally on their islands. Approaching an NPC does not
+trigger a chase, camera lock, catch overlay, or forced regeneration. Encounters
+between a deployed Bro and wild residents remain available.
 
 ## Wallet connectivity (first pass)
 
