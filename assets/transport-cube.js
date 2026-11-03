@@ -46,7 +46,7 @@
   function launch(){
     hooks.hand(hand);cube.position.copy(hand);hooks.direction(velocity).normalize().multiplyScalar(7);velocity.y+=1.8;
     cube.rotation.set(0,0,0);cube.scale.setScalar(1);top.position.y=.055;
-    phase='flight';age=0;flightAge=0;cube.visible=true;status('Transport cube thrown');
+    phase='flight';age=0;flightAge=0;cube.visible=true;status('BRO teleport cube thrown');
   }
   function throwCube(){
     if(!hooks.active()||!hooks.source())return false;

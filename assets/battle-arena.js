@@ -1,5 +1,49 @@
 /* Isolated arena and visual action preview; no world cells or combat accounting. */
-(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory;else root.createBattleArena=factory;})(typeof globalThis!=='undefined'?globalThis:this,function(THREE,createCharacter,animateCharacter,options){
+(function(root,factory){
+  // Shared celestial geometry: the arena and endless rings use the same logo.
+  factory.createEthereumLogo=function(THREE){
+    // Clean crystalline facets, matching the cyan Ethereum reference.
+    const planetMaterial=new THREE.MeshPhongMaterial({
+      vertexColors:true,flatShading:true,shininess:75,
+      specular:0xb8eaff,emissive:0x082137,emissiveIntensity:.45,fog:false
+    });
+    function ethereumSection(equator,top,bottom,lower){
+      // Equal horizontal diagonals retain the diamond profile throughout rotation.
+      const rim=[[-63,equator,0],[0,equator,63],[63,equator,0],[0,equator,-63]];
+      const vertices=[],colors=[];
+      const upperColors=[0xc2f3ff,0x48bce9,0x237eb9,0x74d9f4];
+      const undersideColors=[0x3899ca,0x204d98,0x163d78,0x266d9e];
+      const lowerColors=[0x8ceaff,0x3cb3e3,0x246fab,0x62cfe9];
+      function triangle(a,b,c,color){
+        vertices.push(...a,...b,...c);
+        const tint=new THREE.Color(color);for(let v=0;v<3;v++)colors.push(tint.r,tint.g,tint.b);
+      }
+      for(let i=0;i<4;i++){
+        const next=(i+1)%4;
+        triangle([0,top,0],rim[i],rim[next],lower?undersideColors[i]:upperColors[i]);
+        triangle([0,bottom,0],rim[next],rim[i],lower?lowerColors[i]:undersideColors[i]);
+      }
+      const geometry=new THREE.BufferGeometry();
+      geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+      geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+      geometry.computeVertexNormals();return geometry;
+    }
+    const planet=new THREE.Group();planet.name='ethereumMonument';
+    const edgeMaterial=new THREE.LineBasicMaterial({color:0x9aeaff,transparent:true,opacity:.22,fog:false});
+    for(const [name,equator,top,bottom,lower] of [
+      ['ethereumUpper',-6,100,-44,false],
+      ['ethereumLower',-18,-56,-103,true]
+    ]){
+      // The lower section follows the upper underside with a consistent chevron gap.
+      const geometry=ethereumSection(equator,top,bottom,lower);
+      const section=new THREE.Mesh(geometry,planetMaterial);section.name=name;planet.add(section);
+      const edges=new THREE.LineSegments(new THREE.EdgesGeometry(geometry),edgeMaterial);
+      edges.name='ethereumFacetEdges';planet.add(edges);
+    }
+    return planet;
+  };
+  if(typeof module==='object'&&module.exports)module.exports=factory;else root.createBattleArena=factory;
+})(typeof globalThis!=='undefined'?globalThis:this,function createBattleArena(THREE,createCharacter,animateCharacter,options){
   'use strict';
   options=options||{};
   const scene=new THREE.Scene();scene.background=new THREE.Color(0x040916);scene.fog=new THREE.Fog(0x111c26,48,100);
@@ -216,45 +260,8 @@
   starGeometry.setAttribute('color',new THREE.Float32BufferAttribute(starColors,3));
   const stars=new THREE.Points(starGeometry,new THREE.PointsMaterial({size:1.5,sizeAttenuation:false,vertexColors:true,fog:false}));
   stars.name='arenaStars';sky.add(stars);
-  // Clean crystalline facets, matching the cyan Ethereum reference.
-  const planetMaterial=new THREE.MeshPhongMaterial({
-    vertexColors:true,flatShading:true,shininess:75,
-    specular:0xb8eaff,emissive:0x082137,emissiveIntensity:.45,fog:false
-  });
-  function ethereumSection(equator,top,bottom,lower){
-    // Equal horizontal diagonals retain the diamond profile throughout rotation.
-    const rim=[[-63,equator,0],[0,equator,63],[63,equator,0],[0,equator,-63]];
-    const vertices=[],colors=[];
-    const upperColors=[0xc2f3ff,0x48bce9,0x237eb9,0x74d9f4];
-    const undersideColors=[0x3899ca,0x204d98,0x163d78,0x266d9e];
-    const lowerColors=[0x8ceaff,0x3cb3e3,0x246fab,0x62cfe9];
-    function triangle(a,b,c,color){
-      vertices.push(...a,...b,...c);
-      const tint=new THREE.Color(color);for(let v=0;v<3;v++)colors.push(tint.r,tint.g,tint.b);
-    }
-    for(let i=0;i<4;i++){
-      const next=(i+1)%4;
-      triangle([0,top,0],rim[i],rim[next],lower?undersideColors[i]:upperColors[i]);
-      triangle([0,bottom,0],rim[next],rim[i],lower?lowerColors[i]:undersideColors[i]);
-    }
-    const geometry=new THREE.BufferGeometry();
-    geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
-    geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
-    geometry.computeVertexNormals();return geometry;
-  }
-  const planet=new THREE.Group();planet.name='arenaPlanet';planet.position.set(-65,110,-340);
-  planet.rotation.set(-.08,-.16,-.10);sky.add(planet);
-  const edgeMaterial=new THREE.LineBasicMaterial({color:0x9aeaff,transparent:true,opacity:.22,fog:false});
-  for(const [name,equator,top,bottom,lower] of [
-    ['ethereumUpper',-6,100,-44,false],
-    ['ethereumLower',-18,-56,-103,true]
-  ]){
-    // The lower section follows the upper underside with a consistent chevron gap.
-    const geometry=ethereumSection(equator,top,bottom,lower);
-    const section=new THREE.Mesh(geometry,planetMaterial);section.name=name;planet.add(section);
-    const edges=new THREE.LineSegments(new THREE.EdgesGeometry(geometry),edgeMaterial);
-    edges.name='ethereumFacetEdges';planet.add(edges);
-  }
+  const planet=createBattleArena.createEthereumLogo(THREE);planet.name='arenaPlanet';
+  planet.position.set(-65,110,-340);planet.rotation.set(-.08,-.16,-.10);sky.add(planet);
   scene.add(new THREE.HemisphereLight(0xbddfed,0x38463e,.85));
   const key=new THREE.DirectionalLight(0xf1f6ff,.95);key.position.set(-10,18,14);scene.add(key);
   const fill=new THREE.DirectionalLight(0x93c7e8,.6);fill.position.set(12,9,-6);scene.add(fill);

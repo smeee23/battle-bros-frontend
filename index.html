@@ -28399,7 +28399,7 @@ function neighborStarVector(edge, index) {
       variants: [
         { id: 'tower',      label: 'Tower',          buildingType: 'tower',      hint: 'civilian defense tower' },
         { id: 'air-command', label: 'Air Command',   buildingType: 'air-command', hint: 'military air command' },
-        { id: 'transporter', label: 'Transporter', buildingType: 'transporter', hint: 'ground-level transport module · one level' },
+        { id: 'transporter', label: 'Teleporter', buildingType: 'transporter', hint: 'ground-level transport module · one level' },
         { id: 'habitat',    label: 'Habitat',        buildingType: 'habitat',    hint: 'civilian defense module' },
       ],
     },
@@ -30319,7 +30319,7 @@ function neighborStarVector(edge, index) {
     const dummy=new THREE.Object3D(),box=new THREE.BoxGeometry(TILE,1,TILE);
     let centerX=null,centerZ=null,homeWasVisible=true,clock=0,accumulator=0,lastSafe={x:0,z:0};
     const surfaceStyles=new Map();
-    let materials=null,starfield=null,homeBackground=null,pending=[];
+    let materials=null,starfield=null,ringSystem=null,ringLogo=null,homeBackground=null,pending=[];
     const key=(x,z)=>x+','+z;
     const hash=(x,z,salt=0)=>{
       let n=Math.imul(x,374761393)^Math.imul(z,668265263)^Math.imul(salt+1,1442695041);
@@ -30850,6 +30850,10 @@ function neighborStarVector(edge, index) {
       while(accumulator>=STEP){simulate(STEP);accumulator-=STEP;}
       for(const b of islands.values()){b.dx=b.ox-b.dx;b.dz=b.oz-b.dz;b.root.position.set(b.site.x+b.ox,b.site.elevation||0,b.site.z+b.oz);}
       if(starfield)starfield.position.copy(player.pos);
+      if(ringSystem) {
+        ringSystem.position.set(player.pos.x,0,player.pos.z);
+        ringLogo.rotation.y=(ringLogo.rotation.y+Math.min(.1,Math.max(0,dt))*.025)%(Math.PI*2);
+      }
       if(support){player.pos.x+=support.dx;player.pos.z+=support.dz;}
       if(deployedSupport&&!deployedCharacter.userData.transportActor?.motion){deployedCharacter.position.x+=deployedSupport.dx;deployedCharacter.position.z+=deployedSupport.dz;}
       const hit=sample(player.pos.x,player.pos.z,player.pos.y-eyeHeight+.02);
@@ -30859,6 +30863,54 @@ function neighborStarVector(edge, index) {
         const p=cellToWorld(lastSafe.x,lastSafe.z);
         player.pos.set(p.x,groundYAt(p.x,p.z,eyeHeight),p.z);player.vy=0;player.grounded=true;player.terrainLift=0;player.landingTime=0;
       }
+    }
+    // A distant visual continuation of the streamed terrain. Camera-relative X/Z
+    // keeps an infinite walk on the same local ring sector; Y stays in the
+    // terrain plane so ascending in flight reveals the actual annular shape.
+    function createRingSystem() {
+      if(typeof createBattleArena==='undefined')return;
+      ringSystem=new THREE.Group();ringSystem.name='endless-ethereum-rings';group.add(ringSystem);
+      ringLogo=createBattleArena.createEthereumLogo(THREE);
+      ringLogo.scale.setScalar(1.25);
+      ringLogo.position.set(0,12,-420);ringLogo.rotation.y=-.16;ringSystem.add(ringLogo);
+      const positions=[],colors=[];
+      const palette=[0x293442,0x1b2634,0x3a414a,0x243746,0x303b47];
+      // Uneven, shadowed debris arcs continue the islands into the distance.
+      // Coarse gaps create missing stretches; finer gaps and wandering edges
+      // break up the remaining arcs without changing the shared surface plane.
+      for(let lane=0;lane<44;lane++) {
+        const radius=260+lane*6.2+hash(lane,7,201)*4;
+        const width=1.2+hash(lane,8,201)*4.8,phase=hash(lane,9,201)*Math.PI*2;
+        const baseTint=new THREE.Color(palette[lane%palette.length]);
+        for(let segment=0;segment<256;segment++) {
+          if(hash(lane,Math.floor(segment/7),203)<.24||hash(lane,segment,202)<.18)continue;
+          const a=(segment+hash(lane,segment,204)*.22)/256*Math.PI*2;
+          const b=(segment+.48+hash(lane,segment,205)*.5)/256*Math.PI*2;
+          const offset=(hash(lane,segment,206)-.5)*3;
+          const fragmentWidth=width*(.45+hash(lane,segment,207)*.9);
+          const point=(edge,angle)=>{
+            const r=radius+offset+Math.sin(angle*3+phase)*2.8+Math.sin(angle*11+phase)*1.1+edge;
+            return [Math.cos(angle)*r,-2.5,Math.sin(angle)*r-420];
+          };
+          positions.push(...point(0,a),...point(fragmentWidth,a),...point(fragmentWidth,b),...point(0,a),...point(fragmentWidth,b),...point(0,b));
+          const tint=baseTint.clone().multiplyScalar(.6+hash(lane,segment,208)*.4);
+          for(let v=0;v<6;v++)colors.push(tint.r,tint.g,tint.b);
+        }
+      }
+      const geometry=new THREE.BufferGeometry();
+      geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+      geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+      const material=new THREE.ShaderMaterial({
+        transparent:true,depthWrite:false,side:THREE.DoubleSide,vertexColors:true,fog:false,
+        vertexShader:`varying vec3 ringColor; varying vec3 ringWorld;
+          void main(){ringColor=color;vec4 world=modelMatrix*vec4(position,1.0);
+            ringWorld=world.xyz;gl_Position=projectionMatrix*viewMatrix*world;}`,
+        fragmentShader:`varying vec3 ringColor; varying vec3 ringWorld;
+          void main(){float distanceToViewer=length(ringWorld.xz-cameraPosition.xz);
+            float opacity=smoothstep(48.0,110.0,distanceToViewer)*0.32;
+            gl_FragColor=vec4(ringColor,opacity);}`
+      });
+      const lanes=new THREE.Mesh(geometry,material);lanes.name='endless-ring-lanes';ringSystem.add(lanes);
     }
     function activate() {
       ensureAround(0,0);lastSafe={x:0,z:0};
@@ -30877,6 +30929,8 @@ function neighborStarVector(edge, index) {
         starfield.name='endless-space-stars';starfield.frustumCulled=false;group.add(starfield);
       }
       starfield.position.set(0,0,0);
+      if(!ringSystem)createRingSystem();
+      if(ringSystem)ringSystem.position.set(0,0,0);
       homeWasVisible=xrWorldRoot.visible;xrWorldRoot.visible=false;group.visible=true;explorationActive=true;
       if(typeof syncMinimapVisibility==='function')syncMinimapVisibility();
       applyDistanceMistSettings(currentSkyBgHex);
@@ -31137,7 +31191,7 @@ function neighborStarVector(edge, index) {
     if(!FP_TOOLS.some(option=>option.id===tool)||(tool!=='hands'&&!fpToolsAvailable()))return;
     excavation.equipped=tool; excavation.swing=null;resetTerrainRaiseShots();
     document.getElementById('fp-equipped-tool-label').textContent=tool==='transport-cube'
-      ?'Transport cube equipped':tool==='raiser'?'Terrain raiser equipped · Aim and click to fire a terrain charge':'Axe equipped · 10% gem chance per broken layer';
+      ?'BRO teleport cube equipped':tool==='raiser'?'Terrain raiser equipped · Aim and click to fire a terrain charge':'Axe equipped · 10% gem chance per broken layer';
     if((tool==='axe'||tool==='raiser') && fp.active && canMutateActiveColony() && !battleArenaView.active){
       createExcavationVisuals();
       excavation.miningAxe.visible=false;excavation.raiser.visible=false;
@@ -31150,7 +31204,7 @@ function neighborStarVector(edge, index) {
     for(const button of document.querySelectorAll('#fp-tool-menu button'))
       button.setAttribute('aria-pressed',String(button.dataset.tool===excavation.equipped));
   }
-  const FP_TOOLS=Object.freeze([{id:'hands',label:'None',key:'0'},{id:'axe',label:'Axe',key:'1',kind:'walking-axe',thumbnailOnly:true},{id:'transport-cube',label:'Transport cube',key:'2',kind:'transport-cube',thumbnailOnly:true,thumbnailScale:.7},{id:'raiser',label:'Terrain raiser',key:'3',kind:'walking-raiser',thumbnailOnly:true}]);
+  const FP_TOOLS=Object.freeze([{id:'hands',label:'None',key:'0'},{id:'axe',label:'Axe',key:'1',kind:'walking-axe',thumbnailOnly:true},{id:'transport-cube',label:'BRO teleport cube',key:'2',kind:'transport-cube',thumbnailOnly:true,thumbnailScale:.7},{id:'raiser',label:'Terrain raiser',key:'3',kind:'walking-raiser',thumbnailOnly:true}]);
   const fpToolMenu=document.getElementById('fp-tool-menu');
   const fpToolsToggle=document.getElementById('fp-tools-toggle');
   for(const tool of FP_TOOLS){
@@ -31816,7 +31870,8 @@ function neighborStarVector(edge, index) {
       tickExplorationResidentMotion(actor,t,dt);
     }
     explorationResidentScan-=dt;
-    if(explorationResidentScan>0 || explorationResidents.size>=6)return;
+    // Quarter of the previous six residents, rounded up to a whole NPC.
+    if(explorationResidentScan>0 || explorationResidents.size>=2)return;
     const origin=explorationTerrain.worldToCell(fp.pos.x,fp.pos.z);
     if(!explorationResidentSearch || Math.hypot(origin.x-explorationResidentSearch.x,
       origin.z-explorationResidentSearch.z)>8) {

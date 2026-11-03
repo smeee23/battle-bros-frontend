@@ -107,7 +107,7 @@ fp.pos.set(0,.6,0);transport.throwTransportCube();frames(240);assert(transport.s
 transport.resetTransportCube();context.explorationActive=false;frames(1);assert.equal(transport.state.root,null,'World exit cleans up deployment');
 
 assert(!html.includes('function tickExplorationCompanion('));assert(!html.includes('function recoverCompanion('));
-assert(html.includes("id:'transport-cube',label:'Transport cube',key:'2'"));
+assert(html.includes("id:'transport-cube',label:'BRO teleport cube',key:'2'"));
 console.log('Transport cube: all 28 rigs, appearance preservation, Q tool, ballistic throw, recall, player clearance, invalid terrain, no following and cleanup passed.');
 // Repeated cross-world cycles use actual home registration and animation loops.
 for(const character of ['longneck','specter','juggernaut','monsters'])for(let form=1;form<=7;form++){

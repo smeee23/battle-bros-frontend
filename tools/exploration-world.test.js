@@ -5,7 +5,7 @@ const html=fs.readFileSync('index.html','utf8');
 const source=html.slice(html.indexOf('  // ---------- exploration terrain ----------'),html.indexOf('  const homeFPTerrain ='));
 function setup(){
  const scene=new THREE.Scene(),xrWorldRoot=new THREE.Group();scene.add(xrWorldRoot);
- const context=vm.createContext({THREE,scene,xrWorldRoot,TILE:1,DIRT_H:.5,TOP_H:.18,BUILDABLE_LAND_Y_OFFSET:-.18,currentSkyBgHex:0,
+ const context=vm.createContext({THREE,createBattleArena:require('../assets/battle-arena.js'),scene,xrWorldRoot,TILE:1,DIRT_H:.5,TOP_H:.18,BUILDABLE_LAND_Y_OFFSET:-.18,currentSkyBgHex:0,
  explorationActive:false,terrainRiseForLevel:n=>Math.max(0,(Math.min(64,n||1)-1)*.2),terrainLevelForCell:c=>c?.terrainFloors||1,
  applyDistanceMistSettings(){}});
  require('../tools/terrain-render-fixture')(context,html);
@@ -20,6 +20,16 @@ assert(stats.islands>10&&stats.islands<=100,'Stream a bounded field of whole fra
 assert(new Set(stats.fragments.map(b=>b.style)).size===4,'Dunes, jagged rocks, plateaus and mixed shapes');
 const sizes=stats.fragments.map(b=>b.count);assert(Math.max(...sizes)>Math.min(...sizes)*4,'Substantial landmass size variation');
 assert(terrain.group.getObjectByName('endless-space-stars'));
+const ringSystem=terrain.group.getObjectByName('endless-ethereum-rings');
+const ringLogo=ringSystem.getObjectByName('ethereumMonument');
+const lanes=ringSystem.getObjectByName('endless-ring-lanes');
+assert(ringLogo.getObjectByName('ethereumUpper')&&ringLogo.getObjectByName('ethereumLower'),'Same split crystal as arena');
+const ringPositions=lanes.geometry.attributes.position;
+assert(ringPositions.count>10000,'Detailed ring lanes are batched in one mesh');
+for(let i=0;i<ringPositions.count;i++)assert.equal(ringPositions.getY(i),-2.5,'Rings share the horizontal terrain plane');
+assert.equal(lanes.material.depthWrite,false,'Distant transparent rings do not mask islands');
+assert.equal(ringLogo.getObjectByName('ethereumUpper').material.fog,false,'Logo remains visible past terrain mist');
+
 for(const root of terrain.group.children.filter(c=>c.name.startsWith('floating-fragment-'))) {
  assert(root.getObjectByName('explorationTerrainWindow').isInstancedMesh);
  const hull=root.getObjectByName('fractured-rock-underside');assert(hull.geometry.attributes.position.count>0);
@@ -56,6 +66,15 @@ assert(terrain.diagnostics().pending>0,'Distant arrivals build progressively');
 const remote={pos:new THREE.Vector3(1000,20,1000),grounded:false};
 for(let i=0;i<100&&terrain.diagnostics().pending;i++)terrain.tick(0,remote,.6,null);
 assert.equal(terrain.diagnostics().pending,0,'Progressive streaming completes on the existing tick');
+assert.equal(ringSystem.position.x,remote.pos.x);
+assert.equal(ringSystem.position.z,remote.pos.z);
+assert.equal(ringSystem.position.y,0,'Flying changes elevation above the rings');
+assert.equal(ringLogo.position.z,-420,'Endless walking retains a distant center');
+const retainedRingGeometry=lanes.geometry;
+terrain.deactivate();assert(!terrain.group.visible,'Home hides the entire celestial backdrop');
+terrain.activate();
+assert.equal(terrain.group.getObjectByName('endless-ring-lanes').geometry,retainedRingGeometry,'Re-entry reuses backdrop GPU resources');
+
 terrain.ensureAround(0,0);assert.equal(terrain.getCell(0,0).terrainFloors,2,'Edits survive eviction and reload');
 for(let i=1;i<=8;i++)terrain.ensureAround(i*1000,-i*1000);
 stats=terrain.diagnostics();assert(stats.islands<=100&&stats.sites<200&&stats.cells<50000&&stats.sleeping<=128,'Streaming and dormant motion stay bounded');

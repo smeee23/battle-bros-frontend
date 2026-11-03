@@ -47,7 +47,7 @@ create();assert(!e.tool,'No scanner is created');
 const options=element('fp-tool-options').children;
 assert.equal(options.length,4,'Tool menu has None, Axe, Transport cube and Terrain raiser');
 assert.equal(options[2].dataset.tool,'transport-cube');
-equip('transport-cube');assert.equal(element('fp-equipped-tool-label').textContent,'Transport cube equipped');
+equip('transport-cube');assert.equal(element('fp-equipped-tool-label').textContent,'BRO teleport cube equipped');
 equip('hands');
 assert.equal(options[0].children[0].textContent,'None');
 assert(!options[0].children.some(child=>child.tagName==='canvas'),'None has no thumbnail');

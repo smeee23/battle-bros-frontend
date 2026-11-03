@@ -17,7 +17,7 @@ const context=vm.createContext({SPECTER_MOVE_STATE:longneckFixture.api.SPECTER_M
 for(const key of ['registerSpecterMover','ensureSpecterAnimation','chooseSpecterDestination','ensureSupportAnimation','ensureJuggernautAnimation','registerLavaMonsterMover','lavaContactExtent','planLavaTerrainMove','restoreTelekineticBody','lavaMovementForm'])context[key]=longneckFixture.api[key];
 vm.runInContext(source+'\nthis.residents=explorationResidents;',context);
 for(let i=0;i<20;i++)vm.runInContext('tickExplorationResidents(1,1)',context);
-assert(context.residents.size>1&&context.residents.size<=6,'Sparse bounded population');
+assert.equal(context.residents.size,2,'Resident population stops at the reduced two-NPC cap');
 for(const actor of context.residents.values()){
  assert(Math.hypot(actor.x+.5,actor.z+.5)>=10,'Avoid spawning beside the player');
  assert([3,4,5].includes(appearances[0].form),'Forms stay close to the companion');
@@ -77,9 +77,9 @@ Object.assign(actual.context,api,{battleBroTerrain:require('../assets/battlebro-
  tickBattleBroArenaActor:api.tickBattleBroArenaActor});
 vm.runInContext(source+'\nthis.residents=explorationResidents;',actual.context);
 for(let frame=0;frame<360;frame++)vm.runInContext(`tickExplorationResidents(${frame/60},1/60)`,actual.context);
-assert(actual.context.residents.size>=2,'Populate actual endless terrain rather than an ideal flat fixture');
-assert([...actual.context.residents.values()].some(a=>Math.hypot(a.root.position.x,a.root.position.z)<25),
- 'At least one bro is near the endless-world entry');
+assert.equal(actual.context.residents.size,2,'Populate actual endless terrain up to the reduced two-NPC cap');
+assert([...actual.context.residents.values()].every(a=>Math.hypot(a.root.position.x,a.root.position.z)<=60),
+ 'Reduced population stays within the resident discovery range');
 const resident=actual.context.residents.values().next().value;
 const head=resident.root.userData.rig.head,beforePose=head.quaternion.clone();
 for(let frame=360;frame<420;frame++)vm.runInContext(`tickExplorationResidents(${frame/60},1/60)`,actual.context);
