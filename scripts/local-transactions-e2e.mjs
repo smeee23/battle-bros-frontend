@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import vm from 'node:vm';
+import {addLocalYield} from './local-yield.mjs';
 import {startLocalDev} from './local-dev.mjs';
 import {walletSettings} from '../wallet/config.mjs';
 import {createTransactionService} from '../wallet/transactions.mjs';
@@ -11,7 +12,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check,label,timeout=35000){const end=Date.now()+timeout;while(Date.now()<end){if(await check())return;await delay(200);}throw Error('Timed out: '+label);}
 let stack,service;
 try {
-  stack=await startLocalDev({rpcPort:0,frontendPort:0});
+  stack=await startLocalDev({rpcPort:0,frontendPort:0,scenario:'empty'});
   const settings=walletSettings(stack.runtime,'127.0.0.1'),manifestUrl=new URL(stack.runtime.manifestUrl,stack.origin).href;
   await until(async()=>{try{return (await fetch(manifestUrl)).ok;}catch{return false;}},'initial publication');
   const accounts=await stack.provider.send('eth_accounts',[]),account=accounts[1];
@@ -55,7 +56,20 @@ try {
   assert.equal(context.window.__battleBrosReadModel.identity.owner.toLowerCase(),account.toLowerCase());
   console.log('PASS: shared service → local mint → confirmations → indexer/PostgreSQL → publisher/S3 sink → actual Home reader → unhatched cube.');
 
-  connected=true;await stack.control('holdMining');
+  connected=true;
+  const hatch={contract:'bros',functionName:'hatch',args:[1n,0,[3334,3333,3333],[3334,3333,3333],'Local Hatch'],conflictKey:'hatch:1'};
+  await assert.rejects(service.submit(hatch),/hatch yield/,'A fresh mint cannot hatch without yield');
+  await assert.rejects(addLocalYield('https://example.com'),/local:dev/);
+  await stack.control('holdMining');await assert.rejects(addLocalYield(stack.origin),/Resume mining/);await stack.control('resumeMining');
+  const boosted=await addLocalYield(stack.origin);assert(BigInt(boosted.newPooledEther)>BigInt(boosted.previousPooledEther));
+  await until(async()=>{await context.hydrateBattleBrosReadModel();return context.window.__battleBrosReadModel.capital.riskableShares>0n;},'published rebase');
+  assert(context.window.__battleBrosReadModel.capital.currentValue-context.window.__battleBrosReadModel.capital.protectedPrincipal>=1900000000000000n);
+  const hatchRecord=await service.submit(hatch);
+  await until(async()=>{await service.poll();return service.list().find(r=>r.id===hatchRecord.id).phase==='reflected';},'confirmed and published hatch');
+  await context.hydrateBattleBrosReadModel();assert.equal(context.window.__battleBrosReadModel.identity.hatched,true);assert(!controller.active,'Published hatch exits the incubation cube');
+  console.log('PASS: hatch rejected before yield; local yield endpoint → rebase → published yield → owner hatch → Home unlock.');
+
+  await stack.control('holdMining');
   const second=await service.submit({contract:'bros',functionName:'mintWithETH',value:10n**18n,label:'Replacement mint'});
   await service.poll();assert.equal(service.list().find(r=>r.id===second.id).phase,'pending');
   const replacement=await service.replace(second.id);assert.notEqual(replacement,second.hash);

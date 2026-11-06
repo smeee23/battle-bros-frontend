@@ -2,6 +2,7 @@ import { walletSettings } from './config.mjs';
 import { createInjectedDriver } from './driver.mjs';
 import { createWalletService } from './service.mjs';
 import { mountWalletControls } from './ui.mjs';
+import { mountNeedsInfrastructure } from './needs-ui.mjs';
 
 let storage;
 try { storage = window.localStorage; } catch { /* Private browsing can deny storage. */ }
@@ -24,3 +25,5 @@ export const transactionsReady=settings.rpcUrl&&settings.deployment
   }).catch(()=>null):Promise.resolve(null);
 
 if(window.__battleBrosPublicData.localDev?.instanceId){const link=document.getElementById('local-transactions-link');if(link)link.hidden=false;}
+
+transactionsReady.then(transactions=>mountNeedsInfrastructure({wallet,transactions,storage}));

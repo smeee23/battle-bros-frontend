@@ -108,10 +108,10 @@ for(let form=1;form<=7;form++){
  const motion=a.root.userData.upperArmMotion;
  if(motion){assert.equal(motion.acceleration,0);assert.equal(motion.turn,0);}
 }
-// Actual shared jump action is exclusive; home uses its existing scheduler.
+// Home jumping is disabled; explicitly requested shared jump actions remain exclusive.
 for(let form=1;form<=7;form++)for(const kind of ['home','resident','cube']){
  const a=setup(form,kind),m=a.mover;let jump;
- if(kind==='home'){m.homeJumpWait=0;a.tick(0,1/60);jump=m.homeJump;assert(jump);}
+ if(kind==='home'){m.homeJumpWait=0;a.tick(0,1/60);assert(!m.homeJump,'Automatic home jumps stay disabled');continue;}
  else jump=require('../assets/battlebro-jump')(a.THREE,a.root,{character:'monsters',groundY:()=>0,solveSupport:a.api.solveLavaTurnArm,poseJuvenile:a.api.poseDevelopingArms});
  const phases=new Set();let peak=0;
  for(let frame=1;frame<1000&&jump.active;frame++){

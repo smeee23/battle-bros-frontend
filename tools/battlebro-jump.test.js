@@ -18,15 +18,20 @@ for(const character of ['longneck','specter','juggernaut','monsters'])for(let fo
  assert(!jump.active);assert.equal(root.userData.characterJumping,false,'Jump releases exclusive pose ownership');assert(Math.abs(root.position.y)<1e-9,'Lands on original support');
  api.worldGroup.remove(root);
 }
-// Production home scheduler dispatches the same action rather than another pose implementation.
-for(const character of ['longneck','specter','juggernaut','monsters']){
- const root=api.createBattleBroCharacter({character,form:4,variant:'lava'});api.worldGroup.add(root);root.position.set(.5,0,.5);
+// Automatic home jumps stay disabled for every family and form, even when due.
+for(const character of ['longneck','specter','juggernaut','monsters'])for(let form=1;form<=7;form++){
+ const root=api.createBattleBroCharacter({character,form,variant:'lava'});api.worldGroup.add(root);root.position.set(.5,0,.5);
  const mover={root,parts:root.userData.rig,state:character==='specter'?'IDLE_HOVER':'IDLE',cellX:32,cellZ:32,progress:0,homeJumpWait:0};
  context.jumpMover=mover;
- assert(vm.runInContext('tickHomeBattleBroJump(jumpMover,0,1/60)',context),'Home idle starts retained jump');
- assert(mover.homeJump);api.worldGroup.remove(root);
+ for(const dt of [1/60,30,300]){
+  assert.equal(vm.runInContext(`tickHomeBattleBroJump(jumpMover,0,${dt})`,context),false,'Automatic home jumps are disabled');
+  assert.equal(mover.homeJump,undefined);
+  assert.equal(mover.state,character==='specter'?'IDLE_HOVER':'IDLE');
+  assert.equal(root.position.y,0);
+ }
+ api.worldGroup.remove(root);
 }
-console.log('Home jumps: all four families and seven forms retain all jump phases, low-gravity motion and safe landing through one reusable action.');
+console.log('Automatic home jumps disabled for all four families and seven forms; shared jump action checks passed.');
 // The actual shared support solver must preserve world contacts while the body
 // compresses. Compare normal, shallow and deeper landings without changing launch physics.
 for(const character of ['juggernaut','monsters'])for(let form=1;form<=7;form++){

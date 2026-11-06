@@ -7,6 +7,7 @@ import {existsSync} from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {randomUUID} from 'node:crypto';
+import {seedEstablishedGame} from './local-scenario.mjs';
 const root=path.resolve(import.meta.dirname,'..'),backend=path.resolve(root,'../battle-bros-backend'),contracts=path.resolve(root,'../battle-bros-contracts');
 const requireBackend=createRequire(path.join(backend,'package.json')),requireContracts=createRequire(path.join(contracts,'package.json'));
 const {default:pg}=await import(requireBackend.resolve('pg')), {ethers}=requireContracts('ethers');
@@ -24,12 +25,28 @@ function start(file,args,cwd,env,log) {
   return child;
 }
 export async function startLocalDev(options={}) {
+  const scenarioName=options.scenario??process.env.LOCAL_SCENARIO??'established';
+  if(!['established','empty'].includes(scenarioName))throw Error('LOCAL_SCENARIO must be established or empty');
+  const playerFile=path.join(root,'.local-territory/player.json');
+  let playerAddress=options.playerAddress??process.env.LOCAL_PLAYER_ADDRESS;
+  if(!playerAddress){try{playerAddress=JSON.parse(await fs.readFile(playerFile,'utf8')).address;}catch(error){if(error.code!=='ENOENT')throw error;}}
+  if(playerAddress&&(!ethers.isAddress(playerAddress)||playerAddress===ethers.ZeroAddress))throw Error('LOCAL_PLAYER_ADDRESS must be a nonzero Ethereum address');
   const runId=randomUUID(),privateDir=path.join(backend,'.local-dev',runId),publicDir=path.join(root,'.local-territory/runs',runId,'public');
   await fs.mkdir(privateDir,{recursive:true,mode:0o700});await fs.mkdir(publicDir,{recursive:true});
   const rpcPort=options.rpcPort===0?await port():options.rpcPort??Number(process.env.LOCAL_RPC_PORT??8545),frontendPort=options.frontendPort??Number(process.env.LOCAL_FRONTEND_PORT??3012);
   const confirmations=options.confirmations??2;
   let pgBin=process.env.POSTGRES_BIN;
   if(!pgBin){try{pgBin=JSON.parse(await fs.readFile(path.join(root,'.local-territory/current.json'),'utf8')).postgresBin;}catch{}}
+  if(!pgBin||!existsSync(path.join(pgBin,'initdb'))){
+    // Project-local binaries survive /tmp cleanup and need no system install.
+    const localPostgres=path.join(root,'.local-territory/postgres/root/usr/lib/postgresql');
+    try{
+      for(const version of (await fs.readdir(localPostgres)).sort((a,b)=>Number(b)-Number(a))){
+        const candidate=path.join(localPostgres,version,'bin');
+        if(existsSync(path.join(candidate,'initdb'))){pgBin=candidate;break;}
+      }
+    }catch{}
+  }
   if(!pgBin||!existsSync(path.join(pgBin,'initdb'))){
     try{pgBin=(await exec('pg_config',['--bindir'])).stdout.trim();}catch{}
   }
@@ -70,7 +87,7 @@ export async function startLocalDev(options={}) {
     await run(process.execPath,['scripts/sync-schemas.mjs','--check'],root);
     node=start(process.execPath,[cli,'node','--hostname','127.0.0.1','--port',String(rpcPort)],contracts,{MAINNET_RPC_URL:''},logs('hardhat'));
     await new Promise((resolve,reject)=>{let text='';const timeout=setTimeout(()=>reject(Error('Hardhat startup timed out')),20000);node.stdout.on('data',data=>{text+=data;if(text.includes('Started HTTP and WebSocket JSON-RPC server')){clearTimeout(timeout);resolve();}});node.once('exit',()=>{clearTimeout(timeout);reject(Error('Hardhat could not bind its port; see '+logs('hardhat')));});});
-    const rpc=`http://127.0.0.1:${rpcPort}`;provider=new ethers.JsonRpcProvider(rpc,31337,{cacheTimeout:-1,staticNetwork:true});
+    const rpc=`http://127.0.0.1:${rpcPort}`;provider=new ethers.JsonRpcProvider(rpc,31337,{cacheTimeout:-1,staticNetwork:true});provider.pollingInterval=50;
     for(let i=0;;i++){if(node.exitCode!==null)throw Error('Hardhat could not start; see '+logs('hardhat'));try{await provider.getBlockNumber();break;}catch{if(i>100)throw Error('Local RPC did not start');await delay(100);}}
     // Fresh node only: refuse an occupied endpoint even if another node answered.
     await delay(150);if(node.exitCode!==null)throw Error('Local RPC port is already in use.');
@@ -88,7 +105,12 @@ export async function startLocalDev(options={}) {
     const bros=await deploy('TerritoryBro',[admin.address,vault.target,needs.target]);
     const combat=await deploy('TerritoryCombat',[admin.address,bros.target,vault.target,randomness.target]);
     for(const tx of [await randomness.wire(combat.target,needs.target),await bros.wire(combat.target),await vault.wireModules(bros.target,combat.target)])await tx.wait();
-    await (await combat.createLocations(1,4,1)).wait();
+    await (await combat.createLocations(1,4,scenarioName==='empty'?1:4)).wait();
+    let scenario=null;
+    if(scenarioName==='established'){
+      console.log('Seeding eight BROs, veteran battles, care history and territories…');
+      scenario=await seedEstablishedGame({provider,ethers,admin,bros,combat,needs,stETH,vrf,playerAddress});
+    }
     const deployment={schemaVersion:2,chainId:'31337',deploymentBlock,stETH:String(stETH.target),randomness:String(randomness.target),needs:String(needs.target),vault:String(vault.target),bros:String(bros.target),combat:String(combat.target),matchmaker:String(await combat.matchmaker())};
     const deploymentFile=path.join(privateDir,'deployment.json');await fs.writeFile(deploymentFile,JSON.stringify(deployment));
     let dbURL=externalDB;
@@ -110,6 +132,7 @@ export async function startLocalDev(options={}) {
     const common={DEPLOYMENT_MANIFEST_PATH:deploymentFile,RPC_HTTP_URL:rpc,DATABASE_URL:scoped.href,CONFIRMATION_BLOCKS:String(confirmations),RUN_ONCE:'false'};
     const workerEnv={indexer:common,publisher:{DATABASE_URL:scoped.href,AWS_REGION:'us-east-1',S3_BUCKET:'local-battlebros',S3_PREFIX:'battle-bros',AWS_ACCESS_KEY_ID:'local',AWS_SECRET_ACCESS_KEY:'local',AWS_EC2_METADATA_DISABLED:'true'}};
     function startWorker(kind){workers[kind]=start(process.execPath,[`scripts/territory-${kind}.mjs`],backend,workerEnv[kind],logs(kind));}
+    let yieldBusy=false;
     async function control(command,address) {
       if(stopping)throw Error('Local development stack is stopping');
       if(command==='pausePublisher'||command==='pauseIndexer'){const kind=command==='pausePublisher'?'publisher':'indexer';await stopChild(workers[kind]);workers[kind]=null;}
@@ -118,6 +141,23 @@ export async function startLocalDev(options={}) {
       else if(command==='resumeMining'){await provider.send('evm_setAutomine',[true]);await provider.send('evm_setIntervalMining',[1000]);await provider.send('evm_mine',[]);}
       else if(command==='mine')await provider.send('evm_mine',[]);
       else if(command==='fund') {if(!/^0x[0-9a-fA-F]{40}$/.test(address??''))throw Error('Valid local wallet address required');await provider.send('hardhat_setBalance',[address,'0x'+(100n*10n**18n).toString(16)]);}
+      else if(command==='rememberPlayer'){
+        if(!ethers.isAddress(address)||address===ethers.ZeroAddress)throw Error('Valid nonzero player wallet required');
+        if([admin.address,await (await provider.getSigner(2)).getAddress()].some(a=>a.toLowerCase()===address.toLowerCase()))throw Error('Local admin/account 2 is reserved for scenario setup');
+        await fs.writeFile(playerFile,JSON.stringify({address},null,2)+'\n');
+        return {playerAddress:address,restartRequired:true};
+      }
+      else if(command==='addYield') {
+        if(yieldBusy)throw Error('A test yield update is already in progress.');
+        yieldBusy=true;
+        try{
+          if(!await provider.send('hardhat_getAutomine',[]))throw Error('Resume mining before adding test yield.');
+          if(await stETH.getTotalShares()<=1n)throw Error('Mint a BRO before adding test yield.');
+          const before=await stETH.totalPooledEther(),after=(before*101n+99n)/100n;
+          const receipt=await (await stETH.rebase(after)).wait();
+          return {transactionHash:receipt.hash,blockNumber:String(receipt.blockNumber),previousPooledEther:String(before),newPooledEther:String(after)};
+        }finally{yieldBusy=false;}
+      }
       else throw Error('Unknown local development command');
       return {indexer:!!workers.indexer&&workers.indexer.exitCode===null,publisher:!!workers.publisher&&workers.publisher.exitCode===null};
     }
@@ -141,15 +181,28 @@ export async function startLocalDev(options={}) {
       }catch(error){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({error:error.message}));}
     });
     const sinkPort=await listen(sink,0);workerEnv.publisher.S3_ENDPOINT=`http://127.0.0.1:${sinkPort}`;
-    const anchor=await provider.getBlock('latest');
-    runtime={schemaVersion:4,manifestUrl:`/.local-territory/runs/${runId}/public${prefix}manifest.json`,localDev:{instanceId:runId},
+    const anchor=await provider.getBlock('latest'),worldApiPort=await port();
+    runtime={schemaVersion:4,tokenId:scenario?'1':null,worldApiUrl:`http://127.0.0.1:${worldApiPort}/`,manifestUrl:`/.local-territory/runs/${runId}/public${prefix}manifest.json`,localDev:{instanceId:runId,scenario},
       wallet:{chainId:'31337',rpcUrl:rpc,instanceId:runId,confirmations,anchor:{number:String(anchor.number),hash:anchor.hash},
         deployment:{chainId:'31337',deploymentId:deployment.combat,contracts:Object.fromEntries(['combat','bros','vault','needs','randomness','matchmaker','stETH'].map(key=>[key,deployment[key]]))}}};
     const runtimeFile=path.join(privateDir,'runtime.json');await fs.writeFile(runtimeFile,JSON.stringify(runtime));
     front=start(process.execPath,['tools/dev-server.js',String(frontendPort)],root,{BATTLEBROS_LOCAL_RUNTIME_FILE:runtimeFile,BATTLEBROS_LOCAL_CONTROL_ORIGIN:workerEnv.publisher.S3_ENDPOINT},logs('frontend'));
     origin=await new Promise((resolve,reject)=>{let text='';const timeout=setTimeout(()=>reject(Error('Frontend could not start; see '+logs('frontend'))),10000);front.stdout.on('data',data=>{text+=data;const match=text.match(/http:\/\/127\.0\.0\.1:\d+/);if(match){clearTimeout(timeout);resolve(match[0]);}});front.once('exit',()=>{clearTimeout(timeout);reject(Error('Frontend port unavailable'));});});
     await provider.send('evm_setIntervalMining',[1000]);startWorker('indexer');startWorker('publisher');
-    console.log(`Local development ready: ${origin}/local-transactions.html`);
+    workers.worldApi=start(process.execPath,['scripts/world-api.mjs'],backend,{...common,WORLD_APP_ORIGIN:origin,WORLD_API_PORT:String(worldApiPort)},logs('world-api'));
+    // Do not announce readiness until the real confirmed publication contains the scenario.
+    const manifestFile=path.join(publicDir,prefix,'manifest.json'),deadline=Date.now()+60000;
+    for(;;){
+      try{const manifest=JSON.parse(await fs.readFile(manifestFile,'utf8'));const doc=JSON.parse(await fs.readFile(path.resolve(path.dirname(manifestFile),manifest.paths.gameState),'utf8'));
+        if(BigInt(doc.snapshot.blockNumber)>=BigInt(anchor.number)&&(!scenario||doc.battleBros.length===8))break;
+      }catch{}
+      if(Date.now()>deadline)throw Error('Initial publication timed out; see indexer/publisher logs in '+privateDir);
+      await delay(200);
+    }
+    if(scenario&&playerAddress&&options.rememberPlayer!==false)await fs.writeFile(playerFile,JSON.stringify({address:scenario.playerAddress},null,2)+'\n');
+    console.log(`Local development ready: ${origin}/index.html${scenario?'?battleBroId=1':''}`);
+    console.log(`Development controls and roster: ${origin}/local-transactions.html`);
+    if(scenario)console.log(`Seeded player: ${scenario.playerAddress}. Connect that wallet. To choose yours: LOCAL_PLAYER_ADDRESS=0x… npm run local:dev (remembered for later runs).`);
     console.log(`Local RPC: ${rpc} (chain 31337). Publications use an isolated S3 HTTP sink. Logs: ${privateDir}`);
     return {origin,rpc,runtime,runId,privateDir,provider,control,stop};
   }catch(error){await stop();throw error;}

@@ -5658,6 +5658,7 @@
   <script defer src="assets/character-battle-actions.js"></script>
   <script defer src="assets/battle-arena.js"></script>
   <script src="runtime-config.js"></script>
+  <link rel="stylesheet" href="assets/needs.css">
   <script type="module" src="build/wallet.js"></script>
   <script src="vendor/three/three.r128.min.js"></script>
   <script src="vendor/three/GLTFLoader.r128.js"></script>
@@ -5670,6 +5671,7 @@
   <script src="assets/battlebro-jump.js"></script>
   <script src="assets/transport-cube.js"></script>
   <script src="assets/unhatched-home.js"></script>
+  <script src="assets/bro-appearance.js"></script>
   <script src="assets/battlebro-terrain.js"></script>
   <script src="vendor/tiny-crowd-layer.js"></script>
   <script>
@@ -5715,7 +5717,7 @@
       ['Owner', bro.owner || 'Not connected'],
       ['Level / XP', (bro.level || '—') + ' / ' + (bro.xp || '—')],
       ['Care / Need', bro.hasNeed ? 'Needs care' : 'Content'],
-      ['Hatched / Type', (bro.hatched ? 'Yes' : 'No') + ' / ' + (bro.type || '—')],
+      ['Hatched / Type', (bro.hatched ? 'Yes' : 'No') + ' / ' + (bro.hatched?(['Juggernaut','Monster','Specter','Longneck'][Number(bro.type)] || '—'):'Unassigned')],
     ]);
     battleBroStatRows('battlebro-reserves', [
       ['Attack', bro.attack || '0'], ['Defend', bro.defend || '0'],
@@ -5808,7 +5810,7 @@
     return {schemaVersion:2,identity:{tokenId:requestedTokenId,name:bro.name,owner:bro.owner,active:bro.active,hatched:bro.hatchedAt!=='0',type:bro.kind},
       progression:{xp:BigInt(bro.xp),level:BigInt(bro.level),capacity:BigInt(bro.capacity),reserves:lanes(bro.projectedReserves)},
       training:{weightsBps:lanes(bro.training),lastTrainingAt:BigInt(bro.lastTrainingAt)},
-      need:{active:bro.need.active,activeSinceTimestamp:bro.need.activeSinceTimestamp},
+      need:{...bro.need},
       capital:{committedShares:BigInt(bro.committedShares??0),availableShares:BigInt(bro.availableShares??bro.freeShares),freeShares:BigInt(bro.freeShares),reservedShares:BigInt(bro.reservedShares),totalShares:BigInt(bro.freeShares)+BigInt(bro.reservedShares),currentValue:BigInt(bro.currentValueWei??0),protectedPrincipal:BigInt(bro.protectedPrincipal),riskableShares:BigInt(bro.riskableShares??0)},
       defense:{weightsBps:lanes(bro.defense)},snapshot:{...game.snapshot,blockNumber:BigInt(game.snapshot.blockNumber)},territory:bro.locationId,pendingChallengeId:bro.pendingChallengeId};
   }
@@ -5870,7 +5872,7 @@
     const params = new URLSearchParams(location.search);
     return {
       manifestUrl: params.get('manifestUrl') || runtime.manifestUrl || null,
-      tokenId: runtime.tokenId || params.get('battleBroId') || null,
+      tokenId: window.__battleBrosSelectedTokenId || params.get('battleBroId') || runtime.tokenId || null,
       fixture: !runtime.manifestUrl && !params.get('manifestUrl') && local,
     };
   }
@@ -5913,6 +5915,7 @@
         const model=normalizeBattleBrosPublicDocuments(manifest,game,bro,BigInt(bro.tokenId));
         renderBattleBroReadModel(model,'Territory publication.');
         window.updateUnhatchedHome?.(model,{chainId:game.chainId,deploymentId:game.deploymentId});
+        window.battleBrosAppearanceBridge?.select(model,{chainId:game.chainId,deploymentId:game.deploymentId});
       }
       else {status.textContent='No matching BattleBro in the confirmed territory publication. Use token lookup to browse.';badge.textContent='CONFIRMED TERRITORY V2';}
       battleBrosPublicationContext=publication;
@@ -5928,6 +5931,11 @@
   }
   window.hydrateBattleBrosReadModel=hydrateBattleBrosReadModel;
   window.normalizeBattleBrosPublicDocuments=normalizeBattleBrosPublicDocuments;
+  window.selectBattleBrosReadModel=(model,scope)=>{
+    window.__battleBrosSelectedTokenId=model.identity.tokenId.toString();
+    if(window.history?.replaceState){const url=new URL(location.href);url.searchParams.set('battleBroId',window.__battleBrosSelectedTokenId);window.history.replaceState(null,'',url.href);}
+    renderBattleBroReadModel(model,'Selected owned BRO.');window.updateUnhatchedHome?.(model,scope);window.battleBrosAppearanceBridge?.select(model,scope);
+  };
 
   async function loadBattleBroHistory(tokenId) {
     const id=requireBattleBrosUint(String(tokenId),'Token ID');
@@ -5983,7 +5991,7 @@
     const stats=document.createElement('div');stats.className='battle-history-summary';
     const weights=v=>['attack','defend','counter'].map(k=>k+': '+formatBattleBrosWeight(v[k])).join(' / ');
     const rows=[['Owner',model.identity.owner||'No owner'],['Status',model.identity.active?(model.identity.hatched?'Hatched':'Unhatched'):'Inactive / burned'],
-      ['Level / XP',model.progression.level+' / '+model.progression.xp],['Type',model.identity.type??'—'],
+      ['Level / XP',model.progression.level+' / '+model.progression.xp],['Type',model.identity.hatched?(['Juggernaut','Monster','Specter','Longneck'][Number(model.identity.type)]||'—'):'Unassigned'],
       ['Care',model.need.active?'Needs care':'Content'],['Location',model.territory??'Unoccupied'],['Pending challenge',model.pendingChallengeId??'None'],
       ['Capacity',model.progression.capacity],['Projected reserves (A / D / C)',Object.values(model.progression.reserves).join(' / ')],
       ['Training weights',weights(model.training.weightsBps)],['Defense weights',weights(model.defense.weightsBps)],
@@ -7306,7 +7314,8 @@
       }
     }
     refreshTrainingDisplay();
-    document.getElementById('training-appearance-status').textContent='Appearance updated for this session.';
+    document.getElementById('training-appearance-status').textContent='Appearance updated locally. Use Save appearance to sync it.';
+    if(typeof CustomEvent==='function')document.dispatchEvent?.(new CustomEvent('battlebros:appearance-edited'));
   }
   function setupTrainingColorPicker(select, label, title) {
     select.hidden=true;
@@ -9774,6 +9783,39 @@
     }
     const lintel = new THREE.Mesh(getBoxGeometry(2.36, 0.17, 0.25), M.habitatTrim);
     lintel.position.set(0, 1.64, D / 2 + 0.10); g.add(lintel);
+    const sign = new THREE.Group();
+    sign.name = 'trainingFacilityGlyphSign';
+    sign.position.set(0, 1.65, D / 2 + 0.245);
+    const plaque = new THREE.Mesh(getBoxGeometry(2.02, .205, .025), M.habitatBand);
+    sign.add(plaque);
+    // Elder Futhark runes (ᚦᚨᚾᛁᚲ), built from strokes without a font dependency.
+    const glyphs = [
+      [[-.6,-1,-.6,1],[-.6,.65,.6,.1],[.6,.1,-.6,-.45]],
+      [[-.6,-1,-.6,1],[-.6,1,.6,.35],[-.6,.2,.6,-.45]],
+      [[0,-1,0,1],[-.6,.5,.6,-.5]],
+      [[0,-1,0,1]],
+      [[.6,1,-.6,0],[-.6,0,.6,-1]]
+    ];
+    M.trainingSignInk ||= new THREE.MeshBasicMaterial({color:0xff283c});
+    const strokes = new THREE.InstancedMesh(getBoxGeometry(.14,.14,.009), M.trainingSignInk,
+      glyphs.reduce((count, segments) => count + segments.length, 0));
+    strokes.name = 'redRunicLettering';
+    const stroke = new THREE.Object3D();
+    let strokeIndex = 0;
+    glyphs.forEach((segments, glyphIndex) => {
+      for(const [ax,ay,bx,by] of segments) {
+        const dx=(bx-ax)*.105, dy=(by-ay)*.068;
+        stroke.position.set((glyphIndex-2)*.20+(ax+bx)*.0525, (ay+by)*.034, .019);
+        stroke.rotation.z = Math.atan2(dy,dx);
+        stroke.scale.set(Math.hypot(dx,dy)/.14, .014/.14, 1);
+        stroke.updateMatrix();
+        strokes.setMatrixAt(strokeIndex++,stroke.matrix);
+      }
+    });
+    strokes.instanceMatrix.needsUpdate = true;
+    strokes.userData.noShadow = true;
+    sign.add(strokes);
+    g.add(sign);
     const step = new THREE.Mesh(getBoxGeometry(2.40, 0.04, 0.30), M.step);
     step.position.set(0, 0.02, D / 2 + 0.12); g.add(step);
     g.userData = { ...g.userData, kind: 'house', chimneyTops: [], footprint: 5 };
@@ -16709,12 +16751,14 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
   }
 
   const BATTLEBRO_JUMP_SETTINGS=Object.freeze({prepare:.32,land:.38});
+  const BATTLEBRO_HOME_JUMPS_ENABLED=false;
   function battleBroFamily(root){
     return root.userData.kind==='battlebro-longneck-prototype'?'longneck'
       :root.userData.kind==='battlebro-floating-rock-prototype'?'specter'
       :root.userData.characterFamily||(root.userData.form<=4?'juggernaut':'monsters');
   }
   function tickHomeBattleBroJump(mover,t,dt){
+    if(!BATTLEBRO_HOME_JUMPS_ENABLED)return false;
     const root=mover.root;
     if(!root?.parent||root.userData.previewHome)return false;
     mover.homeJumpWait ??= 20+(root.userData.form||1)*1.7+(root.userData.idlePhase||0)%5;
@@ -18396,8 +18440,8 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     }
   }
 
-  // One selected preview, independent of future NFT type/level rules.
-  function selectBattleBroCharacterPreview(variant, form, character = 'monsters') {
+  // Shared actor replacement for previews and confirmed NFT type/level updates.
+  function selectBattleBroCharacterPreview(variant, form, character = 'monsters', colorsOverride) {
     if (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched()) return {ok:false,reason:'unhatched'};
     if (!BATTLEBRO_CHARACTER_FORMS[character]?.includes(form) || !Object.prototype.hasOwnProperty.call(ROCK_BATTLEBRO_M,variant))
       return {ok:false,reason:'invalid-appearance'};
@@ -18417,7 +18461,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
       }
     }
     if(!spawn)return {ok:false,reason:'no-clear-spawn'};
-    const root=createBattleBroCharacter({character,variant,form,colors:battleBroCharacterPreviewPanel?.getColors()});
+    const root=createBattleBroCharacter({character,variant,form,colors:colorsOverride||battleBroCharacterPreviewPanel?.getColors()});
     const previous=new Set([baseBattleBroPrototype,specterBattleBroPrototype,minotaurBattleBroPrototype,...rockVariantExamples.values(),...floatingRockFormExamples.values()].filter(Boolean));
     for(const old of previous) {
       if(old.userData.terrainConsume)finishTerrainConsume(old.userData.terrainConsume);
@@ -18528,6 +18572,17 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
     select:selectBattleBroCharacterPreview,
     get root(){return baseBattleBroPrototype;},
   };
+
+  function setupSelectedBroAppearance(){
+  window.battleBrosAppearanceBridge=BattleBrosAppearance.create({
+    actor:()=>baseBattleBroPrototype,
+    character:trainingAppearanceCharacter,
+    beforeSelect:()=>{characterEnvironmentRequest++;if(trainingAppearance.active)leaveTrainingAppearance(false);},
+    replace:(...args)=>{characterEnvironmentRequest++;const result=selectBattleBroCharacterPreview(...args);if(result.ok)bindTransportBattleBro(result.root);return result;},
+    applyColors:applyBattleBroColors,
+    onType:(family,model)=>{if(battleBroCharacterPreviewPanel&&!model.identity.hatched)battleBroCharacterPreviewPanel.setCharacter(family||'juggernaut');}
+  });
+  }
 
   const VEHICLE_BASE_WHEEL_RADIUS = 0.13;
   const VEHICLE_BODY_Y_GAP = 0.035;
@@ -40259,6 +40314,7 @@ function neighborStarVector(edge, index) {
     if (typeof window.__requestMinimapRepaint === 'function') window.__requestMinimapRepaint();
     if (typeof schedulePlayerStatsUpdate === 'function') schedulePlayerStatsUpdate();
     updateSelectedBuildingStatus();
+    if (!suppressSave) document.dispatchEvent(new CustomEvent('battlebros:world-edited'));
     if (suppressSave || !canPersistActiveColony()) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
@@ -41542,6 +41598,7 @@ function neighborStarVector(edge, index) {
     }
     ensureBaseBattleBroPrototype();
     setupBattleBroCharacterPreview();
+    setupSelectedBroAppearance();
     setupBattleBroExpressionDemo();
     ensureGhostBoardsAroundTarget();
     initCrowdLayer();
@@ -42654,6 +42711,30 @@ function neighborStarVector(edge, index) {
     }
   }
   window.__toggleTerritoryWorld = toggleTerritoryWorld;
+  // Small renderer adapter; cloud documents contain visual cell intent only.
+  let signedWorldTarget = null;
+  window.battleBrosWorldBridge = {
+    capture:()=>getSerializableWorldState(),
+    captureHome:()=>territoryWorldState.active ? territoryWorldState.home : getSerializableWorldState(),
+    matches:target=>!!signedWorldTarget && signedWorldTarget.kind===target.kind && signedWorldTarget.id===target.id
+      && !territoryWorldState.switching && !explorationActive && !trainingAppearance.active && !neighborInspectionState.active
+      && territoryWorldState.active===(target.kind==='territory'),
+    async open(target,data){
+      if(explorationActive||trainingAppearance.active||neighborInspectionState.active||territoryWorldState.switching)throw new Error('Return to Home or Territory World before opening a saved world.');
+      if(territoryWorldState.active!==(target.kind==='territory')){
+        const changed=await toggleTerritoryWorld();if(!changed)throw new Error('This world cannot be opened in the current mode.');
+      }
+      const source=data || (target.kind==='territory' ? BattleBrosTerritoryWorld.generate() : {v:4,gridSize:HOME_GRID_DEFAULT,environment:'EARTH',seed:'battlebros',cells:[]});
+      clearTimeout(saveTimer);if(fp.active)exitFP();if(flight.active)exitFlightMode();
+      await new Promise((resolve,reject)=>{
+        if(!applyState(source,{territorySwitch:true,keepCamera:true,skipGhostBoards:territoryWorldState.active,onDone:resolve}))reject(new Error('Saved world was rejected.'));
+      });
+      signedWorldTarget={...target};
+      territoryWorldState[target.kind==='home'?'home':'territory']=getSerializableWorldState();
+      window.__requestMinimapRepaint?.();
+    }
+  };
+
   window.__territoryDefenderAreas = () => BattleBrosTerritoryWorld.generate().defenderAreas.map(area => ({...area}));
   document.getElementById('territory-world-toggle')?.addEventListener('click', () => {
     toggleTerritoryWorld().catch(error => console.error('[territory world]',error));

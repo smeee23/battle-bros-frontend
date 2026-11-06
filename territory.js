@@ -1,5 +1,5 @@
 import ABI from './assets/territory-abi.json' with {type:'json'};
-import { wallet, assertTrustedPublication } from './build/wallet.js';
+import { wallet, transactionsReady, assertTrustedPublication } from './build/wallet.js';
 
 const $=id=>document.getElementById(id), cfg=window.__battleBrosPublicData??{}, params=new URLSearchParams(location.search);
 const status=$('status');let manifestUrl=params.get('manifestUrl')||cfg.manifestUrl,manifest,doc,account=null;
@@ -31,6 +31,14 @@ export function encode(abiName,fnName,args){
 }
 async function transact(key,name,args,value='0x0'){
   if(!account)throw new Error('Connect your wallet first.');
+  if(key==='TerritoryBro'&&name==='care'){
+    const transactions=await transactionsReady;if(!transactions)throw Error('Configure the shared transaction service before completing care.');
+    assertTrustedPublication(wallet.settings,doc);
+    const bro=broBy(String(args[0]));if(!bro?.need.active)throw Error('No active Need in the current snapshot');
+    if(bro.need.activity&&bro.need.activity.type!=='care')throw Error('Open the game to satisfy this Need activity.');
+    const record=await transactions.submit({contract:'bros',functionName:'care',args:[BigInt(args[0])],conflictKey:'care:'+args[0],label:'Care for BRO #'+args[0],subject:{type:'need-care',tokenId:String(args[0]),assignmentId:bro.need.activity?.id??'legacy-care',sourceEpoch:bro.need.sourceEpoch,activeSinceTimestamp:bro.need.activeSinceTimestamp}});
+    setStatus('Care submitted. Confirmation and publication are tracked in the game.');return record.hash;
+  }
   assertTrustedPublication(wallet.settings,doc);
   const session=await wallet.session();
   const provider=session.provider;
@@ -71,7 +79,10 @@ function render(){
     management.append(button('Approve 1 stETH',()=>transact('StETH','approve',[contract('vault'),10n**18n]),'secondary'),button('Mint with 1 stETH',()=>transact('TerritoryBro','mintWithStETH',[])));
     if(own.some(b=>b.hatchedAt==='0')){const unhatched=makeSelect(own.filter(b=>b.hatchedAt==='0').map(b=>({value:b.tokenId,label:`Unhatched #${b.tokenId}`})));
       const name=document.createElement('input');name.placeholder='BattleBro name';name.setAttribute('aria-label','BattleBro name');management.append(name);
-      management.append(unhatched,button('Hatch with balanced weights',()=>transact('TerritoryBro','hatch',[unhatched.value,0,[3334,3333,3333],[3334,3333,3333],name.value]),'secondary'));}
+      const kind=makeSelect([{value:'0',label:'Juggernaut'},{value:'1',label:'Monster'},{value:'2',label:'Specter'},{value:'3',label:'Longneck'}],'0');
+      kind.setAttribute('aria-label','BRO type at hatch');
+      const kindLabel=make('label','','BRO type at hatch ');kindLabel.append(kind);
+      management.append(unhatched,kindLabel,button('Hatch with balanced weights',()=>transact('TerritoryBro','hatch',[unhatched.value,Number(kind.value),[3334,3333,3333],[3334,3333,3333],name.value]),'secondary'));}
     for(const b of own.filter(b=>b.hatchedAt==='0'))management.append(button(`Withdraw unhatched #${b.tokenId}`,()=>transact('TerritoryBro','withdrawAll',[b.tokenId]),'danger'));
     const hatchedBros=own.filter(b=>b.hatchedAt!=='0');
     if(hatchedBros.length){const select=makeSelect(hatchedBros.map(b=>({value:b.tokenId,label:`${broLabel(b)} · Level ${b.level}`})));

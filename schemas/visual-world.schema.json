@@ -1,0 +1,375 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BattleBros visual world v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "id",
+    "revision",
+    "contentHash",
+    "world"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "kind": {
+      "enum": [
+        "home",
+        "territory",
+        "appearance"
+      ]
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "world": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "v",
+            "gridSize",
+            "environment",
+            "seed",
+            "cells"
+          ],
+          "properties": {
+            "v": {
+              "const": 4
+            },
+            "gridSize": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 512
+            },
+            "environment": {
+              "type": "string",
+              "maxLength": 32
+            },
+            "seed": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "cells": {
+              "type": "array",
+              "maxItems": 100000,
+              "items": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 12
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "v",
+            "skin",
+            "colors"
+          ],
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "skin": {
+              "enum": [
+                "lava",
+                "sand",
+                "plant",
+                "ice",
+                "mushroom",
+                "gem",
+                "zebra",
+                "cheetah",
+                "rainbow",
+                "tiger",
+                "tieDye"
+              ]
+            },
+            "colors": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "core",
+                "glow",
+                "eye"
+              ],
+              "properties": {
+                "core": {
+                  "enum": [
+                    "default",
+                    "red",
+                    "orange",
+                    "amber",
+                    "gold",
+                    "yellow",
+                    "lime",
+                    "green",
+                    "emerald",
+                    "teal",
+                    "cyan",
+                    "sky",
+                    "blue",
+                    "indigo",
+                    "violet",
+                    "purple",
+                    "magenta",
+                    "pink",
+                    "white",
+                    "silver",
+                    "charcoal",
+                    "black"
+                  ]
+                },
+                "glow": {
+                  "enum": [
+                    "default",
+                    "red",
+                    "orange",
+                    "amber",
+                    "gold",
+                    "yellow",
+                    "lime",
+                    "green",
+                    "emerald",
+                    "teal",
+                    "cyan",
+                    "sky",
+                    "blue",
+                    "indigo",
+                    "violet",
+                    "purple",
+                    "magenta",
+                    "pink",
+                    "white",
+                    "silver",
+                    "charcoal",
+                    "black"
+                  ]
+                },
+                "eye": {
+                  "enum": [
+                    "default",
+                    "red",
+                    "orange",
+                    "amber",
+                    "gold",
+                    "yellow",
+                    "lime",
+                    "green",
+                    "emerald",
+                    "teal",
+                    "cyan",
+                    "sky",
+                    "blue",
+                    "indigo",
+                    "violet",
+                    "purple",
+                    "magenta",
+                    "pink",
+                    "white",
+                    "silver",
+                    "charcoal"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "appearance"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "world": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "v",
+              "skin",
+              "colors"
+            ],
+            "properties": {
+              "v": {
+                "const": 1
+              },
+              "skin": {
+                "enum": [
+                  "lava",
+                  "sand",
+                  "plant",
+                  "ice",
+                  "mushroom",
+                  "gem",
+                  "zebra",
+                  "cheetah",
+                  "rainbow",
+                  "tiger",
+                  "tieDye"
+                ]
+              },
+              "colors": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "core",
+                  "glow",
+                  "eye"
+                ],
+                "properties": {
+                  "core": {
+                    "enum": [
+                      "default",
+                      "red",
+                      "orange",
+                      "amber",
+                      "gold",
+                      "yellow",
+                      "lime",
+                      "green",
+                      "emerald",
+                      "teal",
+                      "cyan",
+                      "sky",
+                      "blue",
+                      "indigo",
+                      "violet",
+                      "purple",
+                      "magenta",
+                      "pink",
+                      "white",
+                      "silver",
+                      "charcoal",
+                      "black"
+                    ]
+                  },
+                  "glow": {
+                    "enum": [
+                      "default",
+                      "red",
+                      "orange",
+                      "amber",
+                      "gold",
+                      "yellow",
+                      "lime",
+                      "green",
+                      "emerald",
+                      "teal",
+                      "cyan",
+                      "sky",
+                      "blue",
+                      "indigo",
+                      "violet",
+                      "purple",
+                      "magenta",
+                      "pink",
+                      "white",
+                      "silver",
+                      "charcoal",
+                      "black"
+                    ]
+                  },
+                  "eye": {
+                    "enum": [
+                      "default",
+                      "red",
+                      "orange",
+                      "amber",
+                      "gold",
+                      "yellow",
+                      "lime",
+                      "green",
+                      "emerald",
+                      "teal",
+                      "cyan",
+                      "sky",
+                      "blue",
+                      "indigo",
+                      "violet",
+                      "purple",
+                      "magenta",
+                      "pink",
+                      "white",
+                      "silver",
+                      "charcoal"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "world": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "v",
+              "gridSize",
+              "environment",
+              "seed",
+              "cells"
+            ],
+            "properties": {
+              "v": {
+                "const": 4
+              },
+              "gridSize": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 512
+              },
+              "environment": {
+                "type": "string",
+                "maxLength": 32
+              },
+              "seed": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "cells": {
+                "type": "array",
+                "maxItems": 100000,
+                "items": {
+                  "type": "array",
+                  "minItems": 4,
+                  "maxItems": 12
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

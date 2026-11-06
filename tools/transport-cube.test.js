@@ -161,10 +161,9 @@ for(const character of ['longneck','specter','juggernaut','monsters'])for(let fo
    for(const anchor of anchors)assert(anchor.distanceTo(source.position)<8,'Planted contacts originate at release location');
    assert(!mover.turn&&!mover.juggernautStride&&!mover.longneckFootMotion,'No stale turn/stride contacts');
    if(cycle===0&&['juggernaut','monsters'].includes(character)){
-     mover.homeJumpWait=0;frames(1,true);assert(mover.homeJump,'Released home rig starts existing jump scheduler');
-     for(let frame=0;frame<900&&mover.homeJump;frame++)frames(1,true);
-     assert(!mover.homeJump&&!source.userData.characterJumping,'Landing releases home animation ownership');
-     assert.equal(registrations(source)[0],mover,'Jump preserves the home controller');
+     mover.homeJumpWait=0;frames(1,true);
+     assert(!mover.homeJump&&!source.userData.characterJumping,'Released home rig keeps automatic jumping disabled');
+     assert.equal(registrations(source)[0],mover,'Home controller is preserved');
    }
    const before=source.position.clone();mover.pauseRemaining=0;mover.idleRemaining=0;
    for(let frame=0;frame<1800&&source.position.distanceTo(before)<=.01;frame++)frames(1,true);

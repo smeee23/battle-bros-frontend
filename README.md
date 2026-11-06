@@ -147,22 +147,65 @@ existing character. No new animation loop or per-frame blockchain/S3 reads are
 introduced. `node tools/unhatched-home.test.js` covers the controller, production
 entry guards, scene lifecycle, collision/spawn behavior, and local draft rules.
 
-## Persistent local mint/transaction development
+## Seeded local game and transaction development
 
 Run from this frontend directory:
 
 ```sh
-POSTGRES_BIN=/path/to/postgresql/bin npm run local:dev
+LOCAL_PLAYER_ADDRESS=0xYourPublicWalletAddress npm run local:dev
 ```
 
-The runner also checks the previous local E2E PostgreSQL path and `pg_config`.
+Use your public browser-wallet address (no private key). After a successful start,
+the runner remembers it in ignored `.local-territory/player.json`; later starts
+only need `npm run local:dev`. You can also connect your wallet on the local
+transaction harness, click **Use connected wallet on next start**, and restart
+once. Without a saved address, the player defaults to Hardhat account 1; the
+terminal and harness show the exact owner. Account 0 and account 2 are reserved
+for administration and the opponent.
+
+The default `established-v1` scenario is a running game, seeded through real
+contract transactions before the indexer publishes its initial snapshot:
+
+| BRO | Owner | Starting state |
+| --- | --- | --- |
+| 1, 2 | Your wallet | Hatched, open care Needs, previous care completions |
+| 3 | Your wallet | Level 2, 16 battle wins, defending territory 2 |
+| 4 | Your wallet | Level 2, 16 battle wins, cared for, trained and ready to claim |
+| 5, 6 | Your wallet | Minted, unhatched, yield available for hatching |
+| 7 | Opponent | Hatched, battle history, defending territory 1 |
+| 8 | Opponent | Hatched, previous care completed, free |
+
+Territories **3 and 4 are open** and can be claimed by BRO #4. The player starts
+with 100 test ETH. The fixture advances training time, adds mock staking yield,
+fulfills mock VRF requests, and earns XP through 32 resolved battles. It does not
+write contract storage or change progression/needs rules. Defenders remain exempt
+from daily Needs under the existing rules. All pending battles are resolved at startup.
+
+Open **http://127.0.0.1:3012/index.html?battleBroId=1**, connect the remembered
+wallet, and switch to local chain 31337. Expand **Needs & worlds** at the top
+right to see both open Needs. Click **Review care**, then **Confirm care**, and
+approve the transaction. Use the BRO selector for the defender or unhatched BROs.
+The territory dashboard supports claiming the open land with BRO #4. The harness
+at `/local-transactions.html` lists the scenario roster with direct Home links.
+
+`npm run local:dev` starts its own frontend. Use its displayed URL; a separate
+`npm run dev` on port 3000 reads the saved static fixture and is a different mode.
+Restarting `local:dev` creates a fresh established game with stable BRO IDs and
+your remembered owner; it does not resume the previous run's transactions.
+For blank-chain mint tests use `LOCAL_SCENARIO=empty npm run local:dev`.
+`npm run local:scenario:test` verifies the scenario, real Needs completion and
+an open-territory claim through the frontend services and confirmed publication.
+
+The runner also checks the previous local E2E PostgreSQL path, project-local
+binaries under `.local-territory/postgres/root/usr/lib/postgresql/*/bin`,
+and `pg_config`. A stale path under `/tmp` falls back to these locations.
 Alternatively set `LOCAL_DATABASE_URL` to a local PostgreSQL server. Migrations
 run in a newly created, isolated schema; existing schemas are not reset.
 Contracts, frontend and backend dependencies must already be installed.
 No Infura key, mainnet fork, real ETH, production AWS credentials, or public-chain
 contract deployment is used.
 
-The defaults are frontend **http://127.0.0.1:3012/local-transactions.html** and
+The defaults are frontend **http://127.0.0.1:3012/** and
 Hardhat RPC **http://127.0.0.1:8545**, chain ID **31337**. Override them with
 `LOCAL_FRONTEND_PORT` and `LOCAL_RPC_PORT` if necessary. An occupied RPC port is
 rejected; the runner never deploys into a node it did not start. The wallet must
@@ -175,7 +218,9 @@ and runs the existing indexer and publisher. The publisher's AWS SDK writes to
 an isolated local S3 HTTP sink. Those immutable snapshots and the mutable
 manifest are served through the frontend's ordinary public-data reader.
 Indexer and publisher remain separate processes with separate credential sets;
-no keeper or gameplay signing worker is needed for these mint scenarios.
+no keeper or gameplay signing worker is needed to construct this fixture.
+After startup there is no automatic battle/Needs keeper; newly requested mock
+randomness is not automatically fulfilled by this scenario script.
 
 Regular one-second block production advances confirmations even without more
 transactions. Local transaction confirmations and indexer depth are configured
@@ -256,3 +301,33 @@ real service → mint → indexer → publication → actual Home reader/cube pa
 plus wallet-independent recovery, speed-up, cancellation, and reset isolation.
 The integration test uses local unlocked RPC accounts as a wallet adapter;
 actual extension dialogs still need a manual browser check before testnet release.
+
+## Needs and signed world saves
+
+The **Needs & worlds** control lists the connected wallet's BROs and active Needs. Select a BRO to view its profile, review its activity, and confirm care using the existing transaction service. Confirmation is shown separately from S3 synchronization. The initial activity is generic care; the six brief gameplay activities will be implemented individually.
+
+The saved `npm run local:e2e` fixture leaves BRO #1 hatched with an active care Need, ready to inspect in Home (`index.html?battleBroId=1`). Its care regression uses BRO #4 so the default BRO's Need remains available. Rerun the fixture to refresh existing saved data. The fixture stops its chain after publication; wallet completion requires a running chain such as `npm run local:dev`.
+
+Configure `worldApiUrl` in the public-data configuration (or `BATTLEBROS_WORLD_API_URL`) to enable signed cloud saves. Open a Home or occupied Territory world, edit it normally, then use **Save world** to sign that revision. Local drafts survive refreshes without a signature. **Load cloud** explicitly discards a draft in favor of the latest accepted save if another device has updated the world. Homes stay with their NFTs and territory worlds stay with their locations.
+
+`npm run local:dev` includes the world API. Hosted installations require the backend additive migration and the `dev:world-api` service; see [backend setup](../battle-bros-backend/docs/needs-and-worlds.md). No production deployment or S3 publication is performed by the frontend build.
+
+### Add local test yield for hatching
+
+After minting, use **Add test yield (+1%)** on the local transaction page, or run in a second terminal:
+
+```sh
+npm run local:yield
+# If the frontend uses another port:
+npm run local:yield -- --url http://127.0.0.1:3019
+```
+
+Keep `npm run local:dev` running. This calls the same local-only control as the button and submits a real positive rebase to that run's mock stETH. It increases the value of all existing deposits by 1%; it does not lower the hatch threshold or automatically hatch a BRO. A fresh 1 ETH BRO gains approximately 0.01 stETH yield, above the 0.0019 requirement. A later mint needs a later yield update. Resume mining first if it is paused.
+
+Wait for the indexer/publisher, refresh the Territory dashboard, enter a name, and use **Hatch with balanced weights** from the owning wallet. Refresh Home after confirmation to see the hatched state. Advancing time alone does not generate mock yield.
+
+### Selected BRO and cosmetics
+
+The selected BRO's published kind now selects its 3D character family automatically. The character preview tab remains available for temporary type/form testing. Skin and core/accent/eye colors are stored separately for each NFT, with local drafts and owner-signed cloud saves.
+
+Select a BRO, use the Training Center to edit its skin/colors, then click **Save appearance** in **Needs & worlds**. **Restore saved appearance** restores its backend cosmetics and canonical character family. Signature rejection or a cloud revision conflict keeps the local draft. Cosmetics follow the NFT when ownership changes. Form/type overrides from the preview are not persisted. Restart the local stack to load the updated API/publisher; each local stack restart creates a fresh chain.

@@ -1,12 +1,15 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BattleBros · Local transaction harness</title><link rel="stylesheet" href="assets/wallet.css">
-<style>body{font:15px/1.6 system-ui;background:#102018;color:#edf3e5;margin:24px auto;max-width:960px;padding:0 20px}button,a{font:inherit;color:inherit}button{padding:8px 12px;background:#294333;border:1px solid #78927b;border-radius:8px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}section,article{border:1px solid #365643;border-radius:12px;padding:18px;margin:18px 0}nav,.actions{display:flex;gap:10px;flex-wrap:wrap}code{overflow-wrap:anywhere}#notice{white-space:pre-wrap}.bb-wallet{max-width:320px}</style></head>
+<style>body{font:15px/1.6 system-ui;background:#102018;color:#edf3e5;margin:24px auto;max-width:960px;padding:0 20px}button,a{font:inherit;color:inherit}button{padding:8px 12px;background:#294333;border:1px solid #78927b;border-radius:8px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}section,article{border:1px solid #365643;border-radius:12px;padding:18px;margin:18px 0}nav,.actions{display:flex;gap:10px;flex-wrap:wrap}code{overflow-wrap:anywhere}#notice{white-space:pre-wrap}.bb-wallet{max-width:320px}</style><link rel="stylesheet" href="assets/needs.css">
+</head>
 <body><h1>Local transaction harness</h1><p>Hardhat chain 31337 · Test ETH only · Isolated local publications</p>
 <nav><div data-wallet-controls></div><a href="index.html">Open Home</a><a href="territory.html">Territory dashboard</a></nav>
+<section id="scenario" hidden><h2>Established game</h2><p id="scenario-owner"></p><p id="scenario-wallet"></p><button id="remember-player">Use connected wallet on next start</button><p>Connect the seeded player wallet to use Needs &amp; worlds in the top-right corner of Home. Territories 3 and 4 start open. Restarting local:dev rebuilds this scenario; your chosen player address is remembered.</p><div id="scenario-roster"></div></section>
 <section><h2>Mint testing</h2><p>Connect a browser wallet and switch to the local network. Fund that address here with test ETH; no test private key import is needed.</p>
 <div class="actions"><button id="fund">Fund connected wallet</button><button id="mint">Mint with 1 test ETH</button><button id="invalid">Test invalid mint (0 ETH)</button></div></section>
-<section><h2>Development controls</h2><p>Hold mining to test pending/replacement/cancellation. Pause publication to test the gap between confirmation and game-state visibility.</p><div class="actions">
+<section><h2>Development controls</h2><p>Add test yield after minting to make a 1 ETH BRO eligible to hatch. This increases yield for all existing deposits; later mints need another update. Hold mining to test pending/replacement/cancellation. Pause publication to test the gap between confirmation and game-state visibility.</p><div class="actions">
+<button data-command="addYield">Add test yield (+1%)</button>
 <button data-command="holdMining">Hold mining</button><button data-command="mine">Mine one block</button><button data-command="resumeMining">Resume mining</button>
 <button data-command="pausePublisher">Pause publisher</button><button data-command="resumePublisher">Resume publisher</button>
 <button data-command="pauseIndexer">Pause indexer</button><button data-command="resumeIndexer">Resume indexer</button></div></section>

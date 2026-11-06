@@ -50,6 +50,9 @@ try {
  assert.equal(manifest.deploymentId.toLowerCase(),deployment.combat.toLowerCase());
  assert.equal(createHash('sha256').update(stateBody).digest('hex'),manifest.contentHash);
  assert.equal(state.battleBros.length,5);assert.equal(state.challenges[0].status,'EXPIRED');
+ const homeBro=state.battleBros.find(b=>b.tokenId==='1');
+ assert.equal(homeBro.need.active,true,'Default Home BRO starts with an active Need');
+ assert.equal(homeBro.need.activity.type,'care');
  // Execute the actual frontend adapter and rendering code against the served publication.
  class Element {constructor(){this.children=[];this.textContent='';this.value='';this.hidden=false;} append(...n){this.children.push(...n);}replaceChildren(...n){this.children=n;this.textContent='';}setAttribute(){}addEventListener(){}focus(){}get text(){return this.textContent+this.children.map(n=>n.text||'').join(' ');}}
  const elements=new Map(),el=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};

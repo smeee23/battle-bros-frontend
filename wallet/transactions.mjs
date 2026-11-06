@@ -53,6 +53,12 @@ export function createTransactionService({wallet,settings=wallet.settings,storag
   }
   function schedule(){if(!stopped&&!timer&&[...records.values()].some(tracking))timer=setTimeout(async()=>{timer=null;await poll();schedule();},pollInterval);}
   function decodedResult(record,receipt){
+    if(record.contract==='bros'&&record.functionName==='care'){
+      for(const log of receipt.logs){if(log.address.toLowerCase()!==record.to.toLowerCase())continue;
+        try{const event=decodeEventLog({abi:contractAbis.bros,data:log.data,topics:log.topics});if(event.eventName==='CareProvided'&&(!record.subject||String(event.args.token)===record.subject.tokenId))return {type:'bro-care',tokenId:String(event.args.token),sourceEpoch:String(event.args.sourceEpoch),timestamp:String(event.args.timestamp)};}catch{}
+      }
+      return null;
+    }
     if(record.contract!=='bros'||!['mintWithETH','mintWithStETH'].includes(record.functionName))return null;
     for(const log of receipt.logs){if(log.address.toLowerCase()!==record.to.toLowerCase())continue;
       try{const event=decodeEventLog({abi:contractAbis.bros,data:log.data,topics:log.topics});if(event.eventName==='BroMinted'&&event.args.owner.toLowerCase()===record.from.toLowerCase())return {type:'bro-mint',tokenId:String(event.args.token)};}catch{}
@@ -101,7 +107,9 @@ export function createTransactionService({wallet,settings=wallet.settings,storag
             if(BigInt(publication.snapshot.blockNumber)<receipt.blockNumber)continue;
             const snapshotBlock=await client.getBlock({blockNumber:BigInt(publication.snapshot.blockNumber)});
             if(snapshotBlock.hash!==publication.snapshot.blockHash)continue;
-            const reflected=record.result?.type==='bro-mint'?publication.battleBros.some(b=>String(b.tokenId)===record.result.tokenId):publication.history.some(event=>event.transactionHash===record.hash);
+            const care=record.result?.type==='bro-care'?publication.battleBros.find(b=>b.tokenId===record.result.tokenId):null;
+            const careReflected=care&&(!care.active||BigInt(care.lastTrainingAt)>=BigInt(record.result.timestamp))&&(!care.need?.active||care.need.sourceEpoch!==record.result.sourceEpoch||care.need.activeSinceTimestamp!==record.subject?.activeSinceTimestamp);
+            const reflected=record.result?.type==='bro-mint'?publication.battleBros.some(b=>String(b.tokenId)===record.result.tokenId):record.result?.type==='bro-care'?careReflected:publication.history.some(event=>event.transactionHash===record.hash);
             if(reflected){change(record,{phase:'reflected',publicationBlock:publication.snapshot.blockNumber});try{onReflected({...record},publication);}catch{}}
           }catch{lastError='Waiting for a valid confirmed publication.';}
         }
@@ -120,6 +128,7 @@ export function createTransactionService({wallet,settings=wallet.settings,storag
       if([...records.values()].some(r=>tracking(r)&&r.from.toLowerCase()===session.address.toLowerCase()&&r.conflictKey===(action.conflictKey??action.contract+':'+action.functionName)))throw issue('This action already has a pending transaction.');
       const args=action.args??[],value=BigInt(action.value??0),data=encodeFunctionData({abi,functionName:action.functionName,args});
       record={id:crypto.randomUUID(),scope,phase:'preparing',contract:action.contract,functionName:action.functionName,conflictKey:action.conflictKey??action.contract+':'+action.functionName,
+        subject:action.subject?.type==='need-care'?{type:'need-care',tokenId:String(action.subject.tokenId),assignmentId:String(action.subject.assignmentId),sourceEpoch:String(action.subject.sourceEpoch),activeSinceTimestamp:String(action.subject.activeSinceTimestamp)}:null,
         label:String(action.label??action.functionName).slice(0,80),from:session.address,to,value:String(value),dataHash:keccak256(data),nonce:null,hash:null,originalHash:null,
         startBlock:'0',scanBlock:'0',confirmations:0,awaitPublication:action.awaitPublication!==false,updatedAt:Date.now(),result:null,error:''};
       records.set(record.id,record);change(record,{});

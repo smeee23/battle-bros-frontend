@@ -19,6 +19,8 @@ if(!manifestUrl && deployment){
   manifestUrl=`${origin.replace(/\/+$/,'')}/${prefix}/v2/${chainId}/${combat}/manifest.json`;
 }
 const runtime={};
+const worldApiUrl=env.BATTLEBROS_WORLD_API_URL||config.worldApiUrl;
+if(worldApiUrl){const url=new URL(worldApiUrl);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('Invalid world API URL');runtime.worldApiUrl=url.href;}
 if(config.wallet || env.BATTLEBROS_WALLET_CHAIN_ID || env.BATTLEBROS_WALLET_RPC_URL) {
   runtime.wallet={...config.wallet,
     ...(env.BATTLEBROS_WALLET_CHAIN_ID?{chainId:env.BATTLEBROS_WALLET_CHAIN_ID}:{}),

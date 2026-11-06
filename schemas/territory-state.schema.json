@@ -412,6 +412,69 @@
               "evaluatedThroughSeedSequence": {
                 "type": "string",
                 "pattern": "^(0|[1-9][0-9]*)$"
+              },
+              "activity": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "type",
+                      "version",
+                      "policyVersion",
+                      "tokenId",
+                      "source",
+                      "sourceEpoch",
+                      "activeSinceTimestamp",
+                      "worldRevision"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^0x[0-9a-f]{64}$"
+                      },
+                      "type": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]{0,63}$"
+                      },
+                      "version": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)$"
+                      },
+                      "policyVersion": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)$"
+                      },
+                      "tokenId": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)$"
+                      },
+                      "source": {
+                        "enum": [
+                          "random",
+                          "backlog"
+                        ]
+                      },
+                      "sourceEpoch": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)$"
+                      },
+                      "activeSinceTimestamp": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)$"
+                      },
+                      "worldRevision": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)$"
+                      }
+                    }
+                  }
+                ],
+                "description": "Backend-selected activity, frozen per generic Need. Absent on older publications."
               }
             }
           },
@@ -1036,6 +1099,45 @@
           "finishedAt": {
             "type": "string",
             "pattern": "^(0|[1-9][0-9]*)$"
+          }
+        }
+      }
+    },
+    "worlds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id",
+          "revision",
+          "contentHash",
+          "path"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "home",
+              "territory",
+              "appearance"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^worlds/(home|territory|appearance)/[0-9]+/[0-9]+-[a-f0-9]{64}\\.json$"
           }
         }
       }

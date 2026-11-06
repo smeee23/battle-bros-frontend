@@ -25,7 +25,7 @@ function fixture(){
     head=12n;const receipt={transactionHash:hash,blockNumber:11n,blockHash:h('c'),status,logs:[{address:b,
       topics:encodeEventTopics({abi:contractAbis.bros,eventName:'BroMinted',args:{token:7n,owner:a}}),data:encodeAbiParameters([{type:'uint64'}],[1n])}]};receipts.set(hash,receipt);return receipt;
   }
-  return {make,settings,wallet,receipts,blocks,saved,data,include,set head(value){head=value;},set simulationError(value){simulationError=value;},set chainId(value){chainId=value;},set code(value){code=value;},set publication(value){publication=value;},get sendCount(){return sendCount;},get reflected(){return reflected;}};
+  return {make,settings,wallet,receipts,blocks,saved,data,include,set head(value){head=value;},set simulationError(value){simulationError=value;},set chainId(value){chainId=value;},set code(value){code=value;},set publication(value){publication=value;},document,get sendCount(){return sendCount;},get reflected(){return reflected;}};
 }
 test('simulate, persist, confirm, reload while disconnected, and await publisher',async()=>{
   const f=fixture(),service=f.make();f.publication=false;
@@ -86,4 +86,18 @@ test('storage failure does not turn a submitted transaction into a failed one',a
   const f=fixture(),service=f.make({storage:{getItem:()=>null,setItem(){throw Error('Quota exceeded');}}});
   const record=await service.submit({...action,awaitPublication:false});assert.equal(record.phase,'pending');assert(service.storageWarning);
   f.include();await service.poll();assert.equal(service.list()[0].phase,'confirmed');
+});
+
+test('care receipts require confirmations, survive stale S3 and reconcile without bounded history',async()=>{
+  const f=fixture(),careAction={contract:'bros',functionName:'care',args:[7n],conflictKey:'care:7',subject:{type:'need-care',tokenId:'7',assignmentId:'need-7',sourceEpoch:'2',activeSinceTimestamp:'1'}};
+  const doc={...f.document,battleBros:[{tokenId:'7',active:true,lastTrainingAt:'1',need:{active:true,sourceEpoch:'2',activeSinceTimestamp:'1'}}],history:[]};
+  let publishedBlock='10';
+  const fetcher=async url=>{const document={...doc,snapshot:{...doc.snapshot,blockNumber:publishedBlock}},body=JSON.stringify(document);return {ok:true,json:async()=>({...document,contentHash:createHash('sha256').update(body).digest('hex'),paths:{gameState:'snapshots/test.json'}}),arrayBuffer:async()=>new TextEncoder().encode(body).buffer};};
+  const service=f.make({fetcher});await service.submit(careAction);
+  const receipt=f.include();receipt.logs=[{address:b,topics:encodeEventTopics({abi:contractAbis.bros,eventName:'CareProvided',args:{token:7n}}),data:encodeAbiParameters([{type:'uint64'},{type:'uint64'}],[2n,2n])}];
+  f.head=11n;await service.poll();assert.equal(service.list()[0].phase,'included');
+  f.head=12n;await service.poll();assert.equal(service.list()[0].phase,'confirmed');assert.equal(service.list()[0].result.type,'bro-care');
+  assert.equal(f.reflected,0);publishedBlock='12';await service.poll();assert.equal(service.list()[0].phase,'confirmed','An unchanged old Need cannot reconcile');
+  doc.battleBros[0].lastTrainingAt='2';doc.battleBros[0].need={active:false,sourceEpoch:null,activeSinceTimestamp:null};
+  const restored=f.make({fetcher});await restored.poll();assert.equal(restored.list()[0].phase,'reflected');assert.equal(f.reflected,1);
 });

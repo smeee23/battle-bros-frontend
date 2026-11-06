@@ -107,7 +107,7 @@ for(let form=1;form<=7;form++){
 }
 for(let form=1;form<=7;form++)for(const kind of ['home','resident','cube']){
  const a=setup(form,kind),m=a.mover;let jump;
- if(kind==='home'){m.homeJumpWait=0;a.tick(0,1/60);jump=m.homeJump;assert(jump);}
+ if(kind==='home'){m.homeJumpWait=0;a.tick(0,1/60);assert(!m.homeJump,'Automatic home jumps stay disabled');continue;}
  else jump=require('../assets/battlebro-jump')(a.THREE,a.root,{character:'specter',groundY:()=>.72});
  const phases=new Set();let peak=.72;
  for(let f=1;f<1000&&jump.active;f++){
