@@ -1,1 +1,15 @@
-.bb-needs{position:fixed;right:16px;top:68px;z-index:10010;color:#e9f1ff;font:14px system-ui,sans-serif}.bb-needs summary{cursor:pointer;background:#18263a;border:1px solid #6380a8;border-radius:10px;padding:10px 14px}.bb-needs-panel{width:min(380px,calc(100vw - 32px));max-height:75vh;overflow:auto;background:#111d2e;border:1px solid #6380a8;border-radius:10px;padding:16px;box-sizing:border-box}.bb-needs label{display:block;margin:10px 0}.bb-needs select{max-width:100%;margin-left:8px}.bb-needs button,.bb-needs select{font:inherit;padding:6px;margin:3px;border-radius:5px}.bb-needs button:disabled{opacity:.5}.bb-needs article{border-top:1px solid #40536d;margin-top:12px;padding-top:12px}.bb-needs [data-error]{color:#ffb5a8}.bb-needs p{line-height:1.4}.bb-needs-actions{display:flex;flex-wrap:wrap}
+.bb-player-controls,.bb-player-needs,.bb-world-controls{font:inherit;font-size:12px;color:inherit}
+.bb-player-controls label,.bb-world-controls label{display:block;margin:8px 0}
+.bb-player-controls select,.bb-world-controls select{display:block;box-sizing:border-box;width:100%;margin-top:5px}
+.bb-player-controls button,.bb-player-controls select,.bb-player-needs button,.bb-world-controls button,.bb-world-controls select{font:inherit;padding:8px;border:1px solid var(--line,#b9ad96);border-radius:7px;background:var(--panel,#fffaf0);color:inherit}
+.bb-player-controls button,.bb-player-needs button,.bb-world-controls button{cursor:pointer}
+.bb-player-controls button:disabled,.bb-player-needs button:disabled,.bb-world-controls button:disabled{opacity:.5;cursor:default}
+.bb-player-needs article button{margin:3px 4px 3px 0}
+.bb-player-needs .battlebro-panel-grid{grid-template-columns:auto minmax(0,1fr)}
+.bb-player-needs .battlebro-panel-grid>:nth-child(even){text-align:right;overflow-wrap:anywhere}
+.bb-player-controls [data-error],.bb-world-controls [data-world-error]{color:#b43d30}
+.bb-player-controls p,.bb-world-controls p{line-height:1.5;font-size:11px}
+.bb-world-actions{display:flex;flex-wrap:wrap;gap:6px}
+.bb-world-controls{padding:4px 8px 8px}
+.bb-player-controls :focus-visible,.bb-player-needs :focus-visible,.bb-world-controls :focus-visible{outline:2px solid var(--accent,#3a72c8);outline-offset:2px}
+body.training-appearance-active #bro-player-controls,body.training-appearance-active #bro-needs-controls{display:none}

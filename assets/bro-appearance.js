@@ -23,6 +23,7 @@
     return {
       select(model,scope){const previous=selected;const next=scope.chainId+':'+scope.deploymentId.toLowerCase()+':'+model.identity.tokenId;const changed=next!==key;if(changed||previous?.identity.hatched!==model.identity.hatched||previous?.identity.type!==model.identity.type||(previous&&formForLevel(previous.progression.level)!==formForLevel(model.progression.level)))beforeSelect();selected=model;key=next;if(changed)rendered='';sync();},
       apply(value){if(!selected)return;beforeSelect();records.set(key,copy(value));sync(true);},
+      remember(value){if(!selected)return;records.set(key,copy(value));rendered='';},
       restore(){beforeSelect();sync(true);},
       capture(){
         if(!selected?.identity.hatched)throw Error('Hatch this BRO before saving its appearance.');

@@ -30,7 +30,7 @@ test('confirmed NFT levels drive all seven forms and cap at VII while preserving
     for(let level=1n;level<=7n;level++){
       bridge.select(model(level),scope);
       assert.equal(root.family,kinds[kind]);assert.equal(root.userData.form,Number(level));
-      if(level===1n)bridge.apply(appearance);
+      if(level===1n){root.userData.visualVariant=appearance.skin;root.userData.colors=appearance.colors;bridge.remember(appearance);}
       assert.deepEqual(bridge.capture(),appearance,'Level updates retain saved skin and colors');
       const previous=root,count=replaced;
       bridge.select(model(level),scope);assert.equal(root,previous);assert.equal(replaced,count,'Unchanged publications reuse the actor');
@@ -56,4 +56,28 @@ test('appearance saves are signed through the shared client; reload, conflict an
   await service.select('2');assert.equal(live.skin,'lava');live.skin='sand';service.draft();reject=true;await assert.rejects(service.save(),/conflict/);assert.equal(saved.get('2').world.skin,'sand');
   const slow=service.select('3');await service.select('1');resolveSlow({world:{document:{...defaultAppearance(),skin:'plant'},revision:'1'}});await slow;assert.equal(live.skin,'ice');
   const reloaded=make();await reloaded.select('1');assert.equal(live.colors.core,'blue');assert.match(statuses.at(-1).status,/BRO #1/);
+});
+test('facility exit saves only changed cosmetics, retries declined drafts, and isolates a pending token switch',async()=>{
+  const drafts=new Map(),cloud=new Map(),calls=[];
+  let live=defaultAppearance(),decline=false,release;
+  const worlds={local:t=>drafts.get(t.id),load:async t=>({world:cloud.get(t.id)??null}),
+    draft:(t,world,revision)=>drafts.set(t.id,{world:structuredClone(world),revision}),
+    save:async(t,world,revision)=>{
+      calls.push({id:t.id,world:structuredClone(world),revision});
+      if(decline)throw Object.assign(Error('User rejected request'),{code:4001});
+      if(t.id==='2')await new Promise(resolve=>release=resolve);
+      cloud.set(t.id,{document:structuredClone(world),revision:'1'});return {world:{revision:'1'}};
+    }};
+  const service=createAppearanceService({worlds,bridge:()=>({capture:()=>live,apply:value=>live=structuredClone(value)})});
+  await service.select('1');service.beginTraining();await service.finishTraining();assert.equal(calls.length,0);
+  service.beginTraining();live.skin='ice';service.draft();live.skin='lava';service.draft();
+  await service.finishTraining();assert.equal(calls.length,0,'Returning to the saved appearance does not sign');
+  service.beginTraining();live.skin='ice';service.draft();assert.equal(calls.length,0,'Edits stay local until exit');
+  decline=true;await assert.rejects(service.finishTraining(),{code:4001});
+  assert.equal(drafts.get('1').world.skin,'ice','A declined save retains its draft');
+  decline=false;service.beginTraining();await service.finishTraining();assert.equal(cloud.get('1').document.skin,'ice','Next facility visit retries the unsynced draft');
+  const savedCalls=calls.length;service.beginTraining();await service.finishTraining();assert.equal(calls.length,savedCalls);
+  await service.select('2');service.beginTraining();live.skin='sand';service.draft();const saving=service.finishTraining();
+  await service.select('1');release();await saving;
+  assert.equal(cloud.get('2').document.skin,'sand');assert.equal(live.skin,'ice','Completing the previous BRO save cannot replace the newly selected BRO');
 });

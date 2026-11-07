@@ -29,6 +29,10 @@ vm.runInContext(html.slice(html.indexOf('  const BATTLEBRO_FRONTEND_EMPTY'),html
  await context.hydrateBattleBrosReadModel();
  assert.match(el('battlebro-name').text,/9007199254740993/);
  assert.match(el('battlebro-territory').text,/#2/);
+ assert.match(el('battlebro-training').text,/Attack 40% Defend 35% Counter 25%/);
+ assert.match(el('battlebro-defense').text,/Attack 10% Defend 60% Counter 30%/,'Defensive weights use their own confirmed allocation');
+ bro.defense=['1250','6025','2725'];await context.hydrateBattleBrosReadModel();
+ assert.match(el('battlebro-defense').text,/Attack 12.5% Defend 60.25% Counter 27.25%/,'Refreshed defensive weights retain basis-point precision');
  assert.equal(el('battlebro-source-badge').textContent,'CONFIRMED TERRITORY V2');
  assert(!el('battlebro-data-status').text.includes('unavailable'));
  assert.equal(hatchPublications.at(-1).hatched,true);
@@ -64,6 +68,7 @@ vm.runInContext(html.slice(html.indexOf('  const BATTLEBRO_FRONTEND_EMPTY'),html
  assert.equal(hatchPublications.length,acceptedHatchUpdates,'Unverified/failed data cannot unlock Home');
  assert.equal(el('battlebro-source-badge').textContent,'DATA UNAVAILABLE');
  assert.equal(el('battlebro-name').textContent,'No BattleBro selected');
+ assert.match(el('battlebro-defense').text,/No confirmed data/,'Failed snapshots clear stale defensive weights');
  game.snapshot=snapshot;fail=true;await context.showBattleHistory(token);
  assert.match(el('battle-history-error').text,/503/);assert.equal(el('battle-history-content').children.length,0);
  assert(!html.includes('battle-calendar'));

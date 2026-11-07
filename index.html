@@ -4386,6 +4386,12 @@
   .battlebro-panel-grid strong { text-align: right; }
   .battlebro-panel-section { margin-top: 15px; padding-top: 13px; border-top: 1px solid rgba(120, 92, 48, 0.16); }
   .battlebro-panel-section h3 { margin: 0 0 9px; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; }
+  .battlebro-panel-disclosure > summary { display:flex; align-items:center; gap:10px; list-style:none; cursor:pointer; font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; }
+  .battlebro-panel-disclosure > summary::-webkit-details-marker { display:none; }
+  .battlebro-panel-disclosure > summary::before { content:''; width:6px; height:6px; flex-shrink:0; border-right:2px solid currentColor; border-bottom:2px solid currentColor; transform:rotate(-45deg); }
+  .battlebro-panel-disclosure[open] > summary { margin-bottom:9px; }
+  .battlebro-panel-disclosure[open] > summary::before { transform:rotate(45deg); }
+  .battlebro-panel-disclosure > summary:focus-visible { outline:2px solid var(--accent); outline-offset:4px; border-radius:3px; }
   .battlebro-panel-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .battlebro-panel-actions button { opacity: .62; cursor: not-allowed; }
   .battlebro-panel-actions button.battlebro-info-action { opacity: 1; cursor: pointer; }
@@ -4611,6 +4617,7 @@
     <a id="local-transactions-link" class="btn" href="local-transactions.html" hidden>Local transaction harness</a>
     <h2 id="battlebro-name">BattleBro #—</h2>
     <p class="battlebro-panel-note" id="battlebro-data-status">Persistent creature overview. Public read model is not connected yet.</p>
+    <div id="bro-player-controls" aria-label="Your BRO"></div>
     <button class="btn" id="unhatched-preview-toggle" type="button" aria-pressed="false">Test unhatched mode</button>
     <p class="battlebro-panel-note" id="unhatched-preview-status" role="status" hidden>Local preview · Published BattleBro data is unchanged.</p>
     <section class="battlebro-panel-section" id="unhatched-home-controls" hidden aria-label="Unhatched BattleBro">
@@ -4628,18 +4635,23 @@
       <button class="btn" id="hatch-refresh" type="button">Refresh hatch status</button>
     </section>
     <div class="battlebro-panel-grid" id="battlebro-core-stats"></div>
-    <div class="battlebro-panel-section">
-      <h3>Combat reserves</h3>
+    <details class="battlebro-panel-section battlebro-panel-disclosure" id="bro-needs-controls" aria-label="Selected BRO Needs" open><summary>Needs</summary></details>
+    <details class="battlebro-panel-section battlebro-panel-disclosure" open>
+      <summary>Combat reserves</summary>
       <div class="battlebro-panel-grid" id="battlebro-reserves"></div>
-    </div>
-    <div class="battlebro-panel-section">
-      <h3>Training weights</h3>
+    </details>
+    <details class="battlebro-panel-section battlebro-panel-disclosure" open>
+      <summary>Training weights</summary>
       <div class="battlebro-panel-grid" id="battlebro-training"></div>
-    </div>
-    <div class="battlebro-panel-section">
-      <h3>Capital position</h3>
+    </details>
+    <details class="battlebro-panel-section battlebro-panel-disclosure" open>
+      <summary>Defensive weights</summary>
+      <div class="battlebro-panel-grid" id="battlebro-defense"></div>
+    </details>
+    <details class="battlebro-panel-section battlebro-panel-disclosure" open>
+      <summary>Capital position</summary>
       <div class="battlebro-panel-grid" id="battlebro-capital"></div>
-    </div>
+    </details>
     <div class="battlebro-panel-section">
       <h3>Territory status</h3>
       <div class="battlebro-panel-grid" id="battlebro-territory"></div>
@@ -4658,7 +4670,7 @@
     </div>
     <section class="battlebro-panel-section" id="training-appearance-controls" hidden aria-label="Appearance selection">
       <h3>Appearance</h3>
-      <p class="battlebro-panel-note">Choose your skin and colors. Your character type and form stay the same.</p>
+      <p class="battlebro-panel-note">Choose your skin and colors. Changed appearances are saved when you leave the facility.</p>
       <div id="training-appearance-options"></div>
       <p class="battlebro-panel-note" id="training-appearance-status" role="status"></p>
       <button class="btn" id="training-appearance-done" type="button">Done · Return outside</button>
@@ -4953,8 +4965,8 @@
     </div>
     <div class="sub">Tap to place · drag to orbit · pinch or scroll to zoom</div>
     <!-- Kept for JS to relocate into the toolbar's world-slot. -->
-    <button type="button" class="brand-title-btn" id="world-menu-btn" aria-haspopup="menu" aria-expanded="false">
-      <span id="world-menu-label">My world</span>
+    <button type="button" class="brand-title-btn" id="world-menu-btn" aria-haspopup="dialog" aria-expanded="false">
+      <span id="world-menu-label">Home world</span>
       <svg class="brand-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
   </div>
@@ -5048,39 +5060,14 @@
     </div>
   </div>
 
-  <!-- World-name popup menu -->
-  <div class="world-menu" id="world-menu" hidden role="menu">
+  <!-- Toolbar World menu -->
+  <div class="world-menu" id="world-menu" hidden role="dialog" aria-label="World saves">
     <div class="world-menu-section">
-      <button class="world-menu-item" id="territory-world-toggle" role="menuitem">Enter Territory World (dev)</button>
-    </div>
-    <div class="world-menu-head">
-      <input class="world-menu-input" id="world-menu-name" placeholder="Whispering Vale" maxlength="80" aria-label="World name" />
-      <button class="world-menu-rename" id="world-menu-rename" data-tooltip="Save name">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      </button>
+      <div class="world-menu-section-title">World</div>
+      <div id="world-save-controls"><p class="battlebro-panel-note">Connect your wallet to save and load your BRO’s worlds.</p></div>
     </div>
     <div class="world-menu-section">
-      <button class="world-menu-item" data-action="new" role="menuitem">
-        <span class="world-menu-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
-        <span class="world-menu-label">New world</span>
-        <span class="world-menu-hint">clear to rock</span>
-      </button>
-      <button class="world-menu-item" data-action="duplicate" role="menuitem">
-        <span class="world-menu-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
-        <span class="world-menu-label">Duplicate</span>
-        <span class="world-menu-hint">copy of this world</span>
-      </button>
-    </div>
-    <div class="world-menu-section" id="world-menu-slots">
-      <div class="world-menu-section-title">My worlds</div>
-      <ul class="world-menu-list" id="world-menu-list"></ul>
-      <div class="world-menu-empty" id="world-menu-empty" hidden>No saved worlds yet. Build one and choose “Save as new”.</div>
-    </div>
-    <div class="world-menu-foot">
-      <button class="world-menu-foot-btn" data-action="save-as" role="menuitem">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-        Save as new
-      </button>
+      <button class="world-menu-item" id="territory-world-toggle" type="button">Enter Territory World (dev)</button>
     </div>
   </div>
 
@@ -5707,7 +5694,7 @@
     const bro = state && state.battleBro || {};
     if(!bro.id) {
       document.getElementById('battlebro-name').textContent='No BattleBro selected';
-      for(const id of ['core-stats','reserves','training','capital','territory'])
+      for(const id of ['core-stats','reserves','training','defense','capital','territory'])
         battleBroStatRows('battlebro-'+id,[['Status','No confirmed data']]);
       return;
     }
@@ -5727,6 +5714,11 @@
       ['Attack', formatBattleBrosWeight(BigInt(bro.attackWeightBps || '0'))],
       ['Defend', formatBattleBrosWeight(BigInt(bro.defendWeightBps || '0'))],
       ['Counter', formatBattleBrosWeight(BigInt(bro.counterWeightBps || '0'))],
+    ]);
+    battleBroStatRows('battlebro-defense', [
+      ['Attack', formatBattleBrosWeight(BigInt(bro.defenseAttackWeightBps || '0'))],
+      ['Defend', formatBattleBrosWeight(BigInt(bro.defenseDefendWeightBps || '0'))],
+      ['Counter', formatBattleBrosWeight(BigInt(bro.defenseCounterWeightBps || '0'))],
     ]);
     battleBroStatRows('battlebro-capital', [
       ['Protected principal', (bro.protectedPrincipalStETH || '—') + ' stETH'],
@@ -5848,6 +5840,9 @@
         attackWeightBps: model.training.weightsBps.attack.toString(),
         defendWeightBps: model.training.weightsBps.defend.toString(),
         counterWeightBps: model.training.weightsBps.counter.toString(),
+        defenseAttackWeightBps: model.defense.weightsBps.attack.toString(),
+        defenseDefendWeightBps: model.defense.weightsBps.defend.toString(),
+        defenseCounterWeightBps: model.defense.weightsBps.counter.toString(),
         protectedPrincipalStETH: formatBattleBrosUnits(capital.protectedPrincipal),
         availableYieldStETH: formatBattleBrosUnits(capital.currentValue > capital.protectedPrincipal ? capital.currentValue - capital.protectedPrincipal : 0n),
       },
@@ -7314,7 +7309,7 @@
       }
     }
     refreshTrainingDisplay();
-    document.getElementById('training-appearance-status').textContent='Appearance updated locally. Use Save appearance to sync it.';
+    document.getElementById('training-appearance-status').textContent='Appearance updated locally. Your changes will be saved when you leave the training facility.';
     if(typeof CustomEvent==='function')document.dispatchEvent?.(new CustomEvent('battlebros:appearance-edited'));
   }
   function setupTrainingColorPicker(select, label, title) {
@@ -7410,11 +7405,15 @@
     document.getElementById('battlebro-sidebar').classList.remove('is-collapsed');
     document.getElementById('battlebro-sidebar-toggle').setAttribute('aria-expanded','true');
     if(document.pointerLockElement && document.exitPointerLock)document.exitPointerLock();
+    if(typeof CustomEvent==='function')document.dispatchEvent?.(new CustomEvent('battlebros:training-entered'));
     state.controls.skin.focus({preventScroll:true});return true;
   }
   function leaveTrainingAppearance(resume=true) {
     const state=trainingAppearance;if(!state.active)return;
     state.active=false;state.cooldown=2;
+    // Capture and submit edits before a BRO switch can replace the live actor.
+    const commit={pending:false};
+    if(typeof CustomEvent==='function')document.dispatchEvent?.(new CustomEvent('battlebros:training-exited',{detail:commit}));
     if(state.drag && renderer.domElement.hasPointerCapture(state.drag.id))renderer.domElement.releasePointerCapture(state.drag.id);
     state.drag=null;
     disposeTrainingDisplay();state.room?.parent?.remove(state.room);if(state.room)disposeGroup(state.room);state.room=null;
@@ -7426,7 +7425,7 @@
     const sidebar=document.getElementById('battlebro-sidebar');sidebar.classList.toggle('is-collapsed',state.saved.collapsed);
     document.getElementById('battlebro-sidebar-toggle').setAttribute('aria-expanded',String(!state.saved.collapsed));
     if(resume&&fp.active){resetTransportCube(false);tickFP(0);
-      try{renderer.domElement.requestPointerLock?.()?.catch?.(()=>{});}catch(_){} }
+      if(!commit.pending)try{renderer.domElement.requestPointerLock?.()?.catch?.(()=>{});}catch(_){} }
   }
   function tickTrainingAppearance(dt,t) {
     const state=trainingAppearance;state.cooldown=Math.max(0,state.cooldown-dt);
@@ -9783,39 +9782,6 @@
     }
     const lintel = new THREE.Mesh(getBoxGeometry(2.36, 0.17, 0.25), M.habitatTrim);
     lintel.position.set(0, 1.64, D / 2 + 0.10); g.add(lintel);
-    const sign = new THREE.Group();
-    sign.name = 'trainingFacilityGlyphSign';
-    sign.position.set(0, 1.65, D / 2 + 0.245);
-    const plaque = new THREE.Mesh(getBoxGeometry(2.02, .205, .025), M.habitatBand);
-    sign.add(plaque);
-    // Elder Futhark runes (ᚦᚨᚾᛁᚲ), built from strokes without a font dependency.
-    const glyphs = [
-      [[-.6,-1,-.6,1],[-.6,.65,.6,.1],[.6,.1,-.6,-.45]],
-      [[-.6,-1,-.6,1],[-.6,1,.6,.35],[-.6,.2,.6,-.45]],
-      [[0,-1,0,1],[-.6,.5,.6,-.5]],
-      [[0,-1,0,1]],
-      [[.6,1,-.6,0],[-.6,0,.6,-1]]
-    ];
-    M.trainingSignInk ||= new THREE.MeshBasicMaterial({color:0xff283c});
-    const strokes = new THREE.InstancedMesh(getBoxGeometry(.14,.14,.009), M.trainingSignInk,
-      glyphs.reduce((count, segments) => count + segments.length, 0));
-    strokes.name = 'redRunicLettering';
-    const stroke = new THREE.Object3D();
-    let strokeIndex = 0;
-    glyphs.forEach((segments, glyphIndex) => {
-      for(const [ax,ay,bx,by] of segments) {
-        const dx=(bx-ax)*.105, dy=(by-ay)*.068;
-        stroke.position.set((glyphIndex-2)*.20+(ax+bx)*.0525, (ay+by)*.034, .019);
-        stroke.rotation.z = Math.atan2(dy,dx);
-        stroke.scale.set(Math.hypot(dx,dy)/.14, .014/.14, 1);
-        stroke.updateMatrix();
-        strokes.setMatrixAt(strokeIndex++,stroke.matrix);
-      }
-    });
-    strokes.instanceMatrix.needsUpdate = true;
-    strokes.userData.noShadow = true;
-    sign.add(strokes);
-    g.add(sign);
     const step = new THREE.Mesh(getBoxGeometry(2.40, 0.04, 0.30), M.step);
     step.position.set(0, 0.02, D / 2 + 0.12); g.add(step);
     g.userData = { ...g.userData, kind: 'house', chimneyTops: [], footprint: 5 };
@@ -42620,13 +42586,7 @@ function neighborStarVector(edge, index) {
     });
   })();
 
-  // -------- world-name popup menu (multi-world local slots) --------
-  // Maintains an array of named local slots in localStorage keyed by id.
-  // The brand title doubles as the popup trigger; the popup lets the user
-  // rename the current world, switch to another, create a new one,
-  // duplicate, or open the AI generation modal.  The existing single
-  // autosave (legacy STORAGE_KEY = 'tinyworld:v1') stays the source of truth for
-  // the live world; each slot is a snapshot copy.
+  // -------- toolbar World menu and compatibility for existing local snapshots --------
   const WORLDS_LS = {
     list: 'tinyworld:worlds.v1',
     active: 'tinyworld:worlds.active.v1',
@@ -42652,9 +42612,6 @@ function neighborStarVector(edge, index) {
     const list = readWorldsMeta();
     const id = getActiveWorldId();
     return list.find(w => w.id === id) || null;
-  }
-  function makeWorldId() {
-    return 'w_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
   }
   async function toggleTerritoryWorld() {
     if (!territoryWorldState.active && (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched())) return false;
@@ -42695,7 +42652,7 @@ function neighborStarVector(edge, index) {
       }
       updateCamera();
       if (!state.active) ensureGhostBoardsAroundTarget();
-      document.getElementById('world-menu-label').textContent = state.active ? 'Territory World (dev)' : (findActiveWorld()?.name || 'My world');
+      document.getElementById('world-menu-label').textContent = state.active ? 'Territory World (dev)' : 'Home world';
       window.__requestMinimapRepaint?.();
       return true;
     } catch (error) {
@@ -42740,153 +42697,28 @@ function neighborStarVector(edge, index) {
     toggleTerritoryWorld().catch(error => console.error('[territory world]',error));
   });
 
-  function snapshotCurrentState() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch (_) { return null; }
-  }
-  function relativeTime(ts) {
-    if (!ts) return '';
-    const diff = Date.now() - ts;
-    if (diff < 60_000) return 'just now';
-    if (diff < 3_600_000) return Math.floor(diff / 60_000) + 'm ago';
-    if (diff < 86_400_000) return Math.floor(diff / 3_600_000) + 'h ago';
-    if (diff < 7 * 86_400_000) return Math.floor(diff / 86_400_000) + 'd ago';
-    try { return new Date(ts).toLocaleDateString(); } catch (_) { return ''; }
-  }
-
   (function wireWorldMenu() {
     const trigger = document.getElementById('world-menu-btn');
     const menu = document.getElementById('world-menu');
     const labelEl = document.getElementById('world-menu-label');
-    const nameInput = document.getElementById('world-menu-name');
-    const renameBtn = document.getElementById('world-menu-rename');
-    const listEl = document.getElementById('world-menu-list');
-    const emptyEl = document.getElementById('world-menu-empty');
-    if (!trigger || !menu || !labelEl || !nameInput || !listEl) return;
+    if (!trigger || !menu || !labelEl) return;
     function paintLabel() {
-      const active = findActiveWorld();
-      const name = territoryWorldState.active ? 'Territory World (dev)' : (active && active.name ? active.name : 'My world');
-      labelEl.innerHTML = escapeName(name);
-      nameInput.value = (active && active.name) || '';
-      nameInput.placeholder = (active && active.name) || 'Untitled world';
+      labelEl.textContent = territoryWorldState.active ? 'Territory World (dev)' : 'Home world';
     }
-    function escapeName(s) {
-      const d = document.createElement('div');
-      d.textContent = s;
-      return d.innerHTML;
-    }
-    function paintList() {
-      if (territoryWorldState.active) {
-        listEl.innerHTML = ''; emptyEl.hidden = false;
-        emptyEl.textContent = 'Territory edits are retained for this session. Return Home to manage Home saves.';
-        return;
-      }
-      emptyEl.textContent = 'No saved worlds yet. Build one and choose Save as new.';
-      const list = readWorldsMeta();
-      const activeId = getActiveWorldId();
-      listEl.innerHTML = '';
-      if (list.length === 0) { emptyEl.hidden = false; return; }
-      emptyEl.hidden = true;
-      // Sort by updatedAt desc.
-      list.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).forEach(w => {
-        const li = document.createElement('li');
-        li.className = 'world-menu-slot' + (w.id === activeId ? ' active' : '');
-        li.setAttribute('data-id', w.id);
-        const name = document.createElement('span');
-        name.className = 'slot-name';
-        name.textContent = w.name || 'Untitled';
-        const date = document.createElement('span');
-        date.className = 'slot-date';
-        date.textContent = relativeTime(w.ts);
-        const del = document.createElement('button');
-        del.className = 'slot-delete';
-        del.setAttribute('data-tooltip', 'Delete');
-        del.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
-        del.addEventListener('click', e => {
-          e.stopPropagation();
-          const next = readWorldsMeta().filter(x => x.id !== w.id);
-          writeWorldsMeta(next);
-          if (getActiveWorldId() === w.id) setActiveWorldId('');
-          paintList(); paintLabel();
-        });
-        li.appendChild(name); li.appendChild(date); li.appendChild(del);
-        li.addEventListener('click', () => loadSlot(w.id));
-        listEl.appendChild(li);
-      });
-    }
-
-    function loadSlot(id) {
-      if (territoryWorldState.active || territoryWorldState.switching) return;
-      const slot = readWorldsMeta().find(w => w.id === id);
-      if (!slot || !slot.state) return;
-      try {
-        if (typeof applyState === 'function' && applyState(slot.state)) {
-          setActiveWorldId(id);
-          paintLabel(); paintList();
-          close();
-        }
-      } catch (err) { console.warn('[world-menu] load failed:', err); }
-    }
-
-    function saveAsNew(name) {
-      if (territoryWorldState.active || territoryWorldState.switching) return;
-      const state = snapshotCurrentState();
-      if (!state) return;
-      const id = makeWorldId();
-      const list = readWorldsMeta();
-      list.push({ id, name: name || ('World ' + (list.length + 1)), ts: Date.now(), state });
-      writeWorldsMeta(list);
-      setActiveWorldId(id);
-      paintLabel(); paintList();
-    }
-
-    function updateActiveSnapshot() {
-      // Keep the active slot's snapshot fresh as the world changes.
-      if (!canPersistActiveColony()) return;
-      const id = getActiveWorldId();
-      if (!id) return;
-      const list = readWorldsMeta();
-      const idx = list.findIndex(w => w.id === id);
-      if (idx === -1) return;
-      list[idx].state = snapshotCurrentState();
-      list[idx].ts = Date.now();
-      writeWorldsMeta(list);
-    }
-
     window.updateActiveWorldSlotSnapshotFromState = function updateActiveWorldSlotSnapshotFromState(state) {
       if (!canPersistActiveColony()) return false;
       const id = getActiveWorldId();
       if (!id || !state) return false;
-      const list = readWorldsMeta();
-      const idx = list.findIndex(w => w.id === id);
+      const list = readWorldsMeta(), idx = list.findIndex(w => w.id === id);
       if (idx === -1) return false;
       list[idx].state = state;
       list[idx].ts = Date.now();
       writeWorldsMeta(list);
-      paintLabel();
       return true;
     };
 
-    function renameActive(name) {
-      if (territoryWorldState.active || territoryWorldState.switching) return;
-      const id = getActiveWorldId();
-      const list = readWorldsMeta();
-      const idx = list.findIndex(w => w.id === id);
-      if (idx === -1) {
-        // No active world yet — create one with this name.
-        saveAsNew(name);
-        return;
-      }
-      list[idx].name = name;
-      list[idx].ts = Date.now();
-      writeWorldsMeta(list);
-      paintLabel(); paintList();
-    }
-
     function open() {
-      paintLabel(); paintList();
+      paintLabel();
 
       const r = trigger.getBoundingClientRect();
       const menuWidth = menu.offsetWidth || 340;
@@ -42930,40 +42762,6 @@ function neighborStarVector(edge, index) {
     window.addEventListener('keydown', e => {
       if (e.key === 'Escape' && !menu.hidden) { close(); }
     });
-
-    menu.querySelectorAll('[data-action]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (territoryWorldState.active || territoryWorldState.switching) return;
-        const action = btn.getAttribute('data-action');
-        if (action === 'new') {
-          doClear();
-          setActiveWorldId('');
-          paintLabel(); paintList();
-        } else if (action === 'duplicate') {
-          const active = findActiveWorld();
-          const baseName = (active && active.name) || 'World';
-          saveAsNew(baseName + ' (copy)');
-        } else if (action === 'save-as') {
-          const name = (nameInput.value.trim()) || ('World ' + (readWorldsMeta().length + 1));
-          saveAsNew(name);
-        }
-      });
-    });
-
-    if (renameBtn) {
-      renameBtn.addEventListener('click', () => {
-        const v = nameInput.value.trim();
-        if (!v) return;
-        renameActive(v);
-      });
-    }
-    nameInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); renameBtn && renameBtn.click(); }
-    });
-
-    // Cheap live update — periodically refresh the active slot snapshot
-    // (every 5s) so the popup list reflects the user's current world.
-    setInterval(updateActiveSnapshot, 5000);
 
     paintLabel();
   })();

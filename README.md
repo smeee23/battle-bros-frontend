@@ -304,11 +304,11 @@ actual extension dialogs still need a manual browser check before testnet releas
 
 ## Needs and signed world saves
 
-The **Needs & worlds** control lists the connected wallet's BROs and active Needs. Select a BRO to view its profile, review its activity, and confirm care using the existing transaction service. Confirmation is shown separately from S3 synchronization. The initial activity is generic care; the six brief gameplay activities will be implemented individually.
+The **user stats** panel lists the connected wallet's BROs and active Needs. Select a BRO to view its profile, review its activity, and confirm care using the existing transaction service. Confirmation is shown separately from S3 synchronization. The initial activity is generic care; the six brief gameplay activities will be implemented individually.
 
 The saved `npm run local:e2e` fixture leaves BRO #1 hatched with an active care Need, ready to inspect in Home (`index.html?battleBroId=1`). Its care regression uses BRO #4 so the default BRO's Need remains available. Rerun the fixture to refresh existing saved data. The fixture stops its chain after publication; wallet completion requires a running chain such as `npm run local:dev`.
 
-Configure `worldApiUrl` in the public-data configuration (or `BATTLEBROS_WORLD_API_URL`) to enable signed cloud saves. Open a Home or occupied Territory world, edit it normally, then use **Save world** to sign that revision. Local drafts survive refreshes without a signature. **Load cloud** explicitly discards a draft in favor of the latest accepted save if another device has updated the world. Homes stay with their NFTs and territory worlds stay with their locations.
+Configure `worldApiUrl` in the public-data configuration (or `BATTLEBROS_WORLD_API_URL`) to enable signed cloud saves. Use the toolbar’s **World** menu to open a Home or occupied Territory world, edit it normally, then use **Save world** to sign that revision. Local drafts survive refreshes without a signature. **Load saved world** explicitly discards a draft in favor of the latest accepted save if another device has updated the world. Homes stay with their NFTs and territory worlds stay with their locations.
 
 `npm run local:dev` includes the world API. Hosted installations require the backend additive migration and the `dev:world-api` service; see [backend setup](../battle-bros-backend/docs/needs-and-worlds.md). No production deployment or S3 publication is performed by the frontend build.
 
@@ -330,4 +330,4 @@ Wait for the indexer/publisher, refresh the Territory dashboard, enter a name, a
 
 The selected BRO's published kind now selects its 3D character family automatically. The character preview tab remains available for temporary type/form testing. Skin and core/accent/eye colors are stored separately for each NFT, with local drafts and owner-signed cloud saves.
 
-Select a BRO, use the Training Center to edit its skin/colors, then click **Save appearance** in **Needs & worlds**. **Restore saved appearance** restores its backend cosmetics and canonical character family. Signature rejection or a cloud revision conflict keeps the local draft. Cosmetics follow the NFT when ownership changes. Form/type overrides from the preview are not persisted. Restart the local stack to load the updated API/publisher; each local stack restart creates a fresh chain.
+Select a BRO in user stats and use the Training Center to edit its skin/colors. Leaving the facility requests an owner signature to save changed appearances; leaving without changes does not request a signature. Unsynced appearance drafts are retried when leaving a later facility visit. Signature rejection or a cloud revision conflict keeps the local draft. Cosmetics follow the NFT when ownership changes. Form/type overrides from the preview are not persisted. Restart the local stack to load the updated API/publisher; each local stack restart creates a fresh chain.
