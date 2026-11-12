@@ -14,7 +14,12 @@ until 2.27 s and finished at 2.65 s. Hit reactions lasted 2.35–3 s. Those lock
 not just the plane-attack cooldown, caused the long interval between combat shots.
 
 Combat now has a short, independent throwing gesture, a per-fighter cooldown and
-a bounded projectile pool. It reuses `applyTelekineticBody` for the existing
+a bounded projectile pool. Both Arena and Practice use the shared defaults
+`projectileSpeedMultiplier: .85` and `projectileScale: 1.2` for player and NPC
+throws, including Berserker rocks. `projectileSize: .42` normalizes source
+geometry to the Form I Juggernaut reference, giving every normal rock a shared
+maximum dimension of `.504` units after the visual scale. Body size and decorative
+pebble size do not change combat projectile size. It reuses `applyTelekineticBody` for the existing
 family-specific arm, torso and neck pose. The original long orbital throws used
 by other world activities retain their timings. Combat copies existing stone
 geometry/materials, samples the stone's current world position at launch, and

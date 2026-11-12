@@ -51,4 +51,55 @@ for(const playerWins of [true,false]){
   assert(c.attack(f.actors,0).ok);f.until(()=>c.canAttack(0),'Second pooled shot');assert(c.attack(f.actors,0).ok);assert.equal(b.activeProjectiles,2);assert(!c.attack(f.actors,1).ok,'Bounded pool rejects overflow');assert.equal(c.stats().allocated,2);
   c.stop();assert.equal(c.stats().active,0);assert(!api.worldGroup.children.some(n=>n.name==='combatRock'),'Projectiles detached on cleanup');assert(!f.actors.some(a=>a.root.userData.battleThrow||a.root.userData.battleHit));f.cleanup();
 }
-console.log('Shared combat: rapid/overlapping shots, launch timing, swept hits, exactly-once damage, Berserker, opponent cadence, concurrent reactions, victory/defeat, restart and bounded cleanup passed.');
+// Shared defaults apply to both throwers and specials in both modes, including flights at
+// either duration clamp; attack frequency and damage retain the shared settings.
+for(const distance of [2,20,36])for(const special of [false,true]){
+  const baseline=fixture({maxHealth:1000,projectileSpeedMultiplier:1,projectileScale:1}),tuned=fixture({maxHealth:1000});
+  const projectiles=[];
+  for(const f of [baseline,tuned]){
+    f.actors[1].root.position.x=f.actors[0].root.position.x+distance;
+    // Controlled launch transforms make the visual multipliers measurable
+    // independently of the randomly authored loose-stone arrangements.
+    const battle=f.combat.combat();
+    for(const fighter of battle.fighters){
+      const source=new THREE.Mesh(fighter.source.geometry,fighter.source.material);
+      source.position.set(0,1,0);source.scale.set(.4,.5,.6);fighter.actor.root.add(source);fighter.source=source;
+      if(special)fighter.energy=fighter.energyMax;
+    }
+    const shots=f.actors.map((a,i)=>f.combat.attack(f.actors,i,{berserker:special}));assert(shots.every(s=>s.ok));
+    const rocks=shots.map(s=>s.action.projectile);f.until(()=>rocks.every(p=>p.launched),'Both sides launch tuned projectiles');projectiles.push(rocks);
+  }
+  for(let i=0;i<2;i++){
+    assert(Math.abs(projectiles[1][i].duration*.85-projectiles[0][i].duration)<1e-8,'Shared defaults fly at 85% speed, including clamped flight times');
+    for(const axis of ['x','y','z'])assert(Math.abs(projectiles[1][i].mesh.scale[axis]/projectiles[0][i].mesh.scale[axis]-1.2)<1e-8,'Shared defaults enlarge both sides by 20% on every axis');
+  }
+  assert.equal(tuned.combat.config.cooldown,baseline.combat.config.cooldown);assert.equal(tuned.combat.config.opponentCadence,baseline.combat.config.opponentCadence);
+  for(const f of [baseline,tuned]){
+    f.until(()=>f.combat.combat().hits===2&&!f.actors.some(f.combat.busy),'Both tuned projectiles hit and clean up');
+    for(const fighter of f.combat.combat().fighters)assert.equal(fighter.health,1000-(special?f.combat.config.berserkerDamage:f.combat.config.normalDamage));
+    f.cleanup();
+  }
+}
+// The automatic opponent must use those defaults too, without a scene override.
+{
+  const old=fixture({maxHealth:1000,projectileSpeedMultiplier:1,projectileScale:1},true),updated=fixture({maxHealth:1000},true),rocks=[],playerRocks=[];
+  for(const f of [old,updated]){
+    for(const fighter of f.combat.combat().fighters){
+      const source=new THREE.Mesh(fighter.source.geometry,fighter.source.material);
+      source.position.set(0,1,0);source.scale.set(.4,.5,.6);fighter.actor.root.add(source);fighter.source=source;
+    }
+    const fighter=f.combat.combat().fighters[1];
+    f.until(()=>fighter.gesture.projectile?.launched,'Automatic NPC launches its rock');rocks.push(fighter.gesture.projectile);
+    const shot=f.combat.attack(f.actors,0);assert(shot.ok);const playerRock=shot.action.projectile;
+    f.until(()=>playerRock.launched,'Player comparison rock launches');playerRocks.push(playerRock);
+  }
+  assert(Math.abs(rocks[1].duration*.85-rocks[0].duration)<1e-8,'Automatic NPC flight is 15% slower');
+  for(const axis of ['x','y','z'])assert(Math.abs(rocks[1].mesh.scale[axis]/rocks[0].mesh.scale[axis]-1.2)<1e-8,'Automatic NPC rock is 20% larger');
+  for(const rock of [rocks[1],playerRocks[1]]){
+    rock.mesh.geometry.computeBoundingBox();
+    const size=rock.mesh.geometry.boundingBox.getSize(new THREE.Vector3()).multiply(rock.mesh.getWorldScale(new THREE.Vector3()));
+    assert(Math.abs(Math.max(size.x,size.y,size.z)-.504)<1e-6,'Player and automatic NPC use the Form I Juggernaut normal-rock size');
+  }
+  for(const f of [old,updated])f.cleanup();
+}
+console.log('Shared combat: rapid/overlapping shots, launch timing, swept hits, exactly-once damage, Berserker, opponent cadence, concurrent reactions, victory/defeat, shared projectile speed/scale and bounded cleanup passed.');

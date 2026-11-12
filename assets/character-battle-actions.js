@@ -6,9 +6,9 @@
   const config=Object.freeze({maxHealth:100,normalDamage:2,berserkerDamage:16,energyMax:100,energyPerHit:5,
     cooldown:.32,windup:.08,gestureDuration:.26,berserkerCooldown:.6,berserkerWindup:.14,berserkerGestureDuration:.42,
     releaseDuration:.08,hitDuration:.32,hitDistance:.14,opponentCadence:.95,opponentDelay:.7,
-    projectileSpeed:32,minFlight:.16,maxFlight:.7,projectileLifetime:1.5,maxRange:40,maxProjectiles:12,...hooks.config});
+    projectileSpeed:32,projectileSpeedMultiplier:.85,projectileScale:1.2,projectileSize:.42,minFlight:.16,maxFlight:.7,projectileLifetime:1.5,maxRange:40,maxProjectiles:12,...hooks.config});
   for(const [key,value] of Object.entries(config))if(!Number.isFinite(value)||value<=0)throw Error('Invalid combat configuration: '+key);
-  if(!Number.isInteger(config.maxProjectiles)||config.maxProjectiles>64||config.gestureDuration>config.cooldown||config.berserkerGestureDuration>config.berserkerCooldown||config.windup>=config.gestureDuration||config.berserkerWindup>=config.berserkerGestureDuration||config.minFlight>config.maxFlight||config.maxFlight>config.projectileLifetime)throw Error('Inconsistent combat timing/pool configuration');
+  if(!Number.isInteger(config.maxProjectiles)||config.maxProjectiles>64||config.gestureDuration>config.cooldown||config.berserkerGestureDuration>config.berserkerCooldown||config.windup>=config.gestureDuration||config.berserkerWindup>=config.berserkerGestureDuration||config.minFlight>config.maxFlight||config.maxFlight/config.projectileSpeedMultiplier>config.projectileLifetime)throw Error('Inconsistent combat timing/pool configuration');
   const smooth=x=>{x=Math.max(0,Math.min(1,x));return x*x*(3-2*x);};
   const expression=root=>root.userData.slots?.face?.userData.expression?.name||'neutral';
   const setExpression=(root,name)=>hooks.setExpression?.(root,name,{automatic:true});
@@ -71,8 +71,15 @@
   }
   function launch(f,g){const p=g.projectile;g.launched=true;if(!p?.active)return;
     f.source.getWorldPosition(p.start);center(battle.fighters[1-p.owner].actor,p.target);p.lastTarget.copy(p.target);p.position.copy(p.start);p.previous.copy(p.start);
-    p.duration=THREE.MathUtils.clamp(p.start.distanceTo(p.target)/config.projectileSpeed,config.minFlight,config.maxFlight);p.age=0;p.launched=true;p.mesh.visible=true;
-    f.source.getWorldScale(p.scale);p.mesh.scale.copy(p.scale).multiplyScalar(p.special?1.8:1);battle.spawned++;
+    p.duration=THREE.MathUtils.clamp(p.start.distanceTo(p.target)/config.projectileSpeed,config.minFlight,config.maxFlight)/config.projectileSpeedMultiplier;p.age=0;p.launched=true;p.mesh.visible=true;
+    if(!f.source.geometry.boundingBox)f.source.geometry.computeBoundingBox();
+    const bounds=f.source.geometry.boundingBox;
+    const size=Math.max(bounds.max.x-bounds.min.x,bounds.max.y-bounds.min.y,bounds.max.z-bounds.min.z);
+    // Form I Juggernaut's reference stone is .42 units across before the shared
+    // 1.2 visual scale. Normalize the copy so body/orbit pebble size cannot leak
+    // into combat. All families, forms and throwers use this same world size.
+    p.scale.setScalar(config.projectileSize/Math.max(size,1e-8));
+    p.mesh.scale.copy(p.scale).multiplyScalar((p.special?1.8:1)*config.projectileScale);battle.spawned++;
   }
   function impact(p){
     if(!p.active||p.damageApplied||!battle.running)return;

@@ -6,18 +6,34 @@ const {api,context,THREE}=require('./longneck-fixture')(),makeArena=require('../
 const actions=makeActions(THREE,{config:{maxHealth:10000},restoreBody:api.restoreTelekineticBody,setExpression:api.setBattleBroExpression});
 const arena=makeArena(THREE,a=>{const root=api.createBattleBroCharacter({...a,character:a.character||'monsters'});root.userData.expressionCycleEnabled=false;api.setBattleBroExpression(root,'mildAngry',{immediate:true});return root;},context.tickBattleBroArenaActor,{actions,wristHeight:context.LAVA_WRIST_ABOVE_GROUND});
 let time=0;const frame=()=>{time+=1/60;arena.tick(time,1/60);};
+// Capture the natural Form I Juggernaut stone, independent of normalization.
+assert(arena.setFighter(0,{character:'juggernaut',variant:'lava',form:1}));
+const referenceSource=actions.combat().fighters[0].source;
+referenceSource.geometry.computeBoundingBox();
+const referenceSize=referenceSource.geometry.boundingBox.getSize(new THREE.Vector3()).multiply(referenceSource.getWorldScale(new THREE.Vector3()));
+const referenceDiameter=Math.max(referenceSize.x,referenceSize.y,referenceSize.z)*actions.config.projectileScale;
+assert(Math.abs(referenceDiameter-.504)<1e-6,'Form I Juggernaut reference size');
+
 for(const character of ['juggernaut','monsters','specter','longneck'])for(const variant of ['lava','sand','plant','ice'])for(let form=1;form<=7;form++){
   assert(arena.setFighter(0,{character,variant,form}));assert(arena.setFighter(1,{character,variant,form:8-form}));frame();
   const [a,b]=arena.actors,rocks=[...a.root.userData.looseRocks.chunks],parents=rocks.map(c=>c.node.parent);
   assert(arena.attack(0).ok);assert(arena.attack(1).ok,'Both sides can attack in the same frame');assert(!arena.attack(0).ok,'Duplicate input obeys per-actor cooldown');
-  let shots=1,frames=0,hit=false,displaced=false;
+  let shots=1,frames=0,hit=false,displaced=false;const measured=new Set();
   for(;frames<240;frames++){
     if(shots<3&&arena.canAttack(0)){assert(arena.attack(0).ok);shots++;}
-    frame();hit ||= !!b.root.userData.battleHit;displaced ||= b.root.position.distanceTo(b.home)>.02;
+    frame();
+    for(const fighter of arena.combat().fighters){
+      const p=fighter.gesture.projectile;if(!p?.launched||measured.has(p.id))continue;
+      p.mesh.geometry.computeBoundingBox();
+      const size=p.mesh.geometry.boundingBox.getSize(new THREE.Vector3()).multiply(p.mesh.getWorldScale(new THREE.Vector3()));
+      assert(Math.abs(Math.max(size.x,size.y,size.z)-referenceDiameter)<1e-6,`${character}/${variant}/${form}: both Arena throwers match Form I Juggernaut's rock size`);
+      measured.add(p.id);
+    }
+    hit ||= !!b.root.userData.battleHit;displaced ||= b.root.position.distanceTo(b.home)>.02;
     for(const actor of arena.actors){actor.root.traverse(n=>assert(Number.isFinite(n.position.x+n.position.y+n.position.z+n.quaternion.w),`${character}/${variant}/${form}: finite animated pose`));const neck=actor.root.userData.rig.neckPivot;if(neck)assert(Math.abs(neck.rotation.x)<.8,'No accumulating Longneck pitch');}
     if(shots===3&&!arena.isBusy())break;
   }
-  assert(frames<240,`${character}/${variant}/${form}: short attacks and recovery finish`);assert(hit&&displaced);assert.equal(b.hitsReceived,3);assert.equal(a.hitsReceived,1);
+  assert(frames<240,`${character}/${variant}/${form}: short attacks and recovery finish`);assert(hit&&displaced);assert.equal(b.hitsReceived,3);assert.equal(a.hitsReceived,1);assert.equal(measured.size,4,'All rendered projectiles were size-checked');
   assert.equal(arena.combat().fighters[1].health,10000-3*actions.config.normalDamage);assert.equal(arena.combat().fighters[0].health,10000-actions.config.normalDamage);
   frame();assert(b.root.position.distanceTo(b.home)<1e-8,'Stumble restores world position');
   rocks.forEach((c,i)=>assert.equal(c.node.parent,parents[i],'Fast throws never detach real support/body parts'));

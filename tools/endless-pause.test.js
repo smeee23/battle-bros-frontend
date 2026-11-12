@@ -17,7 +17,7 @@ const context={explorationActive:true,fp:{active:true,pos:{y:10},vy:-2},fpToolMe
   renderScene(){context.camera.y=context.fp.pos.y;calls.push('render');},window:{}};
 // Keep every production subsystem in the actual render loop observable.
 for(const name of ['tickDropAnims','tickNeighborPivotTween','tickHomeTween','tickOpacityTransitions','tickSquashAnims',
-  'tickRippleAnims','tickTransportCube','tickExcavation','tickFlightMode','tickWeather','tickShootingStar',
+  'tickRippleAnims','tickMinimap','tickTransportCube','tickExcavation','tickFlightMode','tickWeather','tickShootingStar',
   'updateClouds','updateForceShieldMaterials','tickLavaMonsterMovers','tickMinotaurMovers','tickSpecterMovers',
   'tickVehicles','tickAstronauts','syncAmbientWalkVisibility','updateCropDuster','tickBattleBroPlaneAttacks',
   'updatePlasmaTurrets','updateAntiAirDefense','updateSmoke','updateXRFrame'])context[name]=()=>calls.push(name);

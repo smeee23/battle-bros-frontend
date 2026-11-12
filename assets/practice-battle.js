@@ -4,6 +4,7 @@
   let encounter=null,actors=null,savedCamera=null,heights=null,widths=null,facings=null,lastState='',lastBusy=null,lastRevision=-1;
   const resultDurationSeconds=3;
   const resultPivotSeconds=1.2;
+  let frontReach=0;
   let resultAge=0,resultStarted=false,resultExitRequested=false,resultStartYaw=0,resultStartRadius=0,resultStartHeight=0;
   const camera=new THREE.PerspectiveCamera(58,1,.02,2000);
   const forward=new THREE.Vector3(),right=new THREE.Vector3(),up=new THREE.Vector3(0,1,0),eye=new THREE.Vector3(),aim=new THREE.Vector3(),size=new THREE.Vector3();
@@ -17,7 +18,19 @@
     if(encounter)return false;
     encounter=session;actors=session.sides.map(s=>s.actor);savedCamera=host.camera();
     heights=[];widths=[];
-    for(const actor of actors){actor.root.updateMatrixWorld(true);new THREE.Box3().setFromObject(actor.root).getSize(size);heights.push(Math.max(.6,size.y));widths.push(Math.max(.5,Math.min(size.x,heights.at(-1)*1.2)));}
+    forward.subVectors(actors[1].root.position,actors[0].root.position);forward.y=0;
+    if(forward.lengthSq()<1e-8)forward.set(0,0,1);forward.normalize();right.crossVectors(up,forward);
+    for(let i=0;i<actors.length;i++){
+      const actor=actors[i];actor.root.updateMatrixWorld(true);
+      const bounds=new THREE.Box3().setFromObject(actor.root);bounds.getSize(size);
+      heights.push(Math.max(.6,size.y));
+      widths.push(Math.max(.5,Math.abs(right.x)*size.x+Math.abs(right.z)*size.z));
+      if(i===0){
+        actor.root.getWorldPosition(eye);
+        frontReach=Math.max(0,forward.x*((forward.x>=0?bounds.max.x:bounds.min.x)-eye.x)
+          +forward.z*((forward.z>=0?bounds.max.z:bounds.min.z)-eye.z));
+      }
+    }
     for(const actor of actors)actor.root.userData.deferLooseRockAttachments=true;
     host.actions.start(actors,host.combatOptions||{opponentEnabled:true});
     facings=actors.map(actor=>heading(actor.root));
@@ -84,8 +97,8 @@
   function updateCamera(dt,immediate=false){
     const a=actors[0].root.position,b=actors[1].root.position;
     forward.subVectors(b,a);forward.y=0;if(forward.lengthSq()<1e-8)forward.set(0,0,1);forward.normalize();right.crossVectors(up,forward);
-    const aspect=Math.max(.25,host.aspect()||1),h=heights[0],distance=a.distanceTo(b);
-    if(camera.aspect!==aspect){camera.aspect=aspect;camera.fov=THREE.MathUtils.clamp(58/Math.min(1,aspect),58,85);camera.updateProjectionMatrix();}
+    const aspect=Math.max(.25,host.aspect()||1),h=heights[0];
+    if(camera.aspect!==aspect){camera.aspect=aspect;camera.updateProjectionMatrix();}
     if(resultStarted){
       faceBasis();
       const u=Math.min(1,resultAge/resultPivotSeconds),blend=u*u*(3-2*u);
@@ -97,15 +110,31 @@
       aim.lerp(faceTarget,1-Math.exp(-dt*7));
       const floor=host.floor?.(eye.x,eye.z,eye.y);if(Number.isFinite(floor))eye.y=Math.max(eye.y,floor+.3);
       // Orbit around the face rather than interpolating through the character.
-      camera.position.copy(eye);camera.lookAt(aim);return;
+      camera.position.copy(eye);camera.lookAt(aim);setFov(THREE.MathUtils.clamp(58/Math.min(1,aspect),58,85),dt,immediate);return;
     }
     // Authored rigs face +Z with their right shoulder on +X.
     // Keep enough setback for tall forms and portrait screens.
-    const back=Math.max(1.8,h*1.45,widths[0]*1.3,heights[1]*.65-distance*.25)/Math.min(1,aspect);
-    eye.copy(a).addScaledVector(forward,-back).addScaledVector(right,Math.max(.65,widths[0]*.6));eye.y+=h*.85+.3;
-    aim.copy(b);aim.y+=heights[1]*.55;
+    const range=Math.max(1,Math.hypot(b.x-a.x,b.z-a.z));
+    const back=Math.max(1.8,h*1.15,widths[0]*.9,heights[1]*.85-range*.15)/Math.min(1,aspect);
+    // Clear the foreground silhouette at its front edge, rather than aiming
+    // through a broad torso. Larger rigs get a higher and wider shoulder view.
+    const clearRange=range*.5;
+    const side=Math.max(.9,h*.5,(widths[0]*.5+.6)*(back+clearRange)/Math.max(2,clearRange-frontReach));
+    eye.copy(a).addScaledVector(forward,-back).addScaledVector(right,side);eye.y+=h*1.35+.4;
+    aim.lerpVectors(a,b,.75);aim.y=THREE.MathUtils.lerp(a.y+h*.55,b.y+heights[1]*.55,.75);
     const floor=host.floor?.(eye.x,eye.z,eye.y);if(Number.isFinite(floor))eye.y=Math.max(eye.y,floor+.3);
     camera.position.lerp(eye,immediate?1:1-Math.exp(-dt*7));camera.lookAt(aim);
+    // Keep the wider side view readable instead of making the opponent and
+    // rocks tiny when a large foreground rig requires more camera clearance.
+    faceEye.copy(a);faceEye.y+=h*.5;
+    faceTarget.copy(b);faceTarget.y+=heights[1]*.5;
+    const nearest=Math.max(1,Math.min(camera.position.distanceTo(faceEye),camera.position.distanceTo(faceTarget)));
+    const halfFrame=Math.max(Math.max(h,heights[1])*.75,(range+(widths[0]+widths[1])*.5)*.6/aspect);
+    setFov(THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2*Math.atan(halfFrame/nearest)),35,85),dt,immediate);
+  }
+  function setFov(value,dt,immediate){
+    const next=THREE.MathUtils.lerp(camera.fov,value,immediate?1:1-Math.exp(-dt*7));
+    if(Math.abs(next-camera.fov)>.01){camera.fov=next;camera.updateProjectionMatrix();}
   }
   function attack(berserker=false){if(!actors)return false;
     const result=encounter.sides[0].session.run(()=>host.actions.attack(actors,0,{berserker}));

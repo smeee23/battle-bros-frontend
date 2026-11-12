@@ -65,7 +65,7 @@ context.placeOutsideUnhatchedCube();assert(context.fp.pos.length()>5,'Walk mode 
 for(const [start,end,name,args] of [
  ['  function enterTrainingAppearance()', '  function leaveTrainingAppearance(', 'enterTrainingAppearance',[]],
  ['  function switchFPWorld(', '  function cancelFPWarp(', 'switchFPWorld',[true]],
- ['  function throwTransportCube()', '  let transportMinimapUpdatedAt', 'throwTransportCube',[]],
+ ['  function throwTransportCube()', '  function tickTransportCube(', 'throwTransportCube',[]],
  ['  function enterFlightMode(', '  function exitFlightMode(', 'enterFlightMode',[]],
  ['  function enterBattleArena()', '  function exitBattleArena()', 'enterBattleArena',[]],
  ['  async function toggleTerritoryWorld()', '  window.__toggleTerritoryWorld', 'toggleTerritoryWorld',[]],

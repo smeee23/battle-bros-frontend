@@ -97,14 +97,22 @@ for(const family of ['longneck','juggernaut','monsters','specter']){
 {
  const a=actor('longneck',4,0),b=actor('specter',7,8);
  const handlers={},menu={hidden:true,style:{},querySelector:()=>({focus(){}}),addEventListener:(k,fn)=>{handlers[k]=fn;}};
- const hud={hidden:true,focus(){},contains:()=>false,addEventListener(){},querySelectorAll:()=>[...buttons].filter(([id])=>/^practice-(shield|berserker)$/.test(id)).map(([,button])=>button)},buttons=new Map(),captures={};let pointerLockRequests=0;
- Object.assign(context,{BattleBroEncounter:encounter,fp:{active:true},fpKeys:new Set(),trainingAppearance:{active:false},
+ const hud={hidden:true,focus(){},contains:()=>false,addEventListener(){},querySelectorAll:()=>[...buttons].filter(([id])=>/^practice-(shield|berserker)$/.test(id)).map(([,button])=>button)},buttons=new Map(),captures={},docEvents={},normalInputs={};let pointerLockRequests=0,captureMode='grant',pageFocused=true;
+ Object.assign(context,{BattleBroEncounter:encounter,fp:{active:true,yaw:.3,pitch:.1},fpKeys:new Set(),trainingAppearance:{active:false},
   fpToolMenu:{hidden:false},fpToolsToggle:{setAttribute(){}},
-  createBattleBroPractice:require('../assets/practice-battle.js'),createBattleBroBattleActions:(three,hooks)=>require('../assets/character-battle-actions.js')(three,{...hooks,config:{normalDamage:8,berserkerDamage:32,energyPerHit:20}}),
-  camera:new THREE.PerspectiveCamera(55,1,.02,2000),window:{addEventListener:(name,fn,options)=>{if(options?.capture)captures[name]=fn;}},
-  document:{body:{classList:{toggle(){}}},getElementById:id=>{if(id==='bro-encounter-menu')return menu;if(id==='practice-battle-hud')return hud;if(!buttons.has(id))buttons.set(id,{hidden:true,dataset:{},style:{setProperty(key,value){this[key]=value;}},focus(){},contains:target=>['practice-berserker','practice-shield'].some(id=>buttons.get(id)===target||target?.control===buttons.get(id))});return buttons.get(id);},exitPointerLock(){}},renderer:{domElement:{clientWidth:1280,clientHeight:720,requestPointerLock(){pointerLockRequests++;}}},testPlayer:a,testNPC:b});
+  createBattleBroPractice:require('../assets/practice-battle.js'),createBattleBroBattleActions:(three,hooks)=>require('../assets/character-battle-actions.js')(three,{...hooks,config:{...hooks.config,normalDamage:8,berserkerDamage:32,energyPerHit:20}}),
+  camera:new THREE.PerspectiveCamera(55,1,.02,2000),window:{addEventListener:(name,fn,options)=>{if(options?.capture)captures[name]=fn;else normalInputs[name]=fn;}},
+  flight:{active:false},fpJourney:{warp:0},markCameraMoving(){},escapeFP(){context.fp.active=false;vm.runInContext('fpResumeCapture=false;fpResumeCaptureInFlight=false',context);},
+  document:{body:{classList:{toggle(){}}},hasFocus:()=>pageFocused,addEventListener:(name,fn)=>docEvents[name]=fn,getElementById:id=>{if(id==='bro-encounter-menu')return menu;if(id==='practice-battle-hud')return hud;if(!buttons.has(id))buttons.set(id,{hidden:true,dataset:{},style:{setProperty(key,value){this[key]=value;}},focus(){context.document.activeElement=this;},blur(){context.document.activeElement=null;},contains:target=>['practice-berserker','practice-shield'].some(id=>buttons.get(id)===target||target?.control===buttons.get(id))});return buttons.get(id);},exitPointerLock(){this.pointerLockElement=null;docEvents.pointerlockchange?.();}},renderer:{domElement:{clientWidth:1280,clientHeight:720,
+   focus(){context.document.activeElement=this;},requestPointerLock(){
+    pointerLockRequests++;if(captureMode==='throw')throw Error('Capture denied');
+    if(captureMode==='reject')return {catch:fn=>fn(Error('Capture denied'))};
+    if(captureMode==='defer')return;
+    context.document.pointerLockElement=this;docEvents.pointerlockchange?.();
+   }}},testPlayer:a,testNPC:b});
  vm.runInContext("transportCubeController={phase:'deployed',root:testPlayer.root,captures:0,capture(root){if(root!==this.root)return false;this.captures++;pauseTransportBattleBro(root);return true;}};testPlayer.root.userData.transportActor=testPlayer;explorationResidents.clear();explorationResidents.set('test',testNPC);",context);
  vm.runInContext(html.slice(html.indexOf('  const broEncounterMenu='),html.indexOf('  const FP_EYE_H =')),context);
+ vm.runInContext(html.slice(html.indexOf("  document.addEventListener('pointerlockchange'"),html.indexOf('  function tickFP(')),context);
  api.setBattleBroExpression(a.root,'littleSmile',{immediate:true});
  const update=(t)=>vm.runInContext(`broEncounter.tick(${t},.05)`,context);
  const shotCount=()=>vm.runInContext('practiceBattle.combat().shots',context);
@@ -149,6 +157,10 @@ for(const family of ['longneck','juggernaut','monsters','specter']){
  buttons.get('practice-shield').onclick();
  let escaped=false;captures.keydown({key:'Escape',preventDefault(){},stopImmediatePropagation(){escaped=true;}});
  assert(escaped&&hud.hidden,'Escape immediately exits the result before three seconds');
+ assert.equal(context.document.pointerLockElement,context.renderer.domElement,'Manual exit restores mouse capture');
+ assert.equal(context.document.activeElement,context.renderer.domElement,'Manual exit focuses the game canvas');
+ const manualYaw=context.fp.yaw;docEvents.mousemove({target:context.renderer.domElement,movementX:20,movementY:0});
+ assert(Math.abs(context.fp.yaw-manualYaw+.044)<1e-10,'Mouse-look works immediately after manual battle exit');
  assert.equal(vm.runInContext('transportCubeController.captures',context),1,'Completed fight returns the player BRO to the cube');
  captures.keydown({key:'Escape',preventDefault(){},stopImmediatePropagation(){}});assert.equal(vm.runInContext('transportCubeController.captures',context),1,'Repeated exit cannot capture twice');
  for(let i=0;i<80;i++)update(60+i*.05);
@@ -164,6 +176,8 @@ for(const family of ['longneck','juggernaut','monsters','specter']){
  for(let i=1;i<800&&menu.hidden;i++)update(5.1+i*.05);
  assert.equal(menu.hidden,false,'The same NPC prompts again after recall and release');
  handlers.click({target:{dataset:{broChoice:'yes'}}});assert(!hud.hidden);
+ context.document.pointerLockElement=context.renderer.domElement;docEvents.pointerlockchange();
+ assert.equal(context.document.pointerLockElement,null,'A stale capture cannot hide the cursor during a new battle');
  assert(buttons.get('practice-battle-result').hidden,'A new battle clears the previous result');
  assert(!buttons.get('practice-battle-controls').hidden);assert(!buttons.get('practice-shield').disabled);
  assert.equal(buttons.get('practice-berserker').style['--charge'],'0%','New battle clears the button fill');
@@ -194,11 +208,39 @@ for(const family of ['longneck','juggernaut','monsters','specter']){
  assert.equal(buttons.get('practice-battle-result').dataset.outcome,'win');
  const locksBeforeReturn=pointerLockRequests;
  update(128);assert(hud.hidden,'Completed battle automatically closes at three seconds');
- assert.equal(pointerLockRequests,locksBeforeReturn,'Automatic return does not request gesture-only pointer lock');
+ assert.equal(pointerLockRequests,locksBeforeReturn+1,'Automatic return requests mouse capture once');
+ assert.equal(context.document.pointerLockElement,context.renderer.domElement,'Automatic exit restores mouse capture without a click');
+ assert.equal(context.document.activeElement,context.renderer.domElement,'Automatic exit restores canvas focus');
+ const automaticYaw=context.fp.yaw;docEvents.mousemove({target:context.renderer.domElement,movementX:15,movementY:0});
+ assert(Math.abs(context.fp.yaw-automaticYaw+.033)<1e-10,'Mouse-look immediately responds after automatic exit');
+ normalInputs.keydown({key:'w',code:'KeyW',repeat:false});assert(context.fpKeys.has('w'),'Walking keys immediately reach first-person controls');
+ normalInputs.keyup({key:'w',code:'KeyW'});
  assert.equal(vm.runInContext('transportCubeController.captures',context),2,'Automatic close captures the BRO');
  for(let i=0;i<80;i++)update(130+i*.05);
  assert.equal(vm.runInContext('transportCubeController.captures',context),2,'Automatic return runs once');
  assert.equal(a.root.userData.slots.face.userData.expression.name,'littleSmile','Automatic return restores the original expression');
+ // Browser rejection must not silently strand the player or require a click.
+ for(const mode of ['throw','reject','defer']){
+  context.document.pointerLockElement=null;captureMode=mode;
+  vm.runInContext('resumeFPAfterBattle()',context);
+  assert(context.fp.active);docEvents.pointerlockchange();assert(context.fp.active,'Pending capture does not exit first person');
+  const yaw=context.fp.yaw;docEvents.mousemove({target:context.renderer.domElement,movementX:10,movementY:0});
+  assert(Math.abs(context.fp.yaw-yaw+.022)<1e-10,'Pending/denied capture still permits canvas mouse-look');
+  const overUI=context.fp.yaw;docEvents.mousemove({target:buttons.get('practice-shield'),movementX:10,movementY:0});assert.equal(context.fp.yaw,overUI,'Fallback does not rotate the camera over UI');
+  if(mode==='defer')docEvents.pointerlockerror();
+  captureMode='grant';const attempts=pointerLockRequests;
+  normalInputs.keydown({key:'w',code:'KeyW',repeat:false});
+  assert.equal(pointerLockRequests,attempts+1,'Ordinary walking key retries capture');
+  assert.equal(context.document.pointerLockElement,context.renderer.domElement);assert(context.fpKeys.has('w'));
+  normalInputs.keyup({key:'w',code:'KeyW'});
+ }
+ context.document.pointerLockElement=null;pageFocused=false;const attempts=pointerLockRequests;
+ vm.runInContext('resumeFPAfterBattle()',context);assert.equal(pointerLockRequests,attempts,'Background page does not request capture');
+ const unfocusedYaw=context.fp.yaw;docEvents.mousemove({target:context.renderer.domElement,movementX:20,movementY:0});assert.equal(context.fp.yaw,unfocusedYaw);
+ pageFocused=true;normalInputs.keydown({key:'w',code:'KeyW',repeat:false});normalInputs.keyup({key:'w',code:'KeyW'});
+ context.document.pointerLockElement=null;docEvents.pointerlockchange();assert(!context.fp.active,'Normal unlock still leaves first person after capture succeeds');
+ context.fp.active=true;
+
  vm.runInContext("pauseTransportBattleBro(testPlayer.root);transportCubeController.phase='recall-flight';",context);
  assert(menu.hidden&&!b.encounter,'Recalling during the new prompt also cleans up safely');
 }

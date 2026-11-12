@@ -4,7 +4,10 @@ Release your transported BRO near an NPC and choose **Yes** from the existing
 encounter. The question appears after about 0.8 seconds while the BROs turn.
 Choosing **Yes** immediately faces both BROs toward each other, clears their
 temporary turn state, and enters combat without waiting for the turns to finish.
-The camera moves over your BRO's right shoulder. Click the screen (or press
+The camera moves above and to the right of your BRO, scaling its height and
+side clearance to the rig's height, width and forward reach. Framing also accounts
+for the opponent and viewport, with an adaptive field of view to keep rocks and
+the opposing BRO readable when large rigs need more camera distance. Click the screen (or press
 Space/Enter) to throw a quick rock. Health bars track beside each BRO. The compact
 **Berserker** button fills as normal hits land and becomes clickable when charged;
 **Shield** uses the same style and remains an inert placeholder. The opponent attacks on a configurable cadence. A lethal
@@ -15,9 +18,25 @@ your BRO, shrinks the BRO inside, and returns the cube to your hand.
 **Escape** ends the result early and starts the same return. The same BRO stays stored for its next
 deployment. During an unfinished fight, **Escape** restores
 exploration, the camera, and the suspended BRO routes. Health and energy reset
-for each practice encounter. These fights have no onchain consequences.
+for each practice encounter. Exiting restores focus to the game canvas and
+requests mouse capture, including the automatic three-second exit. If capture
+is pending or denied, canvas mouse-look remains available and the next ordinary
+movement key retries capture without requiring an extra click. These fights have
+no onchain consequences.
 
-The Arena uses the same health, energy, timing, opponent cadence, projectiles,
+The shared combat defaults are `projectileSpeedMultiplier: .85` and
+`projectileScale: 1.2` for both BROs in Practice and Arena, including automatic
+NPC attacks and normal/Berserker rocks. This slows flight by 15% and increases
+rock size by 20% without changing attack cadence, damage or energy.
+All normal projectiles use the Form I Juggernaut reference size: `.42` world units
+before the shared `1.2` scale, or `.504` units across. Source geometry is normalized
+so decorative orbit pebbles and larger body stones produce the same projectile
+size for every family, form and side in both environments. Materials, rock shape
+and launch position remain character-specific; supporting body stones stay attached.
+Berserker retains its existing 1.8× visual size multiplier. There are no
+opponent-only size overrides.
+
+The Arena uses the same health, energy, attack timing, opponent cadence, projectiles,
 hit/recovery and completion implementation. Its **New battle** button restarts
 combat; its appearance controls and animation-only **Test hit** remain available.
 See [shared combat](combat.md) for tuning and the reason the old attacks were slow.

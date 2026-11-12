@@ -31592,6 +31592,24 @@ function neighborStarVector(edge, index) {
   const practiceHud=document.getElementById('practice-battle-hud');
   const practiceControls=document.getElementById('practice-battle-controls');
   const practiceHealthAnchors=[document.getElementById('practice-health-anchor-0'),document.getElementById('practice-health-anchor-1')];
+  let fpResumeCapture=false,fpResumeCaptureInFlight=false;
+  function requestFPResumeCapture(){
+    if(!fpResumeCapture||fpResumeCaptureInFlight||!fp.active||practiceBattle.active||trainingAppearance.active||!fpToolMenu.hidden)return;
+    if(document.hasFocus&&!document.hasFocus())return;
+    if(document.pointerLockElement===renderer.domElement){fpResumeCapture=false;return;}
+    if(!renderer.domElement.requestPointerLock)return;
+    fpResumeCaptureInFlight=true;
+    try{
+      const request=renderer.domElement.requestPointerLock();
+      request?.catch?.(()=>{fpResumeCaptureInFlight=false;});
+    }catch(_){fpResumeCaptureInFlight=false;}
+  }
+  function resumeFPAfterBattle(){
+    if(!fp.active)return;
+    document.activeElement?.blur?.();
+    renderer.domElement.tabIndex=-1;renderer.domElement.focus?.({preventScroll:true});
+    fpResumeCapture=true;fpResumeCaptureInFlight=false;requestFPResumeCapture();
+  }
   function paintCombatMeters(prefix,combat){
     if(!combat)return;
     for(let i=0;i<2;i++){
@@ -31610,12 +31628,12 @@ function neighborStarVector(edge, index) {
     aspect:()=>renderer.domElement.clientWidth/Math.max(1,renderer.domElement.clientHeight),
     floor:(x,z,y)=>explorationTerrain.groundYAt(x,z,0,y),
     show:visible=>{practiceHud.hidden=!visible;document.body.classList.toggle('practice-active',visible);fpKeys.clear();
-      if(visible){fpToolMenu.hidden=true;fpToolsToggle.setAttribute('aria-expanded','false');document.exitPointerLock?.();practiceHud.focus();}},
+      if(visible){fpResumeCapture=false;fpResumeCaptureInFlight=false;fpToolMenu.hidden=true;fpToolsToggle.setAttribute('aria-expanded','false');document.exitPointerLock?.();practiceHud.focus();}},
     healthAnchor:(index,x,y,visible)=>{
       const label=practiceHealthAnchors[index];label.hidden=!visible;
       if(visible){label.style.left=Math.max(14,Math.min(86,x*100))+'%';label.style.top=Math.max(8,Math.min(78,y*100))+'%';}
     },
-    complete:()=>exitPracticeBattle(true),
+    complete:()=>exitPracticeBattle(),
     status:(text,busy,combat)=>{
       const completed=!!combat&&!combat.running&&combat.winner!==null;
       const result=document.getElementById('practice-battle-result'),wasHidden=result.hidden;
@@ -31668,22 +31686,23 @@ function neighborStarVector(edge, index) {
       fpKeys.clear();
       broEncounterMenu.hidden=!show;broEncounterMenu.style.display=show?'grid':'none';
       if(show){
+        fpResumeCapture=false;fpResumeCaptureInFlight=false;
         fpKeys.clear();
         document.exitPointerLock?.();
         broEncounterMenu.querySelector('button').focus();
       }
     }
   });
-  function chooseBroEncounter(choice,restorePointerLock=true){
+  function chooseBroEncounter(choice){
     broEncounter.end(choice);
-    if(restorePointerLock&&fp.active&&!practiceBattle.active){const lock=renderer.domElement.requestPointerLock?.();lock?.catch?.(()=>{});}
+    if(fp.active&&!practiceBattle.active)resumeFPAfterBattle();
   }
-  function exitPracticeBattle(automatic=false){
+  function exitPracticeBattle(){
     const combat=practiceBattle.combat();
     if(practiceBattle.active&&!combat.running&&combat.winner!==null){
       transportCubeController?.capture(transportCubeController.root);
     }
-    chooseBroEncounter('exit',!automatic);
+    chooseBroEncounter('exit');
   }
   document.getElementById('practice-berserker').onclick=()=>practiceBattle.attack(true);
   document.getElementById('practice-shield').onclick=()=>{};
@@ -32238,22 +32257,12 @@ function neighborStarVector(edge, index) {
     if(!baseBattleBroPrototype){excavationStatus.textContent='Choose your BattleBro at home first';excavationHud.hidden=false;return false;}
     return ensureTransportCube().throw();
   }
-  let transportMinimapUpdatedAt = -Infinity;
-  let transportMinimapHadBro = false;
   function tickTransportCube(t,dt){
     if(!fpToolsAvailable()){if(transportCubeController)transportCubeController.cube.visible=false;return;}
     if(excavation.equipped==='transport-cube'&&fp.active){
       ensureTransportCube();
     }
     transportCubeController?.tick(dt,t);
-    const hasBro = !!transportCube.root;
-    if (hasBro || transportMinimapHadBro) {
-      if (hasBro !== transportMinimapHadBro || t - transportMinimapUpdatedAt >= .2) {
-        if (typeof requestMinimapRepaint === 'function') requestMinimapRepaint();
-        transportMinimapUpdatedAt = t;
-        transportMinimapHadBro = hasBro;
-      }
-    }
   }
 
   function fpGroundYAt(worldX, worldZ) {
@@ -32347,6 +32356,7 @@ function neighborStarVector(edge, index) {
     fpJourney.previous=null;
     resetTransportCube(explorationActive);
     fp.active = false;
+    if(typeof fpResumeCapture!=='undefined'){fpResumeCapture=false;fpResumeCaptureInFlight=false;}
     activeFPTerrain().deactivate();
     if(typeof restoreHomeTransportBattleBro==='function')restoreHomeTransportBattleBro();
     fpKeys.clear();
@@ -32359,9 +32369,16 @@ function neighborStarVector(edge, index) {
     }
   }
   document.addEventListener('pointerlockchange', () => {
-    if(practiceBattle.active)return;
+    if(document.pointerLockElement===renderer.domElement&&typeof fpResumeCapture!=='undefined'){
+      fpResumeCapture=false;fpResumeCaptureInFlight=false;
+    }
+    if(practiceBattle.active){
+      if(document.pointerLockElement===renderer.domElement)document.exitPointerLock?.();
+      return;
+    }
     if (typeof trainingAppearance!=='undefined' && trainingAppearance.active) return;
     if (!document.pointerLockElement && fp.active && (!fpToolMenu.hidden || (typeof broEncounterMenu!=='undefined'&&!broEncounterMenu.hidden))) return;
+    if(!document.pointerLockElement&&fp.active&&typeof fpResumeCapture!=='undefined'&&fpResumeCapture)return;
     if (!document.pointerLockElement && fp.active) {
       escapeFP();
     } else if (!document.pointerLockElement && flight.active) {
@@ -32369,8 +32386,16 @@ function neighborStarVector(edge, index) {
       else exitFlightMode();
     }
   });
+  document.addEventListener('pointerlockerror',()=>{
+    if(typeof fpResumeCaptureInFlight!=='undefined')fpResumeCaptureInFlight=false;
+  });
   document.addEventListener('mousemove', e => {
-    if (document.pointerLockElement !== renderer.domElement) return;
+    if(document.pointerLockElement!==renderer.domElement){
+      // Keep mouse-look responsive while a post-battle capture is pending or
+      // declined. The next ordinary movement key can supply fresh activation.
+      if(typeof fpResumeCapture==='undefined'||!fpResumeCapture||!fp.active||e.target!==renderer.domElement)return;
+      if(document.hasFocus&&!document.hasFocus())return;
+    }
     if (trainingAppearance.active) return;
     if (fp.active && explorationActive && !fpToolMenu.hidden) return;
     if (fp.active) {
@@ -32394,6 +32419,8 @@ function neighborStarVector(edge, index) {
       return;
     }
     if(fpJourney.warp>0)return;
+    if(typeof fpResumeCapture!=='undefined'&&fpResumeCapture&&!e.repeat&&!e.ctrlKey&&!e.metaKey&&!e.altKey
+      &&['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase()))requestFPResumeCapture();
     if (e.code === 'Space') {
       e.preventDefault();
       if(e.repeat||fpKeys.has('space'))return;
@@ -37044,6 +37071,7 @@ function neighborStarVector(edge, index) {
     tickTransportCube(t,dt);
     if(unhatchedHome)unhatchedHome.tick(t);
     tickExplorationResidents(t,dt);
+    tickMinimap(t);
     broEncounter.tick(t,dt);
     tickExcavation(dt);
     if (flight.active) tickFlightMode(dt);
@@ -41775,8 +41803,8 @@ function neighborStarVector(edge, index) {
   // Tile colour comes from the terrain palette (matches the 3D scene);
   // a per-kind silhouette is overlaid for any populated cell so trees,
   // houses, animals etc. read as the same shape they do in 3D.
-  // Repainting is throttled: setCell + saveState + applyState all call
-  // requestMinimapRepaint(), and the next animation frame consolidates.
+  // The main loop refreshes at 10 Hz; edits request immediate repaints.
+  // Requests consolidate into the next animation frame.
   const MINIMAP_TERRAIN_MATERIALS = {
     grass: 'grass',
     path:  'path',
@@ -41843,6 +41871,20 @@ function neighborStarVector(edge, index) {
   }
   let minimapRepaintQueued = false;
   let minimapState = null;
+  let minimapUpdatedAt = -Infinity;
+  // Use the existing render loop, independently of transport equipment and rigs.
+  function tickMinimap(t) {
+    if (!explorationActive) { minimapUpdatedAt=-Infinity; return; }
+    if (t-minimapUpdatedAt < .1) return;
+    minimapUpdatedAt=t;
+    requestMinimapRepaint();
+  }
+  function minimapCanvasPoint(x,z,map=minimapState) {
+    const dx=x+GRID/2-map.centerGx,dz=z+GRID/2-map.centerGz;
+    const c=Math.cos(map.heading),s=Math.sin(map.heading);
+    return {x:map.width/2+(c*dx-s*dz)*map.width/map.cells,
+      y:map.height/2+(s*dx+c*dz)*map.height/map.cells};
+  }
   function syncMinimapVisibility() {
     const wrap = document.getElementById('minimap-wrap');
     if (wrap) wrap.hidden = !explorationActive;
@@ -41867,11 +41909,12 @@ function neighborStarVector(edge, index) {
   }
   function minimapWorldFromCanvasPoint(px, py) {
     if (!explorationActive || !minimapState) return null;
-    const { startGx, startGz, cells, width, height } = minimapState;
-    const gx = startGx + (px / Math.max(1, width)) * cells;
-    const gz = startGz + (py / Math.max(1, height)) * cells;
-    return { x: gx - GRID / 2, z: gz - GRID / 2 };
+    const { centerGx,centerGz,cells,width,height,heading } = minimapState;
+    const dx=(px/Math.max(1,width)-.5)*cells,dz=(py/Math.max(1,height)-.5)*cells;
+    const c=Math.cos(heading),s=Math.sin(heading);
+    return {x:centerGx+c*dx+s*dz-GRID/2,z:centerGz-s*dx+c*dz-GRID/2};
   }
+
   function hoveredStatusWorldCell() {
     if (!currentHover) return null;
     if (currentHover.boardX || currentHover.boardZ) {
@@ -41942,20 +41985,24 @@ function neighborStarVector(edge, index) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const N = minimapViewCellCount();
-    const S = minimapDrawCellCount(N);
     const W = canvas.width, H = canvas.height;
-    const cw = W / S, ch = H / S;
-    const sampleStep = N / S;
     const mapCenter = fp.active ? fp.pos : target;
-    const centerGx = Math.floor(mapCenter.x + GRID / 2);
-    const centerGz = Math.floor(mapCenter.z + GRID / 2);
-    const startGx = centerGx - Math.floor(N / 2);
-    const startGz = centerGz - Math.floor(N / 2);
-    const explorationCells = explorationTerrain.minimapCells(startGx - GRID / 2, startGz - GRID / 2, N);
-    minimapState = { startGx, startGz, cells: N, width: W, height: H };
-    const sizeEl = document.getElementById('minimap-size');
-    if (sizeEl) sizeEl.textContent = 'Endless · ' + N + '×' + N;
-    ctx.clearRect(0, 0, W, H);
+    const centerGx=mapCenter.x+GRID/2,centerGz=mapCenter.z+GRID/2;
+    const heading=fp.active?fp.yaw:(typeof camera!=='undefined'&&camera.isCamera?
+      Math.atan2(camera.matrixWorld.elements[8],camera.matrixWorld.elements[10]):0);
+    // Cover the rotated square's corners, sampling loaded terrain only.
+    const extent=Math.ceil(N*(Math.abs(Math.cos(heading))+Math.abs(Math.sin(heading))))+2;
+    const S=minimapDrawCellCount(N),sampleStep=extent/S;
+    const startGx=Math.floor(centerGx-extent/2),startGz=Math.floor(centerGz-extent/2);
+    const cw=sampleStep,ch=sampleStep;
+    const explorationCells=explorationTerrain.minimapCells(startGx-GRID/2,startGz-GRID/2,extent);
+    minimapState={centerGx,centerGz,cells:N,width:W,height:H,heading};
+    const sizeEl=document.getElementById('minimap-size');
+    if(sizeEl)sizeEl.textContent='Endless · '+N+'×'+N;
+    ctx.clearRect(0,0,W,H);
+    ctx.save();
+    ctx.translate(W/2,H/2);ctx.scale(W/N,H/N);ctx.rotate(heading);
+    ctx.translate(-centerGx,-centerGz);
     // Terrain pass.
     for (let x = 0; x < S; x++) {
       for (let z = 0; z < S; z++) {
@@ -41971,7 +42018,7 @@ function neighborStarVector(edge, index) {
           colorHex = minimapMixHex(colorHex, 0x000000, shade);
         }
         ctx.fillStyle = minimapHexToCss(minimapThemeHex(colorHex));
-        ctx.fillRect(x * cw, z * ch, cw + 0.5, ch + 0.5);
+        ctx.fillRect(startGx+x*cw,startGz+z*ch,cw+.05,ch+.05);
       }
     }
     // Kind silhouettes.
@@ -41981,33 +42028,36 @@ function neighborStarVector(edge, index) {
         const gz = startGz + Math.floor(z * sampleStep);
         const cell = minimapGlobalCell(gx, gz, explorationCells);
         if (!cell || !cell.kind) continue;
-        drawMinimapProp(ctx, cell.kind, x * cw + cw / 2, z * ch + ch / 2, Math.min(cw, ch));
+        drawMinimapProp(ctx,cell.kind,startGx+x*cw+cw/2,startGz+z*ch+ch/2,Math.min(cw,ch));
       }
     }
-    // Player/camera position in the endless terrain window.
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.70)';
-    ctx.lineWidth = Math.max(1, W * 0.006);
-    const tx = (mapCenter.x + GRID / 2 - startGx) * W / N;
-    const tz = (mapCenter.z + GRID / 2 - startGz) * H / N;
-    ctx.strokeStyle = 'rgba(42,39,34,0.60)';
-    ctx.lineWidth = Math.max(1, W * 0.004);
-    ctx.beginPath();
-    ctx.arc(tx, tz, Math.max(4, Math.min(cw, ch) * 0.28), 0, Math.PI * 2);
-    ctx.moveTo(tx - Math.max(5, cw * 0.45), tz);
-    ctx.lineTo(tx + Math.max(5, cw * 0.45), tz);
-    ctx.moveTo(tx, tz - Math.max(5, ch * 0.45));
-    ctx.lineTo(tx, tz + Math.max(5, ch * 0.45));
-    ctx.stroke();
     ctx.restore();
+    // Keep markers and labels upright; project them through the same heading.
+    drawMinimapNPCs(ctx,minimapState);
+    ctx.save();
+    ctx.translate(W/2,H/2);
+    ctx.fillStyle='#fff';ctx.strokeStyle='#2a2722';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(5,5);ctx.lineTo(0,2);ctx.lineTo(-5,5);ctx.closePath();
+    ctx.fill();ctx.stroke();ctx.restore();
     drawMinimapBro(ctx, minimapState);
+  }
+  function drawMinimapNPCs(ctx,map) {
+    ctx.save();ctx.fillStyle='#ef4444';ctx.strokeStyle='#401315';ctx.lineWidth=1.5;
+    for(const actor of explorationResidents.values()) {
+      const root=actor.root;
+      if(!root?.parent||!root.visible)continue;
+      const p=minimapCanvasPoint(root.position.x,root.position.z,map);
+      if(p.x<4||p.y<4||p.x>map.width-4||p.y>map.height-4)continue;
+      ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill();ctx.stroke();
+    }
+    ctx.restore();
   }
   function drawMinimapBro(ctx, map) {
     const bro = transportCube.root;
     if (!bro || !bro.parent || !bro.visible || !fp.active) return;
-    const { startGx, startGz, cells, width: W, height: H } = map;
-    const px = (bro.position.x + GRID / 2 - startGx) * W / cells;
-    const py = (bro.position.z + GRID / 2 - startGz) * H / cells;
+    const {width:W,height:H}=map;
+    const point=minimapCanvasPoint(bro.position.x,bro.position.z,map);
+    const px=point.x,py=point.y;
     const margin = 14;
     const dx = px - W / 2, dy = py - H / 2;
     const scale = Math.min(1, (W / 2 - margin) / Math.max(.001, Math.abs(dx)),

@@ -15,6 +15,17 @@ const actions=makeActions(THREE,{throwRock:api.telekineticRockThrow,cancelThrow:
 const bodyApplications=new Map(),applyBody=context.applyTelekineticBody;
 context.applyTelekineticBody=(root,mover)=>{bodyApplications.set(root,(bodyApplications.get(root)||0)+1);applyBody(root,mover);};
 const families=['juggernaut','monsters','specter','longneck'];
+const sightRay=new THREE.Raycaster(),sightDirection=new THREE.Vector3(),sightPoint=new THREE.Vector3();
+function unobstructed(camera,point,blocker){
+  sightDirection.subVectors(point,camera.position);const distance=sightDirection.length();
+  sightRay.set(camera.position,sightDirection.normalize());sightRay.far=Math.max(0,distance-.1);
+  blocker.updateMatrixWorld(true);
+  return !sightRay.intersectObject(blocker,true).some(hit=>{
+    if(hit.object.material?.visible===false)return false;
+    for(let node=hit.object;node;node=node.parent){if(!node.visible)return false;if(node===blocker)break;}
+    return true;
+  });
+}
 // Real encounter controllers, arbitrary headings, simultaneous rapid attacks and
 // Arena hit reactions. Fixed-baseline parity alone cannot catch native turn jitter.
 const makeArena=require('../assets/battle-arena.js');
@@ -63,6 +74,12 @@ for(const family of families)for(let form=1;form<=7;form++)for(const heading of 
     t+=.02;system.tick(t,.02);if(!checking)return;
     for(let i=0;i<2;i++)if((actors[i].hitsReceived||0)>received[i]){
       assert(referenceArena.hit(i),'Arena accepts the equivalent impact');received[i]=actors[i].hitsReceived;reactions++;
+    }
+    for(const fighter of combat.combat().fighters){
+      const p=fighter.gesture.projectile;if(!p?.launched)continue;
+      p.mesh.geometry.computeBoundingBox();
+      const size=p.mesh.geometry.boundingBox.getSize(new THREE.Vector3()).multiply(p.mesh.getWorldScale(new THREE.Vector3()));
+      assert(Math.abs(Math.max(size.x,size.y,size.z)-.504)<1e-6,`${family}/${form}: both Practice throwers use the Form I Juggernaut rock size`);
     }
     referenceArena.tick(t,.02);
     for(let i=0;i<2;i++)assert(1-Math.abs(actors[i].root.quaternion.dot(referenceArena.actors[i].root.quaternion))<1e-8,'Practice and Arena retain equivalent root hit tilt and recovery');
@@ -134,11 +151,24 @@ for(const family of families)for(let form=1;form<=7;form++){
   actors.forEach((actor,i)=>assert(actor.root.position.distanceTo(positions[i])<1e-6,'Entering practice keeps the same world position'));
   const f=b.root.position.clone().sub(a.root.position);f.y=0;f.normalize();const right=new THREE.Vector3(1,0,0).applyQuaternion(a.root.quaternion);right.y=0;right.normalize();const offset=currentCamera.position.clone().sub(a.root.position);
   assert(offset.dot(right)>0,'Camera over the right shoulder');assert(offset.dot(f)<0,'Camera behind the player');assert(offset.y>.5,'Camera above the player');
+  assert(currentCamera.position.y>new THREE.Box3().setFromObject(a.root).max.y+.1,'Camera clears the player BRO height');
   for(const label of healthLabels){assert(Number.isFinite(label.x+label.y));assert(label.visible,`${family}/${form}: health anchor remains visible in the combat view`);}
   currentCamera.updateMatrixWorld(true);
   for(const actor of actors){const center=new THREE.Box3().setFromObject(actor.root).getCenter(new THREE.Vector3()).project(currentCamera);assert(Math.abs(center.x)<1&&Math.abs(center.y)<1,`${family}/${form}: both BRO centers visible (${center.x}, ${center.y})`);}
+  new THREE.Box3().setFromObject(b.root).getCenter(sightPoint);
+  assert(unobstructed(currentCamera,sightPoint,a.root),`${family}/${form}: player must not obscure the opponent`);
   assert(practice.attack(),`${family}/${form}: uses arena attack`);assert(!practice.attack(),'Repeated input cannot interrupt');assert(disabled);assert.equal(b.hitsReceived||0,0,'No reaction before impact');
-  let hit=false;for(let i=0;i<1200&&actors.some(actions.busy);i++){tick();hit ||= !!b.root.userData.battleHit;if(!practice.canAttack())assert(!practice.attack(),'Per-BRO cooldown protects the short gesture');}
+  let hit=false,visibleFlight=0;const rock=a.root.userData.battleThrow.projectile;
+  for(let i=0;i<1200&&actors.some(actions.busy);i++){
+    tick();hit ||= !!b.root.userData.battleHit;
+    if(rock.active&&rock.launched&&rock.age/rock.duration>=.55){
+      assert(unobstructed(currentCamera,rock.position,a.root),`${family}/${form}: foreground BRO does not hide the outgoing rock`);
+      sightPoint.copy(rock.position).project(currentCamera);
+      assert(Math.abs(sightPoint.x)<1&&Math.abs(sightPoint.y)<1,'Outgoing rock remains in the viewport');visibleFlight++;
+    }
+    if(!practice.canAttack())assert(!practice.attack(),'Per-BRO cooldown protects the short gesture');
+  }
+  assert(visibleFlight>0,'Outgoing rock has visible flight samples');
   assert(hit,`${family}/${form}: shared arena hit reaction`);assert.equal(b.hitsReceived,1);assert(!actors.some(actions.busy),'Both return to ready');tick();assert(!disabled);
   if(form===4){drift=.005;for(let i=0;i<20;i++)tick();drift=0;for(let i=0;i<2;i++){positions[i].x+=.1;assert(actors[i].root.position.distanceTo(positions[i])<1e-6,'Practice stays attached to the drifting island');}}
   system.end('exit');assert(!practice.active&&!hud);assert.equal(currentCamera,normalCamera);
@@ -147,6 +177,25 @@ for(const family of families)for(let form=1;form<=7;form++){
   // Cancellation mid-attack must return borrowed limbs/projectiles before NPC removal.
   system.resetDeployment(a.root);for(let i=0;i<800&&!prompt;i++)tick();system.end('yes');assert(practice.active);assert(practice.attack());tick();if(form===4){b.root.parent.remove(b.root);tick();}else system.cancel();assert(!practice.active&&!hud);assert(!actors.some(actions.busy));
   for(const actor of actors){const field=actor.root.userData.looseRocks.orbitField;field?.parent?.remove(field);actor.root.parent?.remove(actor.root);}
+}
+// Extreme size mismatches and two large rigs, in both screen orientations.
+for(const family of families)for(const forms of [[7,7],[7,1],[1,7]])for(const aspect of [.6,16/9]){
+  const actors=[actor(family,forms[0],0),actor(family,forms[1],8)];
+  actors[0].root.rotation.y=Math.PI/2;actors[1].root.rotation.y=-Math.PI/2;
+  let camera=new THREE.PerspectiveCamera();
+  const combat=makeActions(THREE,{restoreBody:api.restoreTelekineticBody});
+  const practice=makePractice(THREE,{actions:combat,combatOptions:{opponentEnabled:false},restoreBody:api.restoreTelekineticBody,
+    camera:value=>{if(value)camera=value;return camera;},aspect:()=>aspect,show(){},status(){},attachments(){}});
+  practice.begin({sides:actors.map(actor=>({actor,session:{run:fn=>fn()}}))});camera.updateMatrixWorld(true);
+  for(const actor of actors){
+    new THREE.Box3().setFromObject(actor.root).getCenter(sightPoint);sightPoint.project(camera);
+    assert(Math.abs(sightPoint.x)<1&&Math.abs(sightPoint.y)<1,`${family}/${forms}/${aspect}: both sizes remain framed`);
+  }
+  for(const point of [new THREE.Box3().setFromObject(actors[1].root).getCenter(new THREE.Vector3()),actors[1].root.userData.rig.head.getWorldPosition(new THREE.Vector3())]){
+    assert(unobstructed(camera,point,actors[0].root),`${family}/${forms}: opponent head and body have clear sightlines`);
+    point.project(camera);assert(Math.abs(point.x)<1&&Math.abs(point.y)<1,'Opponent head and body remain in frame');
+  }
+  practice.finish();combat.dispose();for(const actor of actors){const field=actor.root.userData.looseRocks.orbitField;field?.parent?.remove(field);actor.root.parent?.remove(actor.root);}
 }
 // Finish real projectile fights in both directions for every rig. Result camera
 // presentation must never change combat poses, actor positions or saved cameras.
@@ -198,7 +247,7 @@ for(const family of families)for(let form=1;form<=7;form++)for(const winner of [
   system.cancel();assert.equal(currentCamera,savedCamera);assert.equal(face.userData.expression.name,'littleSmile','Original expression is restored');
   combat.dispose();for(const a of actors){const field=a.root.userData.looseRocks.orbitField;field?.parent?.remove(field);a.root.parent?.remove(a.root);}
 }
-assert(html.includes('if(practiceBattle.active)return;'),'Pointer-lock release does not exit Endless World during practice');
+assert(html.includes('if(practiceBattle.active){'),'Practice owns pointer-lock changes while the combat UI is active');
 assert(html.includes("document.getElementById('practice-shield').onclick=()=>{}"),'Shield is explicitly inert');
 assert(html.includes('event.stopImmediatePropagation();'),'Practice captures exploration controls');
 console.log('Practice battle: all 28 forms, shoulder and result cameras, happy/sad outcomes, portrait/landscape face framing, shared attacks/hits, automatic return timing, cancellation and restored cameras/expressions passed.');
