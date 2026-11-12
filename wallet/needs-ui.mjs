@@ -10,9 +10,9 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
   root.className='bb-player-controls';needsRoot.className='battlebro-panel-section battlebro-panel-disclosure bb-player-needs';worldRoot.className='bb-world-controls';
   root.innerHTML='<label>Your BRO <select data-bro aria-label="Your BRO"></select></label><p data-appearance-status role="status" aria-live="polite"></p><button data-refresh type="button">Refresh BROs</button><p data-error role="alert"></p>';
   needsRoot.innerHTML='<summary>Needs</summary><div data-needs></div>';
-  worldRoot.innerHTML='<label>World <select data-world aria-label="Saved world"><option value="home">Home</option><option value="territory">Occupied territory</option></select></label><div class="bb-world-actions"><button data-open type="button">Open world</button><button data-save type="button">Save world</button><button data-cloud type="button">Load saved world</button></div><p data-world-status role="status"></p><p data-world-error role="alert"></p>';
+  worldRoot.innerHTML='<label>World <select data-world aria-label="Saved world"><option value="home">Home</option><option value="territory">Occupied territory</option></select></label><div class="bb-world-actions"><button data-save type="button">Save world</button><button data-cloud type="button">Load saved world</button></div><p data-world-status role="status"></p><p data-world-error role="alert"></p>';
   const el=s=>root.querySelector(s)||needsRoot.querySelector(s)||worldRoot.querySelector(s),broSelect=el('[data-bro]'),kindSelect=el('[data-world]');
-  let publication=null,selected='',identityGeneration=0,revision='0',activeTarget=null,switching=false,worldBusy=false,request=0,timer,lastFocusRefresh=0;
+  let publication=null,selected='',identityGeneration=0,revision='0',activeTarget=null,switching=false,worldBusy=false,autoOpenPending=false,request=0,timer,lastFocusRefresh=0;
   const worlds=runtime.worldApiUrl?createWorldClient({wallet,apiUrl:runtime.worldApiUrl,storage}):null;
   const appearance=createAppearanceService({worlds,bridge:()=>window.battleBrosAppearanceBridge,onChange:state=>{el('[data-appearance-status]').textContent=state.status;}});
   const service=createNeedsService({wallet,transactions,refresh});window.battleBrosNeeds=service;
@@ -27,7 +27,9 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
     const previous=selected||String(window.__battleBrosReadModel?.identity.tokenId??broSelect.value);broSelect.replaceChildren();for(const b of own()){const o=document.createElement('option');o.value=b.tokenId;o.textContent=(b.name||'BRO')+' #'+b.tokenId;broSelect.append(o);}if(own().some(b=>b.tokenId===previous))broSelect.value=previous;selected=own().length?broSelect.value:'';
     if(!own().length){const o=document.createElement('option');o.textContent='Connect an owning wallet';broSelect.append(o);}
     broSelect.disabled=worldBusy;kindSelect.disabled=worldBusy;
-    for(const button of [el('[data-open]'),el('[data-save]'),el('[data-cloud]')])button.disabled=!worlds||!own().length||worldBusy;
+    for(const button of [el('[data-save]'),el('[data-cloud]')])button.disabled=!worlds||!own().length||worldBusy;
+    const selectedBro=own().find(b=>b.tokenId===selected),selectedTarget=selectedBro?{kind:kindSelect.value,id:kindSelect.value==='home'?selectedBro.tokenId:selectedBro.locationId}:null;
+    if(!same(selectedTarget,activeTarget)||!active()||!window.battleBrosWorldBridge?.matches(activeTarget))el('[data-save]').disabled=true;
     if(!worlds)el('[data-world-status]').textContent='Cloud world saves are not configured.';
     const list=el('[data-needs]');list.replaceChildren();
     const selectedNeeds=service.list().filter(n=>n.bro.tokenId===selected);
@@ -57,14 +59,25 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
   async function refresh(){
     const current=++request;try{const doc=await readTransactionPublication(wallet.settings,new URL(runtime.manifestUrl,location.href).href);if(current!==request)return;
       publication=doc;service.update(doc);render();selectBro();
+      await autoOpenWorld();
       if(activeTarget&&el('[data-world-status]').textContent.startsWith('Saved to backend')){const published=doc.worlds?.find(w=>same(w,activeTarget));if(published?.revision===revision)el('[data-world-status]').textContent='World revision '+revision+' published.';}
     }catch(e){if(current===request)throw Error('Confirmed state unavailable. Displayed information may be stale. '+e.message);}
+  }
+  async function autoOpenWorld(){
+    if(!worlds||!selected)return;
+    if(worldBusy){autoOpenPending=true;return;}
+    const bro=own().find(b=>b.tokenId===selected);
+    if(!bro)return;
+    if(kindSelect.value==='territory'&&!bro.locationId)kindSelect.value='home';
+    if(same(target(),activeTarget))return; // A publication refresh must not reload local edits.
+    await worldAction(()=>openWorld());
   }
   async function openWorld({cloud=false}={}){
     if(worldBusy)throw Error('A world operation is already in progress');if(!worlds)throw Error('Cloud world saves are not configured');if(!window.battleBrosWorldBridge)throw Error('World renderer is still loading');
     const next=target(),broId=broSelect.value,generation=identityGeneration;
     if(activeTarget&&active()&&window.battleBrosWorldBridge.matches(activeTarget))worlds.draft(activeTarget,window.battleBrosWorldBridge.capture(),revision);
     worldBusy=true;switching=true;clearTimeout(timer);render();
+    el('[data-world-status]').textContent='Loading '+(next.kind==='home'?'home for BRO #'+broId:'territory #'+next.id)+'…';
     try{
       const loaded=await worlds.load(next),local=cloud?null:worlds.local(next);let world=local?.world??loaded.world?.document;
       if(generation!==identityGeneration)throw Error('Wallet changed while opening the world. Open it again.');
@@ -85,10 +98,11 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
       await window.battleBrosWorldBridge.open(next,world);if(generation!==identityGeneration)throw Error('Wallet changed while opening the world. Open it again.');revision=nextRevision;activeTarget=next;selected=broId;broSelect.value=broId;selectBro(broId);
       const worldLabel=next.kind==='home'?'home for BRO #'+broId:'territory #'+next.id+' for BRO #'+broId;
       el('[data-world-status]').textContent='Opened '+worldLabel+'. '+(local?'Local draft restored'+(local.revision!==(loaded.world?.revision??'0')?'; a newer cloud revision exists.':'')+'. Use “Load saved world” to discard it.':revision==='0'?'No cloud save yet.':('Cloud save '+revision+' loaded.'));
-    }finally{switching=false;worldBusy=false;render();}
+    }catch(e){if(generation===identityGeneration)throw e;}
+    finally{switching=false;worldBusy=false;render();if(autoOpenPending){autoOpenPending=false;await autoOpenWorld();}}
   }
   async function saveWorld(){
-    if(worldBusy)throw Error('A world operation is already in progress');if(!same(target(),activeTarget)||!active())throw Error('Open this world before saving it');
+    if(worldBusy)throw Error('A world operation is already in progress');if(!same(target(),activeTarget)||!active())throw Error('The selected world has not loaded. Refresh BROs to retry.');
     if(!window.battleBrosWorldBridge.matches(activeTarget))throw Error('Return to the opened world before saving');
     worldBusy=true;render();try{
       const world=window.battleBrosWorldBridge.capture();worlds.draft(activeTarget,world,revision);
@@ -96,14 +110,15 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
       const result=await worlds.save(savingTarget,world,revision);if(generation!==identityGeneration)return;clearTimeout(timer);revision=result.world.revision;
       const latest=window.battleBrosWorldBridge.matches(savingTarget)?window.battleBrosWorldBridge.capture():world;worlds.draft(savingTarget,latest,revision);
       el('[data-world-status]').textContent='Saved to backend, revision '+revision+'. Publishing…'+(contentHash(visualWorld(latest))!==contentHash(visualWorld(world))?' Newer edits remain in your local draft.':'');
-    }finally{worldBusy=false;render();}
+    }finally{worldBusy=false;render();if(autoOpenPending){autoOpenPending=false;await autoOpenWorld();}}
   }
   el('[data-cloud]').onclick=()=>worldAction(()=>openWorld({cloud:true}));
   document.addEventListener('battlebros:training-entered',()=>appearance.beginTraining());
   document.addEventListener('battlebros:training-exited',event=>action(()=>{const pending=appearance.finishTraining();if(pending&&event.detail)event.detail.pending=true;return pending;}));
   document.addEventListener('battlebros:appearance-edited',()=>{try{appearance.draft();}catch(e){error(e);}});
-  broSelect.onchange=()=>{selected=broSelect.value;selectBro();render();};
-  el('[data-open]').onclick=()=>worldAction(openWorld);el('[data-save]').onclick=()=>worldAction(saveWorld);el('[data-refresh]').onclick=()=>action(refresh);
+  broSelect.onchange=async()=>{if(worldBusy)return;selected=broSelect.value;kindSelect.value='home';selectBro();render();await autoOpenWorld();};
+  kindSelect.onchange=()=>autoOpenWorld();
+  el('[data-save]').onclick=()=>worldAction(saveWorld);el('[data-refresh]').onclick=()=>action(refresh);
   document.addEventListener('battlebros:world-edited',()=>{
     if(!worlds||switching||!activeTarget||!active()||!window.battleBrosWorldBridge?.matches(activeTarget))return;
     clearTimeout(timer);const capturedTarget={...activeTarget},capturedRevision=revision;

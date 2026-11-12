@@ -42,9 +42,11 @@ for(const family of ['longneck','juggernaut','monsters','specter'])for(let form=
  s.tick();assert(s.system.active,`${family}/${form} triggers`);
  const before=[transforms(a),transforms(b)],positions=[a.root.position.clone(),b.root.position.clone()],yaw=[a.root.rotation.y,b.root.rotation.y];
  const phases=[a.mover.progress,b.mover.progress],pauses=[a.motion.pause,b.motion.pause];
- s.tick(15);assert(!s.prompt,'Notice precedes confirmation');
+ s.tick(7);assert(!s.prompt,'Prompt gives the encounter time to register');
+ s.tick(9);assert(s.prompt,'Prompt appears at 0.8 seconds without waiting for turns');
  assert.notDeepEqual(transforms(a),before[0],`${family}/${form}: family core supplies a nontrivial aggression pose`);
  for(let i=0;i<800&&!s.prompt;i++)s.tick();assert(s.prompt,`${family}/${form}: prompt follows native turn and square off`);
+ for(let i=0;i<800&&!s.system.active.settled;i++)s.tick();
  assert(s.nativeTurns.has(a)&&s.nativeTurns.has(b),`${family}/${form}: both participants use authored contact or robe turns`);
  assert.equal(a.mover.progress,phases[0]);assert.equal(b.mover.progress,phases[1]);
  assert.equal(a.motion.pause,pauses[0]);assert.equal(b.motion.pause,pauses[1]);
@@ -81,11 +83,12 @@ for(const family of ['longneck','juggernaut','monsters','specter']){
  assert.equal(controller(a),core,'Original controller resumes after interrupted stride');
  a.root.parent.remove(a.root);b.root.parent.remove(b.root);
 }
-// Large face-off turns must complete their authored steps before the question appears.
+// Large native turns continue while the early question is already visible.
 for(const family of ['longneck','juggernaut','monsters','specter']){
  const a=actor(family,4,0),b=actor('specter',1,8);a.root.rotation.y=-Math.PI/2;
- const s=scenario(a,b);s.tick();s.tick(30);assert(!s.prompt,'A large native turn delays the prompt');
- for(let i=0;i<1200&&!s.prompt;i++)s.tick();
+ const s=scenario(a,b);s.tick();s.tick(16);assert(s.prompt,'A half turn must not delay the prompt');
+ assert(!s.system.active.settled,'Prompt is visible before the half turn finishes');
+ for(let i=0;i<1200&&!s.system.active.settled;i++)s.tick();
  assert(s.prompt,`${family}: half turn completes`);
  assert(s.nativeTurns.has(a));assert(Math.abs(Math.atan2(Math.sin(a.root.rotation.y-Math.PI/2),Math.cos(a.root.rotation.y-Math.PI/2)))<.04);
  s.system.cancel();a.root.parent.remove(a.root);b.root.parent.remove(b.root);
@@ -94,19 +97,62 @@ for(const family of ['longneck','juggernaut','monsters','specter']){
 {
  const a=actor('longneck',4,0),b=actor('specter',7,8);
  const handlers={},menu={hidden:true,style:{},querySelector:()=>({focus(){}}),addEventListener:(k,fn)=>{handlers[k]=fn;}};
+ const hud={hidden:true,focus(){},contains:()=>false,addEventListener(){},querySelectorAll:()=>[...buttons].filter(([id])=>/^practice-(shield|berserker)$/.test(id)).map(([,button])=>button)},buttons=new Map(),captures={};let pointerLockRequests=0;
  Object.assign(context,{BattleBroEncounter:encounter,fp:{active:true},fpKeys:new Set(),trainingAppearance:{active:false},
-  document:{getElementById:()=>menu,exitPointerLock(){}},renderer:{domElement:{requestPointerLock(){}}},testPlayer:a,testNPC:b});
- vm.runInContext("transportCubeController={phase:'deployed',root:testPlayer.root};testPlayer.root.userData.transportActor=testPlayer;explorationResidents.clear();explorationResidents.set('test',testNPC);",context);
+  fpToolMenu:{hidden:false},fpToolsToggle:{setAttribute(){}},
+  createBattleBroPractice:require('../assets/practice-battle.js'),createBattleBroBattleActions:(three,hooks)=>require('../assets/character-battle-actions.js')(three,{...hooks,config:{normalDamage:8,berserkerDamage:32,energyPerHit:20}}),
+  camera:new THREE.PerspectiveCamera(55,1,.02,2000),window:{addEventListener:(name,fn,options)=>{if(options?.capture)captures[name]=fn;}},
+  document:{body:{classList:{toggle(){}}},getElementById:id=>{if(id==='bro-encounter-menu')return menu;if(id==='practice-battle-hud')return hud;if(!buttons.has(id))buttons.set(id,{hidden:true,dataset:{},style:{setProperty(key,value){this[key]=value;}},focus(){},contains:target=>['practice-berserker','practice-shield'].some(id=>buttons.get(id)===target||target?.control===buttons.get(id))});return buttons.get(id);},exitPointerLock(){}},renderer:{domElement:{clientWidth:1280,clientHeight:720,requestPointerLock(){pointerLockRequests++;}}},testPlayer:a,testNPC:b});
+ vm.runInContext("transportCubeController={phase:'deployed',root:testPlayer.root,captures:0,capture(root){if(root!==this.root)return false;this.captures++;pauseTransportBattleBro(root);return true;}};testPlayer.root.userData.transportActor=testPlayer;explorationResidents.clear();explorationResidents.set('test',testNPC);",context);
  vm.runInContext(html.slice(html.indexOf('  const broEncounterMenu='),html.indexOf('  const FP_EYE_H =')),context);
  api.setBattleBroExpression(a.root,'littleSmile',{immediate:true});
  const update=(t)=>vm.runInContext(`broEncounter.tick(${t},.05)`,context);
+ const shotCount=()=>vm.runInContext('practiceBattle.combat().shots',context);
+ const ready=()=>vm.runInContext('practiceBattle.canAttack()',context);
+ const click=(target=null,button=0)=>{
+  let prevented=false;
+  captures.click({target,button,preventDefault(){prevented=true;},stopImmediatePropagation(){}});
+  const control=target?.control||target;if(!prevented&&!control?.disabled)control?.onclick?.();
+ };
+ const shoot=(button=0)=>{const before=shotCount();click(null,button);return shotCount()>before;};
+
  update(0);assert(a.encounter,'Production adapter detects released actor');
  for(let i=1;i<800&&menu.hidden;i++)update(i*.05);
- assert.equal(menu.hidden,false,'Production prompt opens after square off');
+ assert.equal(menu.hidden,false,'Production prompt opens before square off finishes');
  assert.equal(a.root.userData.slots.face.userData.expression.name,'veryAngry');
  assert.equal(a.root.userData.expressionCycleEnabled,false);
  handlers.click({target:{dataset:{broChoice:'yes'}}});assert(menu.hidden);
- for(let i=0;i<800&&a.encounter;i++)update(40+i*.05);
+ assert.equal(hud.hidden,false,'Yes enters the production practice HUD');
+ assert.equal(buttons.get('practice-health-0').value,100);assert.equal(buttons.get('practice-health-1').value,100);
+ assert.equal(buttons.get('practice-energy-0').value,0);assert(buttons.get('practice-berserker').disabled,'Berserker starts unavailable');
+ const emptyShots=shotCount();click(buttons.get('practice-berserker'));assert.equal(shotCount(),emptyShots,'Uncharged Berserker cannot attack');
+ assert.equal(buttons.get('practice-berserker').style['--charge'],'0%');
+ assert(!buttons.get('practice-health-anchor-0').hidden&&!buttons.get('practice-health-anchor-1').hidden,'Health labels appear next to both BROs');
+ assert.equal(context.fpToolMenu.hidden,true,'Practice closes the walking-tools pause menu');
+ for(const [name,key] of [['keydown','w'],['keydown','q'],['mousemove',null],['pointerdown',null]]){
+  let prevented=false,stopped=false;captures[name]({key,target:null,preventDefault(){prevented=true;},stopImmediatePropagation(){stopped=true;}});
+  assert(prevented&&stopped,'Practice captures movement, tools and mouse input before exploration receives it');
+ }
+ assert(!shoot(2),'Right click does not attack');
+ assert(shoot(),'Primary screen click uses the shared normal attack controller');
+ assert(!shoot(),'Rapid duplicate click respects cooldown');
+ assert.equal(buttons.get('practice-health-1').value,100,'UI does not damage on button press');
+ let reacted=false;for(let i=0;i<400&&buttons.get('practice-health-0').value>0;i++){update(40+i*.05);reacted ||= !!b.root.userData.battleHit;}
+ assert(reacted,'Production opponent plays the arena hit reaction');
+ assert.equal(buttons.get('practice-health-1').value,92,'Successful shot updates opponent health');
+ assert.equal(buttons.get('practice-health-0').value,0,'Opponent attacks reduce player health');
+ assert(buttons.get('practice-battle-controls').hidden,'Completed battle hides the ability controls');
+ assert.equal(a.root.userData.slots.face.userData.expression.name,'sad','Loss uses the existing sad expression');
+ assert.equal(buttons.get('practice-battle-result').textContent,'You lose!');assert(!buttons.get('practice-battle-result').hidden);
+ assert.equal(buttons.get('practice-battle-result').dataset.outcome,'loss');
+ assert(buttons.get('practice-shield').disabled);assert(!shoot(),'Screen clicks cannot attack after defeat');
+ buttons.get('practice-shield').onclick();
+ let escaped=false;captures.keydown({key:'Escape',preventDefault(){},stopImmediatePropagation(){escaped=true;}});
+ assert(escaped&&hud.hidden,'Escape immediately exits the result before three seconds');
+ assert.equal(vm.runInContext('transportCubeController.captures',context),1,'Completed fight returns the player BRO to the cube');
+ captures.keydown({key:'Escape',preventDefault(){},stopImmediatePropagation(){}});assert.equal(vm.runInContext('transportCubeController.captures',context),1,'Repeated exit cannot capture twice');
+ for(let i=0;i<80;i++)update(60+i*.05);
+ assert.equal(vm.runInContext('transportCubeController.captures',context),1,'Early Escape cancels pending automatic return');
  assert(!a.encounter&&!b.encounter);
  assert.equal(a.root.userData.slots.face.userData.expression.name,'littleSmile');
  assert.equal(a.root.userData.expressionCycleEnabled,false,'Original explicit expression preference survives');
@@ -117,6 +163,42 @@ for(const family of ['longneck','juggernaut','monsters','specter']){
  assert(a.root.userData.transportActor.encounter&&b.encounter,'Releasing near the same NPC starts a fresh encounter without separation');
  for(let i=1;i<800&&menu.hidden;i++)update(5.1+i*.05);
  assert.equal(menu.hidden,false,'The same NPC prompts again after recall and release');
+ handlers.click({target:{dataset:{broChoice:'yes'}}});assert(!hud.hidden);
+ assert(buttons.get('practice-battle-result').hidden,'A new battle clears the previous result');
+ assert(!buttons.get('practice-battle-controls').hidden);assert(!buttons.get('practice-shield').disabled);
+ assert.equal(buttons.get('practice-berserker').style['--charge'],'0%','New battle clears the button fill');
+ let normals=0;
+ for(let i=0;i<300&&buttons.get('practice-berserker').disabled;i++){
+  if(normals<5&&ready()){assert(shoot());normals++;}
+  update(80+i*.05);
+ }
+ assert.equal(normals,5);assert.equal(buttons.get('practice-energy-0').value,100);assert(!buttons.get('practice-berserker').disabled,'Five successful hits enable the real Berserker control');
+ assert.equal(buttons.get('practice-health-1').value,60);
+ assert.equal(buttons.get('practice-berserker').style['--charge'],'100%','Berserker fills as successful hits charge it');
+ const shotsBeforeSpecial=shotCount();click({control:buttons.get('practice-berserker')});assert.equal(shotCount(),shotsBeforeSpecial+1,'Clicking inside Berserker executes one special and no normal attack');
+ assert.equal(buttons.get('practice-berserker').style['--charge'],'0%','Special consumes its visible fill');assert.equal(buttons.get('practice-energy-0').value,0,'UI consumes charge immediately');
+ for(let i=0;i<80&&buttons.get('practice-health-1').value===60;i++)update(100+i*.05);
+ assert.equal(buttons.get('practice-health-1').value,28,'Berserker updates the real health meter on impact');
+ const shieldHealth=buttons.get('practice-health-0').value,shieldShots=shotCount();click(buttons.get('practice-shield'));assert.equal(shotCount(),shieldShots,'Shield click does not leak into a normal attack');assert.equal(buttons.get('practice-health-0').value,shieldHealth,'Shield has no combat effect');
+ for(let i=0;i<300&&buttons.get('practice-health-1').value>0;i++){
+  if(ready())shoot();update(110+i*.05);
+ }
+ assert.equal(buttons.get('practice-health-1').value,0);assert.equal(buttons.get('practice-battle-result').textContent,'You win!');
+ assert.equal(a.root.userData.slots.face.userData.expression.name,'bigSmile','Win uses the existing happy expression');
+ assert(buttons.get('practice-battle-controls').hidden,'Results clear the combat controls');
+ captures.keydown({key:'Tab',preventDefault(){},stopImmediatePropagation(){}});
+ const finalHealth=buttons.get('practice-health-0').value;
+ for(let i=0;i<59;i++)update(125+i*.05);
+ assert(!hud.hidden,'Result remains visible until three seconds have elapsed');
+ assert.equal(buttons.get('practice-health-0').value,finalHealth,'Opponent attacks stop after victory');
+ assert.equal(buttons.get('practice-battle-result').dataset.outcome,'win');
+ const locksBeforeReturn=pointerLockRequests;
+ update(128);assert(hud.hidden,'Completed battle automatically closes at three seconds');
+ assert.equal(pointerLockRequests,locksBeforeReturn,'Automatic return does not request gesture-only pointer lock');
+ assert.equal(vm.runInContext('transportCubeController.captures',context),2,'Automatic close captures the BRO');
+ for(let i=0;i<80;i++)update(130+i*.05);
+ assert.equal(vm.runInContext('transportCubeController.captures',context),2,'Automatic return runs once');
+ assert.equal(a.root.userData.slots.face.userData.expression.name,'littleSmile','Automatic return restores the original expression');
  vm.runInContext("pauseTransportBattleBro(testPlayer.root);transportCubeController.phase='recall-flight';",context);
  assert(menu.hidden&&!b.encounter,'Recalling during the new prompt also cleans up safely');
 }

@@ -7,6 +7,7 @@ const listeners={},win={};let gold=100n,mutations=0,extrasRendered=0;
 const tally=c=>BigInt((c.kind==='fence'?(c.floors||1):0)+(c.extras||[]).filter(e=>e.kind==='fence').reduce((n,e)=>n+(e.floors||1),0))*5n;
 const noop=()=>{};
 const ctx=vm.createContext({THREE,world,GRID:20,MAX_FLOORS:3,BATTLEBROS_MIGRATION_MODE:false,
+  fp:{active:false},explorationActive:false,fpToolMenu:{hidden:true},
   selectedTool:{kind:'fence'},ghostRotation:0,ghostPreview:null,xrWorldRoot:new THREE.Group(),
   hoverMesh:{visible:false,position:new THREE.Vector3()},currentHover:null,TOP_H:.18,BUILDABLE_LAND_Y_OFFSET:-.18,
   terrainConsumeLocks:new Map(),stargateOccupiesCell:()=>false,trainingFacilityOccupiesCell:(x,z)=>x===2&&z===2,

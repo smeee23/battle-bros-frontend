@@ -78,7 +78,7 @@ Object.assign(ctx,{FP_FOV:55,FP_NEAR:.02,PERS_FOV_DEFAULT:50,PERS_NEAR_DEFAULT:.
 ctx.document.body.classList={add(){},remove(){}};
 const walkElements=new Map();ctx.document.getElementById=id=>{if(!walkElements.has(id))walkElements.set(id,{hidden:true});return walkElements.get(id);};
 vm.runInContext('let minimapState=null;\n'+section('  function syncMinimapVisibility()', '  function requestMinimapRepaint()'),ctx);
-ctx.trainingAppearance={active:false};ctx.equipExcavationTool=tool=>{ctx.excavation.equipped=tool;};
+ctx.trainingAppearance={active:false};ctx.practiceBattle={active:false};ctx.equipExcavationTool=tool=>{ctx.excavation.equipped=tool;};
 const toolAccess=html.indexOf('  function fpToolsAvailable()');
 vm.runInContext(html.slice(toolAccess,html.indexOf('\n',toolAccess))
  +section('  function syncFPTools()', '  function excavationWithinReach('),ctx);

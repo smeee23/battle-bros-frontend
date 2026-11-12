@@ -99,6 +99,11 @@
   canvas.neighbor-hover { cursor: pointer; }
   canvas.dragging { cursor: grabbing; }
   body.fp-active:not(.training-appearance-active) #app canvas { cursor: none; }
+  body.fp-active.practice-active #app canvas { cursor: default; }
+  body.fp-active .toolbar,
+  body.fp-active .appbar,
+  body.fp-active .controls,
+  body.fp-active #flyout { display: none !important; }
 
   /* Original top-left brand with subtitle below. */
   .brand {
@@ -4705,21 +4710,27 @@
   </script>
 
   <div id="arena-hud" hidden>
-    <header class="arena-header"><button id="arena-exit" type="button">← Training &amp; care</button><div><span class="arena-eyebrow">BATTLEBROS</span><h1>The Arena</h1></div><button id="arena-reset-view" type="button">Reset view</button></header>
+    <header class="arena-header"><button id="arena-exit" type="button">← Training &amp; care</button><div><span class="arena-eyebrow">BATTLEBROS</span><h1>The Arena</h1></div><button id="arena-restart" type="button">New battle</button><button id="arena-reset-view" type="button">Reset view</button></header>
     <footer class="arena-footer">
       <div class="arena-contender amber"><span>AMBER SIDE</span>
+        <details><summary>Appearance</summary>
         <label>Character <select id="arena-character-0" aria-label="Amber character"></select></label>
         <label>Material <select id="arena-material-0" aria-label="Amber material"></select></label>
         <label>Form <select id="arena-form-0" aria-label="Amber form"></select></label>
-        <div class="arena-action-buttons"><button id="arena-attack-0" type="button">Attack</button><button id="arena-hit-0" type="button">Test hit</button></div>
+        </details>
+        <label>Health <meter id="arena-health-0" min="0" max="100" value="100">100</meter></label><label>Berserker <meter id="arena-energy-0" min="0" max="100" value="0">0</meter></label>
+        <div class="arena-action-buttons"><button id="arena-attack-0" type="button">Attack</button><button id="arena-shield-0" type="button">Shield</button><button id="arena-berserker-0" type="button" disabled>Berserker</button><button id="arena-hit-0" type="button">Test hit</button></div>
         <small id="arena-state-0" role="status">Ready</small>
       </div>
       <span class="arena-versus">VS</span>
       <div class="arena-contender azure"><span>AZURE SIDE</span>
+        <details><summary>Appearance</summary>
         <label>Character <select id="arena-character-1" aria-label="Azure character"></select></label>
         <label>Material <select id="arena-material-1" aria-label="Azure material"></select></label>
         <label>Form <select id="arena-form-1" aria-label="Azure form"></select></label>
-        <div class="arena-action-buttons"><button id="arena-attack-1" type="button">Attack</button><button id="arena-hit-1" type="button">Test hit</button></div>
+        </details>
+        <label>Health <meter id="arena-health-1" min="0" max="100" value="100">100</meter></label><label>Berserker <meter id="arena-energy-1" min="0" max="100" value="0">0</meter></label>
+        <div class="arena-action-buttons"><button id="arena-attack-1" type="button">Attack</button><button id="arena-shield-1" type="button">Shield</button><button id="arena-berserker-1" type="button" disabled>Berserker</button><button id="arena-hit-1" type="button">Test hit</button></div>
         <small id="arena-state-1" role="status">Ready</small>
       </div>
     </footer>
@@ -5642,7 +5653,46 @@
       <button type="button" data-bro-choice="no" style="padding:10px 28px">No</button>
     </div>
   </div>
-  <script defer src="assets/character-battle-actions.js"></script>
+  <style>
+    #practice-battle-hud{position:fixed;inset:0;z-index:10001;pointer-events:none;color:#efffff;font:14px system-ui;outline:none}
+    #practice-battle-hud[hidden],#practice-battle-hud [hidden]{display:none!important}
+    .practice-health-anchor{position:absolute;width:clamp(90px,16vw,150px);transform:translate(-50%,-50%);text-shadow:0 1px 4px #07121a}
+    .practice-health-anchor span{display:block;margin-bottom:4px;font-size:11px;font-weight:700;letter-spacing:.04em}
+    .practice-health-anchor meter{display:block;appearance:none;width:100%;height:10px;border:1px solid #b9e8d4;border-radius:8px;background:#102336;overflow:hidden}
+    .practice-health-anchor meter::-webkit-meter-bar{background:#102336;border:0;border-radius:8px}
+    .practice-health-anchor meter::-webkit-meter-optimum-value{background:linear-gradient(90deg,#42ac83,#9bf0b8);border-radius:8px}
+    .practice-health-anchor meter::-moz-meter-bar{background:linear-gradient(90deg,#42ac83,#9bf0b8);border-radius:8px}
+    #practice-battle-controls{position:absolute;bottom:max(20px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);text-align:center}
+    .practice-abilities{display:flex;justify-content:center;gap:12px}
+    #practice-battle-hud .practice-ability{position:relative;isolation:isolate;overflow:hidden;pointer-events:auto;width:112px;height:64px;border:1px solid #86c8cd;border-radius:12px;background:#142d42ed;color:inherit;font:700 13px system-ui;cursor:pointer;box-shadow:0 3px 14px #07121a66}
+    #practice-battle-hud .practice-ability::before{content:"";position:absolute;inset:0 auto 0 0;width:var(--charge,0%);z-index:-1;background:linear-gradient(90deg,#b66a21,#efa743);transition:width .15s ease}
+    #practice-battle-hud .practice-ability:disabled{color:#bed0da;cursor:default}
+    #practice-berserker:not(:disabled){border-color:#ffe0a1;box-shadow:0 0 16px #efa74355}
+    #practice-battle-hud .practice-ability:focus-visible{outline:2px solid #efffff;outline-offset:3px}
+    #practice-battle-controls p{margin:9px 0 0;white-space:nowrap;font-size:11px;text-shadow:0 1px 4px #07121a}
+    #practice-energy-0{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+    #arena-hud meter{width:100%;height:12px;accent-color:#76dfb2}
+    #arena-hud .arena-footer{width:min(650px,calc(100% - 24px))}
+    #arena-hud .arena-contender{min-width:0;flex:1;padding:12px}
+    #arena-hud summary{cursor:pointer;font-size:11px}
+    .arena-action-buttons{flex-wrap:wrap}
+    #practice-battle-result{position:absolute;top:22%;left:50%;transform:translateX(-50%);font-size:32px;font-weight:800;text-align:center;color:#9dffff;text-shadow:0 2px 12px #07121a;white-space:nowrap;outline:none}
+    #practice-battle-result[data-outcome="loss"]{color:#ffb4a2}
+    body.practice-active #fp-tools,body.practice-active #excavation-hud{visibility:hidden}
+  </style>
+  <section id="practice-battle-hud" hidden tabindex="-1" aria-label="Practice battle">
+    <div id="practice-health-anchor-0" class="practice-health-anchor" hidden><span>Your BRO</span><meter id="practice-health-0" min="0" max="100" value="100" aria-label="Player health">100</meter></div>
+    <div id="practice-health-anchor-1" class="practice-health-anchor" hidden><span>Opponent</span><meter id="practice-health-1" min="0" max="100" value="100" aria-label="Opponent health">100</meter></div>
+    <div id="practice-battle-result" hidden role="status" aria-live="polite" tabindex="-1"></div>
+    <div id="practice-battle-controls">
+      <div class="practice-abilities">
+        <button id="practice-berserker" class="practice-ability" type="button" disabled aria-describedby="practice-energy-0">Berserker<meter id="practice-energy-0" min="0" max="100" value="0" aria-label="Berserker energy">0</meter></button>
+        <button id="practice-shield" class="practice-ability" type="button">Shield</button>
+      </div>
+      <p>Click to attack · Esc to leave</p>
+    </div>
+  </section>
+  <script src="assets/character-battle-actions.js"></script>
   <script defer src="assets/battle-arena.js"></script>
   <script src="runtime-config.js"></script>
   <link rel="stylesheet" href="assets/needs.css">
@@ -5650,6 +5700,7 @@
   <script src="vendor/three/three.r128.min.js"></script>
   <script src="vendor/three/GLTFLoader.r128.js"></script>
   <script src="assets/battlebro-encounter.js"></script>
+  <script src="assets/practice-battle.js"></script>
   <script src="assets/territory-world.js"></script>
   <script src="assets/longneck-animation.js"></script>
   <script src="assets/juggernaut-animation.js"></script>
@@ -13181,6 +13232,11 @@
   }
 
   function tickLooseRockAttachments(root, t, dt = 0, mover = null) {
+    // Practice captures its native baseline before the shared combat layer runs.
+    if(root.userData.deferLooseRockAttachments)return;
+    advanceLooseRockAttachments(root,t,dt,mover);
+  }
+  function advanceLooseRockAttachments(root, t, dt = 0, mover = null) {
     const controller = root.userData.looseRocks;
     if (!controller) return;
     const time = t + controller.phase;
@@ -13539,7 +13595,7 @@
   }
 
   function applyTelekineticBody(root, mover) {
-    const a=root.userData.rockThrow;
+    const a=root.userData.battleThrow||root.userData.rockThrow;
     if (!a || !mover) return;
     const rig=root.userData.rig, form=root.userData.form, w=a.weight;
     const bases=root.userData.rockThrowBodyBases || (root.userData.rockThrowBodyBases=[]);
@@ -29711,6 +29767,7 @@ function neighborStarVector(edge, index) {
   renderer.domElement.addEventListener('contextmenu', e => { e.preventDefault(); cancelFenceLine(); });
 
   renderer.domElement.addEventListener('pointerdown', e => {
+    if (fp.active && explorationActive && !fpToolMenu.hidden) return;
     if (e.button === 2 && fenceLineState.drag) {
       e.preventDefault(); cancelFenceLine(); activePointers.clear();
       renderer.domElement.classList.remove('dragging'); return;
@@ -29777,6 +29834,7 @@ function neighborStarVector(edge, index) {
   });
 
   renderer.domElement.addEventListener('pointermove', e => {
+    if (fp.active && explorationActive && !fpToolMenu.hidden) return;
     if (generationViewLocked) {
       e.preventDefault();
       return;
@@ -29967,6 +30025,7 @@ function neighborStarVector(edge, index) {
 
   renderer.domElement.addEventListener('wheel', e => {
     e.preventDefault();
+    if (fp.active && explorationActive && !fpToolMenu.hidden) return;
     if (generationViewLocked) return;
     markCameraMoving();
     viewSize = clampViewSize(viewSize + e.deltaY * 0.005);
@@ -30336,6 +30395,7 @@ function neighborStarVector(edge, index) {
   const explorationTerrain = (() => {
     const SPACING=24, STREAM_RADIUS=2, MAX_DRIFT=2.2, SKY_DRIFT=3.5, STEP=1/30;
     const cells=new Map(), edits=new Map(), sites=new Map(), islands=new Map(), sleeping=new Map(), skyBodies=new Set();
+    const residentPlacements=new Map();
     const group=new THREE.Group();group.name='explorationWorld';group.visible=false;scene.add(group);
     const dummy=new THREE.Object3D(),box=new THREE.BoxGeometry(TILE,1,TILE);
     let centerX=null,centerZ=null,homeWasVisible=true,clock=0,accumulator=0,lastSafe={x:0,z:0};
@@ -30701,6 +30761,7 @@ function neighborStarVector(edge, index) {
       body.entries.forEach(({x,z},i)=>writeInstance(body,x,z,i));
     }
     function disposeBody(body) {
+      for(const placement of body.residentPlacements||[])residentPlacements.delete(placement.key);
       group.remove(body.root);body.hull.geometry.dispose();body.mesh.dispose();disposeSurfaces(body);disposeVegetation(body);
     }
     function convexHull(points) {
@@ -30711,6 +30772,28 @@ function neighborStarVector(edge, index) {
       for(let i=points.length-1;i>=0;i--){const p=points[i];while(upper.length>1&&cross(upper[upper.length-2],upper[upper.length-1],p)<=0)upper.pop();upper.push(p);}
       lower.pop();upper.pop();return lower.concat(upper);
     }
+    function planIslandResidents(body) {
+      body.residentPlacements=[];
+      if(body.site.sky)return;
+      const candidates=body.entries.slice().sort((a,b)=>
+        Math.hypot(a.x+.5-body.site.x,a.z+.5-body.site.z)-Math.hypot(b.x+.5-body.site.x,b.z+.5-body.site.z));
+      for(const {x,z} of candidates){
+        const cell=getCell(x,z),id=Math.floor(x/18)+','+Math.floor(z/18);
+        if(!cell||cell.terrainFloors>6||body.residentPlacements.some(p=>p.id===id||Math.hypot(p.x-x,p.z-z)<18))continue;
+        let flat=true;
+        for(let dx=-2;dx<=2&&flat;dx++)for(let dz=-2;dz<=2;dz++){
+          if(!body.indices.has(key(x+dx,z+dz))){flat=false;break;}
+          const nearby=getCell(x+dx,z+dz);
+          if(!nearby||nearby.terrainFloors!==cell.terrainFloors||nearby.kind||nearby.extras?.length||['water','lava'].includes(nearby.terrain)){flat=false;break;}
+        }
+        if(!flat)continue;
+        const placement={key:body.site.id+'|'+key(x,z),id,x,z,islandId:body.site.id,root:body.root,
+          offsetX:x+.5-body.site.x,offsetZ:z+.5-body.site.z,surfaceY:columnTop(cell)};
+        body.residentPlacements.push(placement);residentPlacements.set(placement.key,placement);
+        if(body.residentPlacements.length===2)break;
+      }
+    }
+    function residentSpawns(){return residentPlacements.values();}
     function buildIsland(site) {
       shape(site);
       const entries=[],indices=new Map(),{minX,maxX,minZ,maxZ}=site.bounds;
@@ -30746,7 +30829,7 @@ function neighborStarVector(edge, index) {
       const body={site,root,mesh,hull,indices,entries,collisionPolygon,ox:saved?.ox||0,oz:saved?.oz||0,
         vx:saved?.vx??Math.cos(site.phase)*(site.sky ? .07 : .025),vz:saved?.vz??Math.sin(site.phase)*(site.sky ? .07 : .025),
         mass:entries.length,dx:0,dz:0};
-      buildSurfaces(body);buildVegetation(body);mesh.instanceMatrix.needsUpdate=true;
+      buildSurfaces(body);buildVegetation(body);planIslandResidents(body);mesh.instanceMatrix.needsUpdate=true;
       root.position.set(site.x+body.ox,site.elevation||0,site.z+body.oz);group.add(root);islands.set(site.id,body);if(site.sky)skyBodies.add(body);
       return body;
     }
@@ -30873,7 +30956,6 @@ function neighborStarVector(edge, index) {
       if(starfield)starfield.position.copy(player.pos);
       if(ringSystem) {
         ringSystem.position.set(player.pos.x,0,player.pos.z);
-        ringLogo.rotation.y=(ringLogo.rotation.y+Math.min(.1,Math.max(0,dt))*.025)%(Math.PI*2);
       }
       if(support){player.pos.x+=support.dx;player.pos.z+=support.dz;}
       if(deployedSupport&&!deployedCharacter.userData.transportActor?.motion){deployedCharacter.position.x+=deployedSupport.dx;deployedCharacter.position.z+=deployedSupport.dz;}
@@ -30985,7 +31067,7 @@ function neighborStarVector(edge, index) {
     }
     function diagnostics() {return {islands:islands.size,pending:pending.length,cells:cells.size,sites:sites.size,sleeping:sleeping.size,
       fragments:[...islands.values()].map(b=>({id:b.site.id,sky:!!b.site.sky,elevation:b.site.elevation||0,width:b.site.width,length:b.site.length,style:b.site.style,biome:b.site.biome,count:b.mass,ox:b.ox,oz:b.oz,vx:b.vx,vz:b.vz}))};}
-    return {group,getCell,setCell,worldToCell,cellToWorld,groundYAt,blocksBodyAt,ceilingYAt,nearbyColumns,ensureAround,canExcavate,activate,deactivate,tick,diagnostics,
+    return {group,getCell,setCell,worldToCell,cellToWorld,groundYAt,blocksBodyAt,ceilingYAt,nearbyColumns,residentSpawns,ensureAround,canExcavate,activate,deactivate,tick,diagnostics,
       minimapCells};
   })();
   const homeFPTerrain = {
@@ -31507,13 +31589,57 @@ function neighborStarVector(edge, index) {
   //   - ground height comes from the active first-person terrain provider.
   //   - props remain non-colliding, as in the existing first-person mode.
   const broEncounterMenu=document.getElementById('bro-encounter-menu');
+  const practiceHud=document.getElementById('practice-battle-hud');
+  const practiceControls=document.getElementById('practice-battle-controls');
+  const practiceHealthAnchors=[document.getElementById('practice-health-anchor-0'),document.getElementById('practice-health-anchor-1')];
+  function paintCombatMeters(prefix,combat){
+    if(!combat)return;
+    for(let i=0;i<2;i++){
+      const f=combat.fighters[i];if(!f)continue;
+      const health=document.getElementById(prefix+'-health-'+i),energy=document.getElementById(prefix+'-energy-'+i);
+      if(health){if(health.max!==f.maxHealth)health.max=f.maxHealth;if(health.value!==f.health){health.value=f.health;health.textContent=String(f.health);}}
+      if(energy){if(energy.max!==f.energyMax)energy.max=f.energyMax;if(energy.value!==f.energy){energy.value=f.energy;energy.textContent=String(f.energy);}}
+    }
+  }
+  const practiceBattle=createBattleBroPractice(THREE,{
+    actions:createBattleBroBattleActions(THREE,{restoreBody:restoreTelekineticBody,setExpression:setBattleBroExpression}),
+    restoreBody:restoreTelekineticBody,
+    expression:(actor,name)=>setBattleBroExpression(actor.root,name,{automatic:true}),
+    attachments:(actor,t,dt)=>advanceLooseRockAttachments(actor.root,t,dt,actor.mover),
+    camera:value=>{if(value)camera=value;return camera;},
+    aspect:()=>renderer.domElement.clientWidth/Math.max(1,renderer.domElement.clientHeight),
+    floor:(x,z,y)=>explorationTerrain.groundYAt(x,z,0,y),
+    show:visible=>{practiceHud.hidden=!visible;document.body.classList.toggle('practice-active',visible);fpKeys.clear();
+      if(visible){fpToolMenu.hidden=true;fpToolsToggle.setAttribute('aria-expanded','false');document.exitPointerLock?.();practiceHud.focus();}},
+    healthAnchor:(index,x,y,visible)=>{
+      const label=practiceHealthAnchors[index];label.hidden=!visible;
+      if(visible){label.style.left=Math.max(14,Math.min(86,x*100))+'%';label.style.top=Math.max(8,Math.min(78,y*100))+'%';}
+    },
+    complete:()=>exitPracticeBattle(true),
+    status:(text,busy,combat)=>{
+      const completed=!!combat&&!combat.running&&combat.winner!==null;
+      const result=document.getElementById('practice-battle-result'),wasHidden=result.hidden;
+      result.hidden=!completed;
+      result.textContent=completed?(combat.winner===0?'You win!':'You lose!'):'';
+      result.dataset.outcome=completed?(combat.winner===0?'win':'loss'):'';
+      practiceControls.hidden=completed;
+      document.getElementById('practice-shield').disabled=completed;
+      const berserker=document.getElementById('practice-berserker'),fighter=combat?.fighters[0];
+      berserker.disabled=!practiceBattle.canAttack(true);
+      berserker.style.setProperty('--charge',fighter?(100*fighter.energy/fighter.energyMax)+'%':'0%');
+      paintCombatMeters('practice',combat);
+      if(completed&&wasHidden)result.focus();
+    }
+  });
   const broEncounter=BattleBroEncounter.create({
-    enabled:()=>fp.active&&explorationActive&&!trainingAppearance.active,
+    enabled:()=>fp.active&&explorationActive&&!trainingAppearance.active&&(!practiceBattle.active||transportCubeController?.phase==='deployed'),
     player:()=>transportCubeController&&['deployed','returning'].includes(transportCubeController.phase)
       ?transportCube.root?.userData.transportActor:null,
     npcs:()=>[...explorationResidents.values()],
     available:actor=>!!actor?.root.parent&&actor.root.visible&&!!actor.motion
-      &&!actor.root.userData.characterJumping&&!actor.root.userData.rockThrow&&!actor.root.userData.terrainConsume,
+      &&!actor.root.userData.characterJumping&&(!actor.root.userData.rockThrow||actor.encounter?.phase==='practice')&&!actor.root.userData.terrainConsume,
+    practice:{begin:session=>transportCubeController?.phase==='deployed'&&practiceBattle.begin(session),restore:()=>practiceBattle.restore(),
+      tick:(t,dt)=>practiceBattle.tick(t,dt),finish:()=>practiceBattle.finish()},
     controller:actor=>actor.character==='specter'?ensureSpecterAnimation(actor.mover)
       :actor.character==='longneck'?ensureLongneckAnimation(actor.mover):ensureSupportAnimation(actor.mover),
     expressionName:actor=>({name:actor.root.userData.slots?.face?.userData.expression?.name||'neutral',
@@ -31548,11 +31674,35 @@ function neighborStarVector(edge, index) {
       }
     }
   });
-  // Both choices share cleanup; the choice remains an explicit future battle handoff.
-  function chooseBroEncounter(choice){
+  function chooseBroEncounter(choice,restorePointerLock=true){
     broEncounter.end(choice);
-    if(fp.active){const lock=renderer.domElement.requestPointerLock?.();lock?.catch?.(()=>{});}
+    if(restorePointerLock&&fp.active&&!practiceBattle.active){const lock=renderer.domElement.requestPointerLock?.();lock?.catch?.(()=>{});}
   }
+  function exitPracticeBattle(automatic=false){
+    const combat=practiceBattle.combat();
+    if(practiceBattle.active&&!combat.running&&combat.winner!==null){
+      transportCubeController?.capture(transportCubeController.root);
+    }
+    chooseBroEncounter('exit',!automatic);
+  }
+  document.getElementById('practice-berserker').onclick=()=>practiceBattle.attack(true);
+  document.getElementById('practice-shield').onclick=()=>{};
+  // Capture before exploration hotkeys, cube recall, mouse-look and tool handlers.
+  for(const name of ['keydown','keyup','pointerdown','pointerup','pointermove','mousedown','mouseup','mousemove','click','dblclick','wheel','contextmenu']){
+    window.addEventListener(name,event=>{
+      if(!practiceBattle.active)return;
+      if(name==='keydown'&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();exitPracticeBattle();return;}
+      if(name==='keydown'&&event.key==='Tab'){
+        const buttons=[...practiceHud.querySelectorAll('button')].filter(button=>!button.disabled),index=buttons.indexOf(document.activeElement);
+        event.preventDefault();event.stopImmediatePropagation();if(!buttons.length)return;buttons[(index+(event.shiftKey?-1:1)+buttons.length)%buttons.length].focus();return;
+      }
+      if(practiceControls.contains(event.target))return;
+      if(name==='click'&&event.button===0)practiceBattle.attack();
+      if(name==='keydown'&&!event.repeat&&(event.key===' '||event.key==='Enter'))practiceBattle.attack();
+      event.preventDefault();event.stopImmediatePropagation();
+    },{capture:true,passive:false});
+  }
+  for(const name of ['keydown','keyup','pointerdown','pointerup','mousedown','mouseup','click','dblclick','wheel'])practiceHud.addEventListener(name,event=>event.stopPropagation());
   broEncounterMenu.addEventListener('click',event=>{
     const choice=event.target.dataset.broChoice;if(choice)chooseBroEncounter(choice);
   });
@@ -31602,8 +31752,9 @@ function neighborStarVector(edge, index) {
 
   // Sparse local scenery inhabitants, anchored to logical cells as islands drift.
   const explorationResidents = new Map();
-  let explorationResidentScan = 0;
-  let explorationResidentSearch = null;
+  const explorationResidentPlans = new Map();
+  let explorationResidentFrame = 0;
+  const explorationResidentViewPoint = new THREE.Vector3();
   function residentHash(x,z,salt=0) {
     let n=Math.imul(x,374761393)^Math.imul(z,668265263)^Math.imul(salt+1,1442695041);
     n=Math.imul(n^(n>>>13),1274126177);
@@ -31880,65 +32031,70 @@ function neighborStarVector(edge, index) {
   function tickExplorationResidents(t,dt) {
     if(!fp.active || !explorationActive) {
       for(const [id,actor] of explorationResidents)removeExplorationResident(id,actor);
-      explorationResidentScan=0;explorationResidentSearch=null;return;
+      explorationResidentPlans.clear();explorationResidentFrame=0;return;
     }
     for(const [id,actor] of explorationResidents) {
       actor.terrainTime=t;
-      const point=explorationTerrain.cellToWorld(actor.x,actor.z);
+      const point=explorationTerrain.cellToWorld(actor.x,actor.z,actor.islandId);
       if(Math.hypot(point.x-fp.pos.x,point.z-fp.pos.z)>70 || !residentSupport(actor)) {
         removeExplorationResident(id,actor);continue;
       }
       tickExplorationResidentMotion(actor,t,dt);
     }
-    explorationResidentScan-=dt;
-    // Quarter of the previous six residents, rounded up to a whole NPC.
-    if(explorationResidentScan>0 || explorationResidents.size>=2)return;
-    const origin=explorationTerrain.worldToCell(fp.pos.x,fp.pos.z);
-    if(!explorationResidentSearch || Math.hypot(origin.x-explorationResidentSearch.x,
-      origin.z-explorationResidentSearch.z)>8) {
-      const candidates=[];
-      for(let dx=-52;dx<=52;dx++)for(let dz=-52;dz<=52;dz++) {
-        const distance=Math.hypot(dx,dz);
-        if(distance<10 || distance>52)continue;
-        const forward=-dx*Math.sin(fp.yaw||0)-dz*Math.cos(fp.yaw||0);
-        candidates.push({x:origin.x+dx,z:origin.z+dz,priority:distance+(forward<0?12:0)});
+    // Placement plans arrive with the streamed islands, even while both rig
+    // slots are occupied. Planning never allocates a character rig.
+    explorationResidentFrame++;
+    for(const record of explorationResidentPlans.values())if(!record.placement.root.parent)explorationResidentPlans.delete(record.placement.key);
+    for(const placement of explorationTerrain.residentSpawns?.()||[]){
+      if(explorationResidentPlans.get(placement.key)?.placement!==placement)
+        explorationResidentPlans.set(placement.key,{placement,arrival:explorationResidentFrame,nextCheck:0});
+    }
+    if(explorationResidents.size>=2)return;
+    const viewCamera=typeof camera!=='undefined'&&camera?.isCamera?camera:null;viewCamera?.updateMatrixWorld(true);
+    // At most eight footprint revalidations and one rig build per render frame.
+    for(let probe=0;probe<8;probe++){
+      let selected=null,priority=Infinity;
+      for(const record of explorationResidentPlans.values()){
+        const p=record.placement;if(record.nextCheck>t||explorationResidents.has(p.id))continue;
+        const dx=p.root.position.x+p.offsetX-fp.pos.x,dz=p.root.position.z+p.offsetZ-fp.pos.z;
+        const distance=Math.hypot(dx,dz),arriving=explorationResidentFrame-record.arrival<=1;
+        // Newly streamed islands and residents appear together. Older islands
+        // can replenish slots only beyond fog (46), preventing visible pop-in.
+        if(distance<10||distance>68||(!arriving&&distance<56))continue;
+        if(!arriving&&viewCamera){
+          // Fog uses camera depth, not radial distance. Leave a conservative
+          // body envelope so oblique views cannot reveal a replacement spawn.
+          explorationResidentViewPoint.set(p.root.position.x+p.offsetX,p.root.position.y+(p.surfaceY||0)+6,p.root.position.z+p.offsetZ).applyMatrix4(viewCamera.matrixWorldInverse);
+          if(explorationResidentViewPoint.z>-62&&explorationResidentViewPoint.z<16)continue;
+        }
+        let occupied=false;for(const actor of explorationResidents.values())if(Math.hypot(actor.x-p.x,actor.z-p.z)<18){occupied=true;break;}
+        if(occupied)continue;
+        const forward=-dx*Math.sin(fp.yaw||0)-dz*Math.cos(fp.yaw||0),score=distance+(forward<0?12:0);
+        if(score<priority){selected=record;priority=score;}
       }
-      candidates.sort((a,b)=>a.priority-b.priority);
-      explorationResidentSearch={x:origin.x,z:origin.z,candidates,index:0};
-    }
-    const search=explorationResidentSearch;
-    explorationResidentScan=0;
-    // Bound terrain probes per frame; do not miss small flat patches by random sampling.
-    for(let probe=0;probe<48 && search.index<search.candidates.length;probe++) {
-        const {x,z}=search.candidates[search.index++];
-        const id=Math.floor(x/18)+','+Math.floor(z/18);
-        if(explorationResidents.has(id))continue;
-        const point=explorationTerrain.cellToWorld(x,z);
-        const distance=Math.hypot(point.x-fp.pos.x,point.z-fp.pos.z);
-        if(distance<10 || distance>60 || !residentFlatCell(x,z))continue;
-        if([...explorationResidents.values()].some(actor=>Math.hypot(actor.x-x,actor.z-z)<18))continue;
-        const characters=['monsters','juggernaut','longneck','specter'];
-        const variants=['lava','ice','mushroom','gem'];
-        const cores=['cyan','amber','violet','lime','pink','red'];
-        const character=characters[Math.floor(residentHash(x,z,40)*characters.length)];
-        const form=Math.max(1,Math.min(7,(transportCube.root?.userData.form||4)
-          +Math.floor(residentHash(x,z,41)*3)-1));
-        const core=cores[Math.floor(residentHash(x,z,42)*cores.length)];
-        const root=createBattleBroCharacter({character,form,
-          variant:variants[Math.floor(residentHash(x,z,43)*variants.length)],colors:{core,glow:core}});
-        root.name='exploration-resident-'+id;
-        root.rotation.y=residentHash(x,z,44)*Math.PI*2;
-        root.position.set(point.x,explorationTerrain.groundYAt(point.x,point.z)
-          +(character==='specter'?SPECTER_HOVER_CLEARANCE:0),point.z);
-        explorationTerrain.group.add(root);
-        const mover={root,parts:root.userData.locomotionRig||root.userData.rig,
-          state:'IDLE',progress:0,ikTarget:new THREE.Vector3()};
-        explorationResidents.set(id,{root,mover,x,z,character,phase:residentHash(x,z,45)*20});
-        explorationResidentScan=.6;
-        return; // Build at most one rig per scan on the existing render loop.
-    }
-    if(search.index>=search.candidates.length) {
-      explorationResidentScan=3;explorationResidentSearch=null;
+      if(!selected)return;
+      selected.nextCheck=t+.5;
+      const {id,x,z,islandId}=selected.placement;
+      if(!residentFlatCell(x,z,islandId))continue;
+      const point=explorationTerrain.cellToWorld(x,z,islandId);
+      const characters=['monsters','juggernaut','longneck','specter'];
+      const variants=['lava','ice','mushroom','gem'];
+      const cores=['cyan','amber','violet','lime','pink','red'];
+      const character=characters[Math.floor(residentHash(x,z,40)*characters.length)];
+      const form=Math.max(1,Math.min(7,(transportCube.root?.userData.form||4)
+        +Math.floor(residentHash(x,z,41)*3)-1));
+      const core=cores[Math.floor(residentHash(x,z,42)*cores.length)];
+      const root=createBattleBroCharacter({character,form,
+        variant:variants[Math.floor(residentHash(x,z,43)*variants.length)],colors:{core,glow:core}});
+      root.name='exploration-resident-'+id;
+      root.rotation.y=residentHash(x,z,44)*Math.PI*2;
+      root.position.set(point.x,explorationTerrain.groundYAt(point.x,point.z)
+        +(character==='specter'?SPECTER_HOVER_CLEARANCE:0),point.z);
+      explorationTerrain.group.add(root);
+      const mover={root,parts:root.userData.locomotionRig||root.userData.rig,
+        state:'IDLE',progress:0,ikTarget:new THREE.Vector3()};
+      explorationResidents.set(id,{root,mover,x,z,islandId,character,phase:residentHash(x,z,45)*20});
+      return;
     }
   }
 
@@ -32203,6 +32359,7 @@ function neighborStarVector(edge, index) {
     }
   }
   document.addEventListener('pointerlockchange', () => {
+    if(practiceBattle.active)return;
     if (typeof trainingAppearance!=='undefined' && trainingAppearance.active) return;
     if (!document.pointerLockElement && fp.active && (!fpToolMenu.hidden || (typeof broEncounterMenu!=='undefined'&&!broEncounterMenu.hidden))) return;
     if (!document.pointerLockElement && fp.active) {
@@ -32215,6 +32372,7 @@ function neighborStarVector(edge, index) {
   document.addEventListener('mousemove', e => {
     if (document.pointerLockElement !== renderer.domElement) return;
     if (trainingAppearance.active) return;
+    if (fp.active && explorationActive && !fpToolMenu.hidden) return;
     if (fp.active) {
       markCameraMoving();
       fp.yaw -= e.movementX * 0.0022;
@@ -36708,8 +36866,7 @@ function neighborStarVector(edge, index) {
     if (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched()) return false;
     if (renderer.xr.isPresenting || !window.createBattleArena) return;
     if (!battleArenaView.view) {
-      const actions=window.createBattleBroBattleActions(THREE,{throwRock:telekineticRockThrow,cancelThrow:cancelTelekineticRockThrow,
-        restoreBody:restoreTelekineticBody,setExpression:setBattleBroExpression});
+      const actions=window.createBattleBroBattleActions(THREE,{restoreBody:restoreTelekineticBody,setExpression:setBattleBroExpression});
       battleArenaView.view=window.createBattleArena(THREE,
         appearance=>{
           const root=createBattleBroCharacter({...appearance,character:appearance.character||'monsters'});root.userData.expressionCycleEnabled=false;
@@ -36718,13 +36875,14 @@ function neighborStarVector(edge, index) {
         tickBattleBroArenaActor,{actions,wristHeight:LAVA_WRIST_ABOVE_GROUND,characterForms:BATTLEBRO_CHARACTER_FORMS,
           disposeCharacter:(root,field)=>{if(field)disposeGroup(field);disposeGroup(root);}});
     }
+    battleArenaView.view.startCombat();
     battleArenaView.active=true;
     document.body.classList.add('arena-active');
     document.getElementById('arena-hud').hidden=false;
     document.getElementById('arena-exit').focus();
   }
   function exitBattleArena() {
-    battleArenaView.view?.resetCombat();
+    battleArenaView.view?.stopCombat();
     battleArenaView.active=false;battleArenaView.drag=null;
     document.body.classList.remove('arena-active');
     document.getElementById('arena-hud').hidden=true;
@@ -36733,6 +36891,7 @@ function neighborStarVector(edge, index) {
   document.getElementById('battlebro-arena-action').addEventListener('click',enterBattleArena);
   document.getElementById('arena-exit').addEventListener('click',exitBattleArena);
   document.getElementById('arena-reset-view').addEventListener('click',()=>battleArenaView.view?.reset());
+  document.getElementById('arena-restart').addEventListener('click',()=>battleArenaView.view?.startCombat());
   for(let index=0;index<2;index++){
     const material=document.getElementById('arena-material-'+index),form=document.getElementById('arena-form-'+index),character=document.getElementById('arena-character-'+index);
     for(const [value,label] of [['juggernaut','Juggernaut'],['monsters','Monsters'],['specter','Specter'],['longneck','Longneck']])character.add(new Option(label,value));
@@ -36748,15 +36907,19 @@ function neighborStarVector(edge, index) {
     material.onchange=change;form.onchange=change;character.onchange=()=>{syncForms();change();};
     syncForms();
     document.getElementById('arena-attack-'+index).onclick=()=>battleArenaView.view?.attack(index);
+    document.getElementById('arena-berserker-'+index).onclick=()=>battleArenaView.view?.attack(index,true);
+    document.getElementById('arena-shield-'+index).onclick=()=>{};
     document.getElementById('arena-hit-'+index).onclick=()=>battleArenaView.view?.hit(index);
   }
   function updateArenaActionControls(){
     const view=battleArenaView.view;if(!view)return;
+    const combat=view.combat();paintCombatMeters('arena',combat);
     for(let i=0;i<2;i++){
       const state=document.getElementById('arena-state-'+i),text=view.actorState(i);
       if(state.textContent!==text)state.textContent=text;
-      document.getElementById('arena-attack-'+i).disabled=view.isBusy();
-      document.getElementById('arena-hit-'+i).disabled=view.isBusy();
+      document.getElementById('arena-attack-'+i).disabled=!view.canAttack(i);
+      document.getElementById('arena-berserker-'+i).disabled=!view.canAttack(i,true);
+      document.getElementById('arena-hit-'+i).disabled=!combat?.running;
     }
   }
 
@@ -36777,8 +36940,9 @@ function neighborStarVector(edge, index) {
   },true);
 
   let prevT = 0;
+  let endlessMenuPauseStarted = null, endlessMenuPausedTime = 0;
   let smokeTimer = 0;
-  // Item 5 — Page Visibility pause only. The earlier DPR backoff path
+  // Page Visibility pause. The earlier DPR backoff path
   // was removed because renderer.setPixelRatio reallocates the shadow
   // map and left it blank until the next click forced a re-render
   // (the existing BattleBros render-settings resolution slider already
@@ -36830,6 +36994,18 @@ function neighborStarVector(edge, index) {
   }
 
   function animate(now, xrFrame) {
+    const wallTime = now / 1000;
+    if (explorationActive && fp.active && !fpToolMenu.hidden) {
+      // Keep the rendered frame and all world simulation frozen while the DOM
+      // tools menu stays interactive. Preserve falling velocity for resumption.
+      if (endlessMenuPauseStarted === null) endlessMenuPauseStarted = wallTime;
+      prevT = 0;
+      return;
+    }
+    if (endlessMenuPauseStarted !== null) {
+      endlessMenuPausedTime += Math.max(0, wallTime - endlessMenuPauseStarted);
+      endlessMenuPauseStarted = null;
+    }
     if (docHidden && !xrSession) {
       // Tab is backgrounded — keep the rAF heartbeat (browsers throttle
       // it anyway) but skip per-frame work + render. prevT reset so the
@@ -36837,7 +37013,8 @@ function neighborStarVector(edge, index) {
       prevT = 0;
       return;
     }
-    const t = now / 1000;
+    // Exclude menu time from absolute-time poses as well as dt-based physics.
+    const t = wallTime - endlessMenuPausedTime;
     const dt = prevT ? Math.min(t - prevT, 0.05) : 0;
     prevT = t;
     if(longneckReview){longneckReview.render(renderer,dt);return;}
@@ -36862,7 +37039,8 @@ function neighborStarVector(edge, index) {
     tickSquashAnims(dt);
     if (rippleAnims.length) tickRippleAnims(dt);
     const inTrainingAppearance=tickTrainingAppearance(dt,t);
-    if (fp.active && !inTrainingAppearance) {if(broEncounterMenu.hidden&&!tickFPJourney(dt))tickFP(dt);}
+    if(practiceBattle.active){practiceBattle.restore();activeFPTerrain().tick?.(dt,fp,fpEyeHeight(),transportCube.root);}
+    else if (fp.active && !inTrainingAppearance) {if(broEncounterMenu.hidden&&!tickFPJourney(dt))tickFP(dt);}
     tickTransportCube(t,dt);
     if(unhatchedHome)unhatchedHome.tick(t);
     tickExplorationResidents(t,dt);

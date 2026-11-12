@@ -81,6 +81,19 @@ for(const character of ['longneck','specter','juggernaut','monsters'])for(let fo
  assert.equal(group.children.filter(n=>n.userData.rig).length,0,'No deployed character after recall');
  assert(transport.throwTransportCube(),'A separate click deploys again');frames(240);
  assert.equal(transport.state.root,source,'Second click releases the same instance');
+ const returnPosition=source.position.clone(),returnScale=source.scale.clone();
+ fp.pos.x=100;camera.rotation.y=Math.PI;
+ assert(!controller.capture(new THREE.Group()),'Scripted capture rejects a different BRO');
+ assert(controller.capture(source),'Post-battle return works without equipping or aiming the cube');
+ assert.equal(controller.phase,'recall-opening');assert(controller.cube.visible);assert(!source.userData.transportActor,'Navigation stops for capture');
+ assert(source.position.equals(returnPosition)&&source.scale.equals(returnScale),'Capture starts at the current BRO position and scale');
+ assert(!controller.capture(source),'Repeated return cannot restart capture');
+ frames(24);assert.equal(controller.phase,'recall');frames(15);
+ assert(source.scale.x>0&&source.scale.x<returnScale.x,'Completed battle reuses animated shrinking into the open cube');
+ frames(120);assert.equal(controller.phase,'carried');assert.equal(transport.state.root,null);assert(source.scale.equals(returnScale),'Stored BRO regains its full scale');
+ assert(!controller.capture(source),'Stored BRO cannot be captured again');
+ fp.pos.x=0;camera.rotation.y=0;
+
  transport.resetTransportCube();assert.equal(transport.state.root,null);assert.equal(source.parent,null,'Stored instance has no parent');
 }
 context.baseBattleBroPrototype=api.createBattleBroCharacter({character:'longneck',form:4,variant:'lava'});

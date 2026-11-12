@@ -6,9 +6,10 @@ const longneckFixture=require('./longneck-fixture')();
 const source=html.slice(html.indexOf('  // Sparse local scenery inhabitants'),html.indexOf('  // ---------- transport cube'));
 const group=new THREE.Group(),island=new THREE.Group();island.name='floating-fragment-flat';group.add(island);
 let drift=0,mountain=false,disposed=0;const appearances=[];
+const placements=[{key:'flat|0,-12',id:'0,-1',x:0,z:-12,offsetX:.5,offsetZ:-11.5,islandId:'flat',root:island},{key:'flat|0,-34',id:'0,-2',x:0,z:-34,offsetX:.5,offsetZ:-33.5,islandId:'flat',root:island}];
 const context=vm.createContext({SPECTER_MOVE_STATE:longneckFixture.api.SPECTER_MOVE_STATE,battleBroTerrain:require('../assets/battlebro-terrain'),ensureLongneckAnimation:longneckFixture.api.ensureLongneckAnimation,tickBattleBroExpression(){},tickLooseRockAttachments(){},THREE,fp:{active:true,pos:new THREE.Vector3()},explorationActive:true,
  transportCube:{root:{userData:{form:4}}},SPECTER_HOVER_CLEARANCE:1,
- explorationTerrain:{group,worldToCell:(x,z)=>({x:Math.floor(x-drift),z:Math.floor(z),islandId:'flat'}),getCell:(x,z)=>({islandId:'flat',terrainFloors:mountain?20:3,kind:null}),
+ explorationTerrain:{group,residentSpawns:()=>placements.values(),worldToCell:(x,z)=>({x:Math.floor(x-drift),z:Math.floor(z),islandId:'flat'}),getCell:(x,z)=>({islandId:'flat',terrainFloors:mountain?20:3,kind:null}),
  cellToWorld:(x,z)=>({x:x+.5+drift,z:z+.5}),groundYAt:()=>mountain?3.8:.4},
  createBattleBroCharacter:appearance=>{appearances.push(appearance);if(['juggernaut','monsters','specter'].includes(appearance.character))return longneckFixture.api.createBattleBroCharacter(appearance);if(appearance.character==='longneck')return longneckFixture.api.createLongNeckBattleBro(appearance);const root=new THREE.Group();
  root.userData.rig={rig:new THREE.Group(),head:new THREE.Group(),torso:new THREE.Group()};return root;},
@@ -16,7 +17,11 @@ const context=vm.createContext({SPECTER_MOVE_STATE:longneckFixture.api.SPECTER_M
  disposeGroup:()=>disposed++,tickBattleBroArenaActor:()=>{}});
 for(const key of ['registerSpecterMover','ensureSpecterAnimation','chooseSpecterDestination','ensureSupportAnimation','ensureJuggernautAnimation','registerLavaMonsterMover','lavaContactExtent','planLavaTerrainMove','restoreTelekineticBody','lavaMovementForm'])context[key]=longneckFixture.api[key];
 vm.runInContext(source+'\nthis.residents=explorationResidents;',context);
-for(let i=0;i<20;i++)vm.runInContext('tickExplorationResidents(1,1)',context);
+vm.runInContext('tickExplorationResidents(1,1/60)',context);
+assert.equal(context.residents.size,1,'First streamed resident exists in the first frame');
+vm.runInContext('tickExplorationResidents(1+1/60,1/60)',context);
+assert.equal(context.residents.size,2,'Second resident appears next frame without the old scan/wait');
+vm.runInContext('tickExplorationResidents(1+2/60,1/60)',context);
 assert.equal(context.residents.size,2,'Resident population stops at the reduced two-NPC cap');
 for(const actor of context.residents.values()){
  assert(Math.hypot(actor.x+.5,actor.z+.5)>=10,'Avoid spawning beside the player');
@@ -24,6 +29,36 @@ for(const actor of context.residents.values()){
 }
 assert(new Set(appearances.map(a=>a.variant)).size>1,'Varied skins');
 assert(new Set(appearances.map(a=>a.colors.core)).size>1,'Varied cores');
+// Keep discovering placements at the cap. When a slot opens, old visible
+// islands must not suddenly gain residents; replacements start beyond fog.
+const nativeMotion=context.tickExplorationResidentMotion;context.tickExplorationResidentMotion=()=>{};
+placements.push({key:'flat|25,0',id:'1,0',x:25,z:0,offsetX:25.5,offsetZ:.5,islandId:'flat',root:island},
+ {key:'flat|62,0',id:'3,0',x:62,z:0,offsetX:62.5,offsetZ:.5,islandId:'flat',root:island});
+for(let frame=0;frame<3;frame++)vm.runInContext(`tickExplorationResidents(${1.1+frame/60},1/60)`,context);
+assert.equal(appearances.length,2,'Planning while full does not allocate more rigs');
+const removed=context.residents.entries().next().value;context.removeExplorationResident(...removed);
+vm.runInContext('tickExplorationResidents(2,1/60)',context);
+assert.equal(context.residents.size,2);assert(context.residents.has('3,0'),'Vacancy is replenished beyond the fog range');
+assert(!context.residents.has('1,0'),'No late spawn on an already visible island');
+assert.equal(appearances.length,3,'Only one replacement rig is built per frame');
+const retained=[...context.residents.values()];context.fp.yaw=Math.PI;
+vm.runInContext('tickExplorationResidents(2.01,1/60)',context);
+assert(retained.every(a=>[...context.residents.values()].includes(a)),'Turning reuses the same resident instances');
+// Radial distance alone is insufficient for an oblique, wide-field view:
+// the fog shader uses camera depth. Do not materialize a visible side island.
+context.camera=new THREE.PerspectiveCamera(75,2,.02,2000);context.camera.updateMatrixWorld(true);
+placements.push({key:'flat|45,-45',id:'2,-3',x:45,z:-45,offsetX:45.5,offsetZ:-44.5,islandId:'flat',root:island});
+for(let frame=0;frame<3;frame++)vm.runInContext(`tickExplorationResidents(${2.1+frame/60},1/60)`,context);
+const visibleResident=[...context.residents].find(([id])=>id!=='3,0');context.removeExplorationResident(...visibleResident);
+vm.runInContext('tickExplorationResidents(2.2,1/60)',context);
+assert.equal(context.residents.size,1,'A visible oblique island does not gain a late BRO');
+context.camera.rotation.y=Math.PI;
+vm.runInContext('tickExplorationResidents(2.3,1/60)',context);
+assert(context.residents.has('2,-3'),'An unseen placement can be prepared before looking back');
+delete context.camera;
+context.tickExplorationResidentMotion=nativeMotion;
+vm.runInContext('tickExplorationResidents(2.4,1/60)',context);
+
 const actor=context.residents.values().next().value,before=actor.root.position.x;
 drift=.25;vm.runInContext('tickExplorationResidents(2,.01)',context);
 assert.equal(actor.root.position.x,before+.25,'Residents ride island drift');
@@ -76,9 +111,11 @@ Object.assign(actual.context,api,{battleBroTerrain:require('../assets/battlebro-
  disposeGroup(){},createBattleBroCharacter:api.createBattleBroCharacter,
  tickBattleBroArenaActor:api.tickBattleBroArenaActor});
 vm.runInContext(source+'\nthis.residents=explorationResidents;',actual.context);
-for(let frame=0;frame<360;frame++)vm.runInContext(`tickExplorationResidents(${frame/60},1/60)`,actual.context);
+for(let frame=0;frame<2;frame++)vm.runInContext(`tickExplorationResidents(${frame/60},1/60)`,actual.context);
+assert.equal(actual.context.residents.size,2,'Real streamed terrain supplies both resident rigs in the first two frames');
+for(let frame=2;frame<360;frame++)vm.runInContext(`tickExplorationResidents(${frame/60},1/60)`,actual.context);
 assert.equal(actual.context.residents.size,2,'Populate actual endless terrain up to the reduced two-NPC cap');
-assert([...actual.context.residents.values()].every(a=>Math.hypot(a.root.position.x,a.root.position.z)<=60),
+assert([...actual.context.residents.values()].every(a=>Math.hypot(a.root.position.x,a.root.position.z)<=70),
  'Reduced population stays within the resident discovery range');
 const resident=actual.context.residents.values().next().value;
 const head=resident.root.userData.rig.head,beforePose=head.quaternion.clone();

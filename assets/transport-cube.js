@@ -69,6 +69,15 @@
   function returnCube(message){
     phase='returning';age=0;returnStart=cube.position.clone();top.position.y=.055;status(message);
   }
+  // Scripted return from a completed encounter. Start at the BRO so capture
+  // remains available even when the exploration camera is far away or turned.
+  function capture(expectedRoot){
+    if(!hooks.active()||phase!=='deployed'||!root||root!==expectedRoot)return false;
+    hooks.pause(root);actorScale=root.scale.clone();age=0;
+    cube.position.copy(root.position);cube.position.y+=.1;
+    cube.rotation.set(0,0,0);cube.scale.setScalar(1);top.position.y=.055;cube.visible=true;
+    phase='recall-opening';status('Returning BattleBro to the cube');return true;
+  }
   function carryLanding(){
     if(!landing?.anchor)return;
     const point=hooks.anchor(landing.cell);
@@ -140,5 +149,5 @@
     if(root&&deployed&&['deployed','returning'].includes(phase))hooks.animate(root,t,dt);
     if(root)hooks.visual?.(root);
   }
-  return {throw:throwCube,tick,reset,suspend,get root(){return deployed?root:null;},get phase(){return phase;},get cube(){return cube;}};
+  return {throw:throwCube,capture,tick,reset,suspend,get root(){return deployed?root:null;},get phase(){return phase;},get cube(){return cube;}};
 });

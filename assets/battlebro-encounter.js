@@ -68,6 +68,14 @@
     run(()=>controller.reset());
     for(const r of originalPose){r.node.position.copy(r.p);r.node.quaternion.copy(r.q);r.node.scale.copy(r.s);}
     return {
+      run,
+      face(yaw,t){
+        root.rotation.set(0,yaw,0);
+        // Cancel temporary turn/contact state at the new heading. The original
+        // navigation session remains suspended and is restored on exit.
+        run(()=>controller.reset());
+        return this.frame(yaw,0,t,()=>true);
+      },
       frame:(yaw,dt,t,canTurn)=>run(()=>controller.encounterFrame(yaw,dt,t,canTurn)),
       carry(delta){
         // Carry both the paused route and action contacts; history advances only once.
@@ -85,12 +93,29 @@
     const distance=(a,b)=>a.root.position.distanceTo(b.root.position);
     function finish(){
       if(!active)return;
+      if(active.phase==='practice')host.practice?.finish();
       for(const s of active.sides){s.pose.restore();s.actor.root.rotation.y=s.yaw;s.session.finish();
         delete s.actor.encounter;host.expression(s.actor,s.expression,true);}
       active=null;host.menu(false);
     }
     function end(choice){
       if(!active||active.phase==='recover')return;
+      if(choice==='yes'&&host.practice&&active.phase==='prompt'){
+        const headings=active.sides.map(s=>{
+          const other=active.sides.find(o=>o!==s).actor.root.position,root=s.actor.root;
+          return Math.atan2(other.x-root.position.x,other.z-root.position.z);
+        });
+        if(!active.sides.every((s,i)=>host.canTurn(s.actor,headings[i]))){end('no');return;}
+        active.squareAge=1.1;
+        for(let i=0;i<active.sides.length;i++){
+          const s=active.sides[i];s.pose.restore();s.session.face(headings[i],active.time);
+          s.pose.capture();s.pose.pose({age:active.age,readyAge:active.squareAge,weight:1,look:0,time:active.time});
+        }
+        if(host.practice.begin(active)){active.phase='practice';host.menu(false);}
+        else end('no');
+        return;
+      }
+      if(active.phase==='practice')host.practice?.finish();
       active.choice=choice;active.phase='recover';active.recovery=0;active.returnAge=0;host.menu(false);
       for(const s of active.sides)host.expression(s.actor,s.expression);
     }
@@ -107,10 +132,11 @@
         if(!set.size)blocked.delete(a);
       }
       if(active){
+        if(active.phase==='practice')host.practice?.restore();
         if(!enabled||active.sides[0].actor!==player||!npcs.includes(active.sides[1].actor)||!active.sides.every(s=>host.available(s.actor))){finish();return;}
-        const step=Math.max(0,Math.min(dt,.05));active.age+=step;
+        const step=Math.max(0,Math.min(dt,.05));active.age+=step;active.time=t;
         if(active.phase==='recover')active.recovery+=step;
-        if(active.age>=.6&&!active.expressed&&active.phase==='sequence'){
+        if(active.age>=.25&&!active.expressed&&active.phase!=='recover'){
           active.expressed=true;for(const s of active.sides)host.expression(s.actor,'veryAngry');
         }
         const recovery=smooth(active.recovery/.7);
@@ -121,24 +147,30 @@
           if(!host.carry(s.actor,s.session,t)){finish();return;}
           const target=Math.atan2(other.x-root.position.x,other.z-root.position.z);
           const recovering=active.phase==='recover';
-          const yaw=recovering?(recovery>=1?s.yaw:null):(active.age>=1?target:null);
+          const yaw=recovering?(recovery>=1?s.yaw:null):target;
           const result=s.session.frame(yaw,step,t,nextYaw=>host.canTurn(s.actor,nextYaw));
           if(!result.accepted){finish();return;}
           const aligned=!Number.isFinite(yaw)||Math.abs(angle(yaw-root.rotation.y))<.04;
           settled=settled&&result.done&&aligned&&(!recovering||recovery>=1);
-          if(active.age<.5)s.session.blendOriginal(1-smooth(active.age/.5));
+          if(active.phase!=='practice'&&active.age<.5)s.session.blendOriginal(1-smooth(active.age/.5));
+          // Only native pose data belongs in the next frame's baseline. Practice
+          // advances attachments/throws after BOTH clean baselines are captured.
           s.pose.capture();
           s.pose.pose({age:active.age,readyAge:active.squareAge,weight:1-recovery,look:angle(target-root.rotation.y),time:t});
           host.tickExpression(s.actor,step);
         }
+        if(active.phase==='practice'){host.practice?.tick(t,step);return;}
         if(active.phase==='recover'){
           if(settled)active.returnAge+=step;else active.returnAge=0;
           const blend=smooth(active.returnAge/.7);
           for(const s of active.sides)s.session.blendOriginal(blend);
           if(active.returnAge>=.7){finish();return;}
         }else{
-          if(settled&&active.age>=1)active.squareAge+=step;else active.squareAge=0;
-          if(active.phase==='sequence'&&active.age>=3&&active.squareAge>=1.1){active.phase='prompt';host.menu(true);}
+          active.settled=settled;
+          if(settled)active.squareAge+=step;else active.squareAge=0;
+          // Ask while native turns are running. Accepting completes the facing
+          // immediately and resets temporary turn state before combat starts.
+          if(active.phase==='sequence'&&active.age>=.8){active.phase='prompt';host.menu(true);}
         }
         return;
       }

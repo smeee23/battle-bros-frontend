@@ -282,17 +282,21 @@
     actors.push(makeActor(index,{variant:'lava',form:6}));
     const shadow=new THREE.Mesh(new THREE.CircleGeometry(1.6,40),new THREE.MeshBasicMaterial({color:0x152c23,transparent:true,opacity:.22,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.set((index===0?-1:1)*5.6,deckLift+.455,1);architecture.add(shadow);
   }
-  function resetCombat(){actions?.cancel(actors);for(const actor of actors){actor.root.position.copy(actor.home);actor.root.quaternion.copy(actor.facing);}}
+  let combatEnabled=false,combatOptions={opponentEnabled:false};
+  function homeCombat(){actions?.cancel(actors);for(const actor of actors){actor.root.position.copy(actor.home);actor.root.quaternion.copy(actor.facing);}}
+  function resetCombat(){homeCombat();actions?.start(actors,combatOptions);}
+  function startCombat(options={}){combatEnabled=true;combatOptions={opponentEnabled:true,...options};resetCombat();}
+  function stopCombat(){combatEnabled=false;homeCombat();}
   function setFighter(index,appearance){
     if(index!==0&&index!==1)return false;
     const character=appearance?.character||'monsters';
     if(!characterForms[character]?.includes(appearance?.form)||!['lava','sand','plant','ice'].includes(appearance?.variant))return false;
-    resetCombat();const old=actors[index];actors[index]=makeActor(index,appearance);
+    homeCombat();const old=actors[index];actors[index]=makeActor(index,appearance);
     const field=old.root.userData.looseRocks?.orbitField;if(field)field.parent?.remove(field);
-    old.root.parent?.remove(old.root);options.disposeCharacter?.(old.root,field);return true;
+    old.root.parent?.remove(old.root);options.disposeCharacter?.(old.root,field);actions?.start(actors,combatEnabled?combatOptions:{opponentEnabled:false});return true;
   }
-  function attack(index){return actions?.attack(actors,index)||{ok:false,reason:'unavailable'};}
-  function hit(index){if(!actions||actors.some(actor=>actions.busy(actor)))return false;return actions.hit(actors[index],actors[1-index].root.position);}
+  function attack(index,berserker=false){return actions?.attack(actors,index,{berserker})||{ok:false,reason:'unavailable'};}
+  function hit(index){if(!actions)return false;return actions.hit(actors[index],actors[1-index].root.position);}
   let yaw=0,pitch=.24,distance=29;
   const lookAt=new THREE.Vector3(0,3,0);
   function resize(aspect){if(camera.aspect===aspect)return;camera.aspect=aspect;camera.updateProjectionMatrix();}
@@ -300,8 +304,9 @@
   function zoom(delta){distance=THREE.MathUtils.clamp(distance+delta,12,220);}
   function reset(){yaw=0;pitch=.24;distance=29;}
   function tick(time,dt){const framedDistance=distance;camera.fov=THREE.MathUtils.clamp(50/Math.min(1,camera.aspect/1.1),50,85);camera.updateProjectionMatrix();scene.fog.near=180;scene.fog.far=380;camera.position.set(Math.sin(yaw)*Math.cos(pitch)*framedDistance,deckLift+3+Math.sin(pitch)*framedDistance,Math.cos(yaw)*Math.cos(pitch)*framedDistance);lookAt.y=deckLift+6+Math.max(0,.24-pitch)*55;camera.lookAt(lookAt);sky.position.copy(camera.position);plasmaMaterial.uniforms.time.value=time;planet.rotation.y=(planet.rotation.y+Math.max(0,Math.min(dt||0,.1))*.045)%(Math.PI*2);for(const actor of actors)actions?.restore(actor);for(const actor of actors)animateCharacter(actor,time,dt);for(const actor of actors)actions?.tick(actor,time,dt);}
-  tick(0,0);
-  return {scene,camera,actors,architecture,resize,orbit,zoom,reset,tick,setFighter,attack,hit,resetCombat,
+  actions?.start(actors,{opponentEnabled:false});tick(0,0);
+  return {scene,camera,actors,architecture,resize,orbit,zoom,reset,tick,setFighter,attack,hit,resetCombat,startCombat,stopCombat,
+    combat:()=>actions?.combat(),canAttack:(index,berserker=false)=>!!actions?.canAttack(index,berserker),
     isBusy:()=>!!actions&&actors.some(actor=>actions.busy(actor)),
     actorState:index=>actions?actions.state(actors[index]):'Ready'};
 });
