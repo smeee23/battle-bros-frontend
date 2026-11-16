@@ -128,7 +128,7 @@ export function createTransactionService({wallet,settings=wallet.settings,storag
       if([...records.values()].some(r=>tracking(r)&&r.from.toLowerCase()===session.address.toLowerCase()&&r.conflictKey===(action.conflictKey??action.contract+':'+action.functionName)))throw issue('This action already has a pending transaction.');
       const args=action.args??[],value=BigInt(action.value??0),data=encodeFunctionData({abi,functionName:action.functionName,args});
       record={id:crypto.randomUUID(),scope,phase:'preparing',contract:action.contract,functionName:action.functionName,conflictKey:action.conflictKey??action.contract+':'+action.functionName,
-        subject:action.subject?.type==='need-care'?{type:'need-care',tokenId:String(action.subject.tokenId),assignmentId:String(action.subject.assignmentId),sourceEpoch:String(action.subject.sourceEpoch),activeSinceTimestamp:String(action.subject.activeSinceTimestamp)}:null,
+        subject:action.subject?.type==='need-care'?{type:'need-care',tokenId:String(action.subject.tokenId),assignmentId:String(action.subject.assignmentId),sourceEpoch:String(action.subject.sourceEpoch),activeSinceTimestamp:String(action.subject.activeSinceTimestamp)}:action.subject?.type==='bro-weights'?{type:'bro-weights',tokenId:String(action.subject.tokenId),group:action.subject.group,weights:action.subject.weights.map(String)}:null,
         label:String(action.label??action.functionName).slice(0,80),from:session.address,to,value:String(value),dataHash:keccak256(data),nonce:null,hash:null,originalHash:null,
         startBlock:'0',scanBlock:'0',confirmations:0,awaitPublication:action.awaitPublication!==false,updatedAt:Date.now(),result:null,error:''};
       records.set(record.id,record);change(record,{});

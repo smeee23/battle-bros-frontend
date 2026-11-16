@@ -81,3 +81,25 @@ test('facility exit saves only changed cosmetics, retries declined drafts, and i
   await service.select('1');release();await saving;
   assert.equal(cloud.get('2').document.skin,'sand');assert.equal(live.skin,'ice','Completing the previous BRO save cannot replace the newly selected BRO');
 });
+test('training Cancel restores entry cosmetics and local draft without a signature',async()=>{
+  const drafts=new Map();let live=defaultAppearance(),signatures=0,remembered;
+  const service=createAppearanceService({worlds:{local:t=>drafts.get(t.id),load:async()=>({world:null}),
+    draft:(t,world,revision)=>drafts.set(t.id,{world:structuredClone(world),revision}),
+    save:async()=>{signatures++;return {world:{revision:'1'}};}},
+    bridge:()=>({capture:()=>live,apply:value=>live=structuredClone(value),remember:value=>remembered=structuredClone(value)})});
+  await service.select('1');live.skin='sand';service.draft(); // Preserve a pre-existing unsynced draft.
+  service.beginTraining();live.skin='ice';live.colors.eye='blue';service.draft();service.cancelTraining();
+  assert.equal(signatures,0);assert.equal(live.skin,'sand');assert.equal(live.colors.eye,'default');
+  assert.deepEqual(drafts.get('1').world,live);assert.deepEqual(remembered,live);
+  assert.equal(service.finishTraining(),undefined,'Cancel cannot leave a pending session to sign later');
+  await service.select('2');assert.equal(live.skin,'lava');await service.select('1');assert.equal(live.skin,'sand','Reload does not resurrect canceled edits');
+  service.beginTraining();live.skin='gem';service.draft();await service.select('2');service.cancelTraining();
+  assert.equal(live.skin,'lava','An obsolete cancellation never changes the newly selected BRO');assert.equal(signatures,0);
+});
+test('saving inside training updates the rollback baseline and later unsaved edits are discarded',async()=>{
+ let live=defaultAppearance(),saves=0,reject=false;const drafts=new Map();
+ const service=createAppearanceService({worlds:{local:t=>drafts.get(t.id),load:async()=>({world:null}),draft:(t,world,revision)=>drafts.set(t.id,{world:structuredClone(world),revision}),save:async()=>{if(reject)throw Error('declined');saves++;return {world:{revision:String(saves)}};}},bridge:()=>({capture:()=>live,apply:a=>live=structuredClone(a)})});
+ await service.select('1');service.beginTraining();live.skin='ice';service.draft();await service.saveTraining();
+ live.skin='gem';service.draft();service.cancelTraining();assert.equal(live.skin,'ice');assert.equal(saves,1);
+ service.beginTraining();live.skin='sand';service.draft();reject=true;await assert.rejects(service.saveTraining(),/declined/);service.cancelTraining();assert.equal(live.skin,'ice','Rejected save never advances the rollback baseline');
+});

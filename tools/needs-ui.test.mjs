@@ -48,6 +48,7 @@ test('player UI discovers Needs, launches care, opens worlds, signs saves and pr
     assert.equal(find('[data-status]'),undefined,'The existing stats header owns the confirmed-block label');
     assert(worldMenu.querySelector('[data-save]'));assert(worldMenu.querySelector('[data-cloud]'));
     assert.equal(find('[data-save-appearance]'),undefined,'No menu appearance-save button');
+    assert.equal(window.battleBrosWalletAddress('1'),address,'Stats ownership checks use the latest owned BRO roster');assert.equal(window.battleBrosWalletAddress('999999'),null);
     assert.equal(find('[data-bro]').value,'1');assert.equal(service.list()[0].status,'awaiting-activity');
     assert.equal(service.list().length,2);assert.equal(find('[data-needs]').children.length,1,'Only the selected BRO’s Needs are shown');
     await find('[data-needs]').children[0].children[2].onclick();assert.equal(service.list()[0].status,'ready');
@@ -61,11 +62,16 @@ test('player UI discovers Needs, launches care, opens worlds, signs saves and pr
     conflict=true;await find('[data-save]').onclick();assert.match(find('[data-world-error]').textContent,/another device/);assert.equal(saved.size,1,'Conflict keeps the local draft');
     const beforeAppearanceSave=signed;conflict=false;events['battlebros:training-entered']();
     cosmetics={...cosmetics,skin:'ice'};events['battlebros:appearance-edited']();assert.equal(signed,beforeAppearanceSave,'Editing only creates a local draft');
-    const exit={detail:{pending:false}};await events['battlebros:training-exited'](exit);
-    assert(exit.detail.pending,'Exit keeps the mouse free for the wallet prompt');
+    const save={detail:{promise:null}};events['battlebros:training-save-appearance'](save);await save.detail.promise;
     assert.match(find('[data-appearance-status]').textContent,/Appearance saved for BRO #1/);assert.equal(signed,beforeAppearanceSave+1);
-    events['battlebros:training-entered']();await events['battlebros:training-exited']({detail:{pending:false}});
-    assert.equal(signed,beforeAppearanceSave+1,'Leaving without edits does not request a signature');
+    cosmetics={...cosmetics,skin:'gem'};events['battlebros:appearance-edited']();await events['battlebros:training-exited']();
+    assert.equal(cosmetics.skin,'ice','Leaving retains saved appearance and discards subsequent edits');
+    events['battlebros:training-entered']();await events['battlebros:training-exited']();
+    assert.equal(signed,beforeAppearanceSave+1,'Leaving never requests a signature');
+    const beforeCancel=signed,oldCosmetics=structuredClone(cosmetics);
+    events['battlebros:training-entered']();cosmetics={...cosmetics,skin:'gem'};events['battlebros:appearance-edited']();
+    const canceled={detail:{pending:false,save:false}};await events['battlebros:training-exited'](canceled);
+    assert.deepEqual(cosmetics,oldCosmetics,'Cancel restores the appearance at facility entry');assert.equal(signed,beforeCancel);assert.equal(canceled.detail.pending,false);
     find('[data-bro]').value='2';await find('[data-bro]').onchange();assert.equal(selectedProfile,'2');
     assert.equal(find('[data-needs]').children.length,1);assert.match(find('[data-needs]').children[0].textContent,/No active Needs for this BRO/);
     assert.equal(cosmetics.skin,'lava','A second BRO does not inherit the first BRO’s skin');assert.deepEqual(opened,{kind:'home',id:'2'});assert.match(find('[data-world-status]').textContent,/BRO #2.*No cloud save yet/);

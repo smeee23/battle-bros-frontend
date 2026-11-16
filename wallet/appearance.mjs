@@ -21,9 +21,23 @@ export function createAppearanceService({worlds,bridge,onChange=()=>{}}){
       }catch(error){if(request!==generation)return;if(local){validateAppearance(local.world);current.revision=local.revision;bridge()?.apply(local.world);}status='Appearance could not sync: '+error.message;}
       notify();
     },
-    beginTraining(){training=null;if(!current||busy)return;try{const hash=contentHash(bridge().capture());training={generation,initial:current.savedHash,edited:hash!==current.savedHash};}catch{/* Unhatched BROs cannot edit appearance. */}},
+    beginTraining(){training=null;if(!current||busy)return;try{const appearance=JSON.parse(JSON.stringify(bridge().capture())),hash=contentHash(appearance);training={generation,appearance,initial:current.savedHash,edited:hash!==current.savedHash};}catch{/* Unhatched BROs cannot edit appearance. */}},
+    async saveTraining(){
+      if(!training||training.generation!==generation)throw Error('Reopen the training facility before saving.');
+      const session=training,appearance=JSON.parse(JSON.stringify(bridge().capture()));
+      try{if(contentHash(appearance)!==current.savedHash)await this.save();}
+      catch(error){if(training===session&&session.generation===generation)worlds?.draft(current,session.appearance,current.revision);throw error;}
+      if(training===session&&session.generation===generation){session.appearance=appearance;session.initial=current.savedHash;session.edited=false;}
+    },
+    cancelTraining(){
+      const session=training;training=null;if(!session||session.generation!==generation)return;
+      const appearance=session.appearance,view=bridge();
+      if(contentHash(view.capture())!==contentHash(appearance))view.apply(appearance);
+      view.remember?.(appearance);worlds?.draft(current,appearance,current.revision);
+      status='Appearance changes canceled for BRO #'+current.id+'.';notify();
+    },
     finishTraining(){const session=training;training=null;if(!session||session.generation!==generation||!session.edited)return;if(contentHash(bridge().capture())===session.initial)return;return this.save();},
-    draft(){if(!current||!worlds)return;const appearance=bridge()?.capture();if(!appearance)return;validateAppearance(appearance);bridge()?.remember?.(appearance);if(training)training.edited=true;worlds.draft(current,appearance,current.revision);status='Appearance saved locally for BRO #'+current.id+'. Leave the training facility to sync it.';notify();},
+    draft(){if(!current||!worlds)return;const appearance=bridge()?.capture();if(!appearance)return;validateAppearance(appearance);bridge()?.remember?.(appearance);if(training){training.edited=true;status='Appearance preview updated. Choose Save appearance to keep it.';notify();return;}worlds.draft(current,appearance,current.revision);status='Appearance saved locally for BRO #'+current.id+'. Choose Save in the training facility to sync it.';notify();},
     async save(){
       if(!current||!worlds)throw Error('Select a BRO and configure appearance saves first.');if(busy)throw Error('An appearance save is already in progress.');
       const request=generation,target={kind:'appearance',id:current.id},appearance=bridge().capture();validateAppearance(appearance);worlds.draft(target,appearance,current.revision);busy=true;status='Sign the appearance save for BRO #'+target.id+'.';notify();

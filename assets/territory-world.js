@@ -12,6 +12,12 @@
     const distance=Math.max(Math.abs(x-(SIZE-2.5)),Math.abs(z-1.5));
     return distance<=7 ? 8 : 0;
   }
+  // Same level-three doorstep as Home, joined gently to the outer level-eight paths.
+  function trainingTerrainLevel(x,z) {
+    if(x<0||z<0)return 0;
+    const distance=Math.hypot(x,z);
+    return distance<=16?Math.min(8,3+Math.floor(Math.max(0,distance-6))):0;
+  }
   function generate(seed='territory-v1') {
     let hash=2166136261;
     for(const c of String(seed))hash=Math.imul(hash^c.charCodeAt(0),16777619);
@@ -55,11 +61,13 @@
       }
       const portalLevel=portalTerrainLevel(x,z);
       if(portalLevel){height=portalLevel;terrain='snow';kind=null;}
+      const trainingLevel=trainingTerrainLevel(x,z);
+      if(trainingLevel){height=trainingLevel;terrain='stone';kind=null;}
       cells.push({x,z,terrain,kind,floors:1,terrainFloors:Math.max(1,Math.min(MAX_HEIGHT,height)),buildingType:null,fenceSide:null});
     }
     return {v:4,gridSize:SIZE,environment:'LUNAR',seed:String(seed),cells,
       // Development metadata; not authoritative territory occupancy or a roster.
       defenderAreas:areas};
   }
-  return Object.freeze({generate,portalTerrainLevel,SIZE,MAX_HEIGHT});
+  return Object.freeze({generate,portalTerrainLevel,trainingTerrainLevel,SIZE,MAX_HEIGHT});
 });

@@ -1,3 +1,4 @@
+import {createWeightsService} from './weights.mjs';
 import {createAppearanceService} from './appearance.mjs';
 import {readTransactionPublication} from './publication.mjs';
 import {createNeedsService} from './needs.mjs';
@@ -16,7 +17,15 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
   const worlds=runtime.worldApiUrl?createWorldClient({wallet,apiUrl:runtime.worldApiUrl,storage}):null;
   const appearance=createAppearanceService({worlds,bridge:()=>window.battleBrosAppearanceBridge,onChange:state=>{el('[data-appearance-status]').textContent=state.status;}});
   const service=createNeedsService({wallet,transactions,refresh});window.battleBrosNeeds=service;
+  const weights=createWeightsService({wallet,transactions,selected:()=>selected,publication:()=>publication});
+  window.battleBrosSaveWeights=request=>weights.save(request);
+  window.battleBrosWeightEligibility=(tokenId,scope)=>weights.eligibility(tokenId,scope);
+  window.battleBrosTrainingWeights?.refreshEligibility();
+  window.battleBrosWeightTransactions=()=>weights.records();
+  transactions?.subscribe(()=>window.battleBrosTrainingWeights?.update(weights.records()));
   const own=()=>publication?.battleBros.filter(b=>b.active&&b.owner?.toLowerCase()===wallet.getState().address?.toLowerCase())??[];
+  window.battleBrosWalletAddress=tokenId=>wallet.getState().status==='connected'&&(tokenId===undefined||own().some(b=>b.tokenId===String(tokenId)))?wallet.getState().address:null;
+  window.syncDefenseWeightVisibility?.();
   const target=()=>{const bro=own().find(b=>b.tokenId===broSelect.value);if(!bro)throw Error('Select a BRO owned by your connected wallet');if(kindSelect.value==='territory'&&!bro.locationId)throw Error('This BRO does not occupy a territory');return {kind:kindSelect.value,id:kindSelect.value==='home'?bro.tokenId:bro.locationId};};
   const same=(a,b)=>a&&b&&a.kind===b.kind&&a.id===b.id;
   const active=()=>own().some(b=>activeTarget?.kind==='home'?b.tokenId===activeTarget.id:b.locationId===activeTarget?.id);
@@ -24,6 +33,7 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
   async function action(fn,selector='[data-error]'){el(selector).textContent='';try{await fn();}catch(e){error(e,selector);}}
   const worldAction=fn=>action(fn,'[data-world-error]');
   function render(){
+    window.syncDefenseWeightVisibility?.();
     const previous=selected||String(window.__battleBrosReadModel?.identity.tokenId??broSelect.value);broSelect.replaceChildren();for(const b of own()){const o=document.createElement('option');o.value=b.tokenId;o.textContent=(b.name||'BRO')+' #'+b.tokenId;broSelect.append(o);}if(own().some(b=>b.tokenId===previous))broSelect.value=previous;selected=own().length?broSelect.value:'';
     if(!own().length){const o=document.createElement('option');o.textContent='Connect an owning wallet';broSelect.append(o);}
     broSelect.disabled=worldBusy;kindSelect.disabled=worldBusy;
@@ -114,7 +124,8 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
   }
   el('[data-cloud]').onclick=()=>worldAction(()=>openWorld({cloud:true}));
   document.addEventListener('battlebros:training-entered',()=>appearance.beginTraining());
-  document.addEventListener('battlebros:training-exited',event=>action(()=>{const pending=appearance.finishTraining();if(pending&&event.detail)event.detail.pending=true;return pending;}));
+  document.addEventListener('battlebros:training-save-appearance',event=>{event.detail.promise=appearance.saveTraining();});
+  document.addEventListener('battlebros:training-exited',()=>{try{appearance.cancelTraining();}catch(e){error(e);}});
   document.addEventListener('battlebros:appearance-edited',()=>{try{appearance.draft();}catch(e){error(e);}});
   broSelect.onchange=async()=>{if(worldBusy)return;selected=broSelect.value;kindSelect.value='home';selectBro();render();await autoOpenWorld();};
   kindSelect.onchange=()=>autoOpenWorld();
@@ -124,7 +135,7 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
     clearTimeout(timer);const capturedTarget={...activeTarget},capturedRevision=revision;
     timer=setTimeout(()=>{if(switching||!same(activeTarget,capturedTarget)||!active()||!window.battleBrosWorldBridge.matches(activeTarget))return;try{worlds.draft(capturedTarget,window.battleBrosWorldBridge.capture(),capturedRevision);el('[data-world-status]').textContent='Saved locally. Sign “Save world” to sync across devices.';}catch(e){error(e,'[data-world-error]');}},300);
   });
-  service.subscribe(render);let identity='';wallet.subscribe(state=>{const next=state.address+':'+state.chainId;if(next===identity)return;identity=next;identityGeneration++;clearTimeout(timer);activeTarget=null;selected='';appearance.reset();render();action(refresh);});
+  service.subscribe(render);let identity='';wallet.subscribe(state=>{window.syncDefenseWeightVisibility?.();const next=state.address+':'+state.chainId;if(next===identity)return;identity=next;identityGeneration++;clearTimeout(timer);activeTarget=null;selected='';appearance.reset();window.battleBrosTrainingWeights?.refreshEligibility();render();action(refresh);});
   document.addEventListener('battlebros:transaction-reflected',()=>action(refresh));
   window.addEventListener('focus',()=>{if(Date.now()-lastFocusRefresh>30000){lastFocusRefresh=Date.now();action(refresh);}});
   for(const panel of [root,needsRoot,worldRoot]){

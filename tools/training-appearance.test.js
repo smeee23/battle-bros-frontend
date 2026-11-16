@@ -1,11 +1,12 @@
 'use strict';
+(async()=>{
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const THREE=require('../vendor/three/three.r128.min.js');
 const html=fs.readFileSync('index.html','utf8');
 function element(){return {hidden:true,value:'',children:[],get options(){return this.children;},style:{},textContent:'',append(...items){this.children.push(...items);},add(item){this.children.push(item);},setAttribute(){},getAttribute(){},focus(){},querySelectorAll(){return [];},classList:{values:new Set(),contains(k){return this.values.has(k);},add(k){this.values.add(k);},remove(k){this.values.delete(k);},toggle(k,on){if(on)this.add(k);else this.remove(k);}}};}
 const nodes=new Map();const get=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
 const trainingEvents=[];
-const document={body:element(),getElementById:get,createElement:element,createTextNode:text=>({textContent:text}),pointerLockElement:{},exitPointerLock(){this.pointerLockElement=null;},dispatchEvent(event){trainingEvents.push(event.type);if(event.type==='battlebros:training-exited')event.detail.pending=true;}};
+const document={body:element(),getElementById:get,createElement:element,createTextNode:text=>({textContent:text}),pointerLockElement:{},exitPointerLock(){this.pointerLockElement=null;},dispatchEvent(event){trainingEvents.push(event.type);if(event.type==='battlebros:training-save-appearance')event.detail.promise=Promise.resolve();}};
 const materials=Object.fromEntries(['habitatShell','habitatTrim','habitatBand','habitatWindow'].map(k=>[k,new THREE.MeshBasicMaterial()]));
 const facility=new THREE.Group();facility.scale.setScalar(4.5);facility.rotation.y=Math.PI/4;
 const building=new THREE.Group();building.name='Training Center';facility.add(building);
@@ -17,10 +18,10 @@ const worldGroup=new THREE.Group();worldGroup.add(facility);
 const make=appearance=>{const root=new THREE.Group();root.add(new THREE.Mesh(new THREE.BoxGeometry(2,3,1),materials.habitatTrim));root.userData={form:appearance.form,visualVariant:appearance.variant,characterFamily:appearance.character,colors:appearance.colors};return root;};
 const source=make({character:'juggernaut',form:4,variant:'lava',colors:{core:'blue',glow:'default',eye:'green'}});source.position.set(20,1,20);worldGroup.add(source);
 const camera=new THREE.PerspectiveCamera(70,1,.03,1100);camera.position.set(10,3,10);
-const noop=()=>{};let resumed=0,pointerLocks=0;
+const noop=()=>{};let resumed=0,pointerLocks=0,discard=true,warnings=0;
 const previewEvents=new Map(),captures=new Set();
 const previewCanvas={requestPointerLock:()=>pointerLocks++,addEventListener:(name,handler)=>previewEvents.set(name,handler),setPointerCapture:id=>captures.add(id),hasPointerCapture:id=>captures.has(id),releasePointerCapture:id=>captures.delete(id)};
-const context={THREE,document,CustomEvent:class{constructor(type,{detail}={}){this.type=type;this.detail=detail;}},window:{addEventListener:noop},Option:function(title,value){this.value=value;this.text=title;},
+const context={THREE,document,CustomEvent:class{constructor(type,{detail}={}){this.type=type;this.detail=detail;}},window:{addEventListener:noop,confirm:()=>{warnings++;return discard;}},Option:function(title,value){this.value=value;this.text=title;},
  M:materials,worldGroup,trainingFacility:facility,baseBattleBroPrototype:source,persCam:camera,
  fp:{active:true,grounded:true,pos:new THREE.Vector3(),yaw:0,pitch:0},explorationActive:false,fpKeys:new Set(['w']),
  fpToolMenu:element(),renderer:{domElement:previewCanvas},BATTLEBRO_COLORS:{blue:0,green:0,black:0},
@@ -72,11 +73,14 @@ assert.equal(run('trainingAppearance.display.rotation.y'),originalYaw+.5,'Appear
 assert.equal(context.baseBattleBroPrototype,source,'Skin changes preserve the existing world actor');
 assert.equal(context.baseBattleBroPrototype.userData.visualVariant,'ice');assert.deepEqual(context.baseBattleBroPrototype.position,source.position,'Changing skin preserves home location');
 run("trainingAppearance.controls.eye.value='blue';changeTrainingAppearance()");assert.equal(context.baseBattleBroPrototype.userData.colors.eye,'blue');
-run('leaveTrainingAppearance()');assert.equal(shell.visible,true);assert.equal(get('training-appearance-controls').hidden,true);assert.equal(resumed,2,'Training entry and exit clear any transport deployment');
+await get('training-appearance-done').onclick();assert(run('trainingAppearance.active'),'Save appearance keeps the facility open');
+const savedSkin=source.userData.visualVariant;run("trainingAppearance.controls.skin.value='gem';changeTrainingAppearance()");
+discard=false;get('training-appearance-cancel').onclick();assert(run('trainingAppearance.active'),'Declining the warning keeps edits open');
+discard=true;get('training-appearance-cancel').onclick();assert.equal(source.userData.visualVariant,savedSkin,'Only changes after the last save are discarded');assert.equal(warnings,2);assert.equal(shell.visible,true);assert.equal(get('training-appearance-controls').hidden,true);assert.equal(resumed,2,'Training entry and exit clear any transport deployment');
 assert.equal(trainingEvents[0],'battlebros:training-entered');
 assert(trainingEvents.includes('battlebros:appearance-edited'));
 assert.equal(trainingEvents.at(-1),'battlebros:training-exited');
-assert.equal(pointerLocks,0,'Pending facility saves keep the mouse free for wallet approval');
+assert.equal(pointerLocks,1,'Returning outside restores mouse capture after saves finish');
 assert.equal(facility.getObjectByName('appearancePedestal'),undefined);
 for(const mesh of building.children.filter(mesh=>mesh.userData.trainingDoorSide))
  assert(Math.abs(mesh.position.x-mesh.userData.trainingDoorSide*(mesh.geometry.parameters.width===.96?.5:.09))<1e-8,'Door and handle return to closed positions');assert(!run('trainingDoorApproach(fp.pos,trainingFacility)'),'Exit lands outside trigger');
@@ -95,3 +99,16 @@ assert.equal(context.baseBattleBroPrototype,source,'Training exit retains the sa
 assert.equal(run('transportCube.root'),source,'Training retains the original active home instance');
 assert.equal(run('trainingAppearance.display'),null,'Training preview is removed on exit');
 assert.equal(worldGroup.children.filter(child=>child.userData.characterFamily==='juggernaut').length,1,'Only the original BattleBro remains at home');
+
+// Cancel rolls back both skin and colors without signing or replacing the live rig.
+run('enterTrainingAppearance()');
+const entrySkin=source.userData.visualVariant,entryColors=JSON.stringify(source.userData.colors),eventsBefore=trainingEvents.length;
+run("trainingAppearance.controls.skin.value='gem';trainingAppearance.controls.eye.value='green';changeTrainingAppearance()");
+get('training-appearance-cancel').onclick();
+assert.equal(source.userData.visualVariant,entrySkin);assert.equal(JSON.stringify(source.userData.colors),entryColors);
+assert.equal(context.baseBattleBroPrototype,source);assert(!run('trainingAppearance.active'));
+assert.equal(trainingEvents.slice(eventsBefore).filter(e=>e==='battlebros:appearance-edited').length,1,'Rollback does not emit a second edit');
+assert(pointerLocks>0,'Cancel immediately returns mouse capture without a wallet prompt');
+
+context.territoryWorldState={active:true};run('enterTrainingAppearance()');assert(run('trainingAppearance.active'),'The shared doorway and interior work in Territory World');get('training-appearance-cancel').onclick();assert(!run('trainingAppearance.active'));
+})().catch(error=>{console.error(error);process.exitCode=1;});

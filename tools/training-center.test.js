@@ -78,3 +78,11 @@ console.log('training facility: real walls/plasma, unchanged design, enlarged do
 
 assert.equal(api.setCell(0,0,{terrain:'stone',kind:null}),false,'Player cannot erase or reshape the permanent foundation');
 assert.equal(api.setCell(19,19,{terrain:'stone',kind:'house',buildingType:'skyscraper'}),false,'Cannot place another facility');
+
+context.territoryWorldState={active:true};
+const homeFacility=root.children[0],homeBox=new THREE.Box3().setFromObject(homeFacility);
+api.syncTrainingFacility();const territoryFacility=root.children[0];
+assert.equal(root.children.length,1,'Territory keeps one permanent training facility');
+assert.equal(homeFacility.parent,null);assert.deepEqual(new THREE.Box3().setFromObject(territoryFacility),homeBox,'Territory facility has the same position, dimensions, door, foundation and model as Home');
+assert(api.trainingFacilityOccupiesCell(0,0),'Territory foundation is protected');
+assert.equal(api.setCell(0,0,{terrain:'stone',kind:null}),false,'Territory facility cannot be erased');

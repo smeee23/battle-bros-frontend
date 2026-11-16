@@ -1,0 +1,36 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const create=require('../assets/training-weights');
+function element(){return {hidden:false,value:'',children:[],attrs:{},append(...items){this.children.push(...items);},setAttribute(k,v){this.attrs[k]=v;}};}
+const nodes=new Map();let enabled=true,records=[],world='territory';
+const document={createElement:element,getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);}};
+const editor=create({document,getRecords:()=>records,onValidity:valid=>enabled=valid});
+const model=id=>({identity:{tokenId:BigInt(id),hatched:true},snapshot:{blockNumber:1n},training:{weightsBps:{attack:3334n,defend:3333n,counter:3333n}},defense:{weightsBps:{attack:2000n,defend:3000n,counter:5000n}}});
+const scope={chainId:'31337',deploymentId:'0xABC'};
+const inputs=group=>nodes.get('battlebro-'+group+'-editor').children.filter(el=>el.children.length).map(el=>el.children[0]);
+const set=(group,index,value)=>{const input=inputs(group)[index];input.value=value;input.oninput();};
+assert(editor.begin(model(1),scope));const [attack,,counter]=inputs('training');assert.equal(attack.value,'33.34');assert(counter.readOnly);assert(!editor.dirty());
+assert(nodes.get('battlebro-defense-editor').hidden);assert(!nodes.get('battlebro-defense').hidden);assert(nodes.get('battlebro-defense-restriction').textContent.includes('cannot be changed in training facilities'));
+set('training',0,'40.01');assert.equal(counter.value,'26.66');set('training',1,'59.99');assert.equal(counter.value,'0');assert(enabled);
+for(const bad of ['','-1','100.01','4.001','NaN','1e2']){set('training',0,bad);assert(!enabled,bad);assert.throws(()=>editor.request());assert(editor.dirty());}
+set('training',0,'100');set('training',1,'0');assert(enabled);assert.deepEqual(editor.request().groups,['training']);
+set('defense',0,'60');assert.deepEqual(editor.request().groups,['training'],'Directly changing hidden controls cannot submit defense');
+editor.setBusy(true);assert(!enabled);assert(attack.disabled);editor.setBusy(false);assert(enabled);
+const tx=phase=>({id:'1',updatedAt:1,blockNumber:'2',phase,subject:{tokenId:'1',group:'training',weights:['10000','0','0']}});
+records=[tx('pending')];editor.update(records);assert(!enabled);assert(attack.disabled);assert(editor.dirty(),'Submission is not confirmation');
+assert.throws(()=>editor.request(),/pending/);editor.update([tx('rejected')]);assert(enabled);assert(editor.dirty());
+records=[tx('confirmed')];editor.update(records);assert(enabled);assert(!editor.dirty());assert.deepEqual(editor.request().groups,[]);
+editor.update([tx('pending')]);assert(editor.dirty(),'Reorg removes the confirmation baseline');editor.update([tx('confirmed')]);assert(!editor.dirty());
+set('training',0,'99');assert(editor.dirty());editor.finish();editor.begin(model(1),scope);assert.equal(attack.value,'100','Confirmed transactions survive publication lag and re-entry');
+editor.finish();editor.begin({...model(1),snapshot:{blockNumber:3n}},scope);assert.equal(attack.value,'33.34','Newer publication wins');
+editor.finish();editor.begin(model(2),scope);set('training',0,'40');editor.finish();editor.begin(model(2),scope);assert.equal(attack.value,'33.34','Unsaved edits are discarded');
+records=[];editor.finish();editor.begin({...model(1),need:{active:true}},scope);assert(!enabled);assert(nodes.get('battlebro-training-editor').hidden);assert(!nodes.get('battlebro-training').hidden);assert(nodes.get('battlebro-training-restriction').textContent.includes('Need'));
+editor.refreshEligibility({...model(1),need:{active:false}});assert(enabled);
+editor.refreshEligibility({...model(1),pendingChallengeId:'9'});assert(!enabled);assert(nodes.get('battlebro-training-restriction').textContent.includes('pending challenge'));
+editor.refreshEligibility({...model(1),territory:'2'});assert(enabled,'Occupants can still change training');assert(nodes.get('battlebro-defense-editor').hidden);assert(nodes.get('battlebro-defense-restriction').textContent.includes('locked'));
+editor.finish();world='home';editor.begin(model(1),scope);assert(nodes.get('battlebro-defense-section').hidden,'Home hides defense');set('training',0,'40');assert.deepEqual(editor.request().groups,['training']);
+editor.finish();assert(nodes.get('battlebro-defense-section').hidden,'Leaving defers stats visibility to the world context');world='territory';editor.begin(model(1),scope);assert(nodes.get('battlebro-defense-section').hidden,'Territory facility also hides defense');assert(nodes.get('battlebro-defense-editor').hidden);
+editor.finish();for(const group of ['training','defense'])assert(nodes.get('battlebro-'+group+'-restriction').hidden);
+editor.begin({...model(1),identity:{tokenId:1n,hatched:false}},scope);editor.update([]);assert(!enabled);editor.finish();
+const html=fs.readFileSync('index.html','utf8');assert(html.includes('trainingHasUnsavedChanges()&&window.confirm'));assert(html.includes('saveTrainingSettings(\'weights\')'));
+console.log('Training weights: training-only saves in Home/Territory, read-only defense, restrictions, validation, confirmation/reorg, retry and discard passed');

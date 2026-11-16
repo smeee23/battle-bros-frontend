@@ -4404,6 +4404,12 @@
   #training-appearance-controls label { display:block; margin:12px 0; font-size:12px; }
   #training-appearance-controls select { display:block; width:100%; margin-top:5px; padding:9px; border:1px solid #b9ad96; border-radius:8px; background:#fffaf0; color:inherit; }
   #training-appearance-controls select[hidden] { display:none; }
+  #battlebro-defense-section[hidden], .battlebro-panel-grid[hidden], .training-weight-editor[hidden] { display:none; }
+  .training-weight-editor label { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0; }
+  .training-weight-editor input { width:90px; padding:6px; border:1px solid #b9ad96; border-radius:6px; background:#fffaf0; color:#241c0b; }
+  #training-weights-save:disabled { opacity:.45; cursor:not-allowed; }
+  .training-weight-editor input[readonly] { background:#e8e0cf; }
+  .training-weight-editor input[aria-invalid="true"] { border-color:#b42828; }
   .training-color-picker { margin-top:5px; border:1px solid #b9ad96; border-radius:8px; background:#fffaf0; }
   .training-color-picker summary { padding:9px; cursor:pointer; }
   .training-color-options { max-height:220px; overflow-y:auto; padding:4px; }
@@ -4648,10 +4654,14 @@
     <details class="battlebro-panel-section battlebro-panel-disclosure" open>
       <summary>Training weights</summary>
       <div class="battlebro-panel-grid" id="battlebro-training"></div>
+      <div class="training-weight-editor" id="battlebro-training-editor" hidden></div>
+      <p class="battlebro-panel-note" id="battlebro-training-restriction" role="status" aria-live="polite" hidden></p>
     </details>
-    <details class="battlebro-panel-section battlebro-panel-disclosure" open>
+    <details class="battlebro-panel-section battlebro-panel-disclosure" id="battlebro-defense-section" open hidden>
       <summary>Defensive weights</summary>
       <div class="battlebro-panel-grid" id="battlebro-defense"></div>
+      <div class="training-weight-editor" id="battlebro-defense-editor" hidden></div>
+      <p class="battlebro-panel-note" id="battlebro-defense-restriction" role="status" aria-live="polite" hidden></p>
     </details>
     <details class="battlebro-panel-section battlebro-panel-disclosure" open>
       <summary>Capital position</summary>
@@ -4675,10 +4685,12 @@
     </div>
     <section class="battlebro-panel-section" id="training-appearance-controls" hidden aria-label="Appearance selection">
       <h3>Appearance</h3>
-      <p class="battlebro-panel-note">Choose your skin and colors. Changed appearances are saved when you leave the facility.</p>
+      <p class="battlebro-panel-note">Choose your skin and colors. Save appearance signs your cosmetic changes. Save weights sends onchain transactions (one per changed group). Return outside discards unsaved changes.</p>
       <div id="training-appearance-options"></div>
       <p class="battlebro-panel-note" id="training-appearance-status" role="status"></p>
-      <button class="btn" id="training-appearance-done" type="button">Done · Return outside</button>
+      <button class="btn" id="training-appearance-done" type="button">Save appearance</button>
+      <button class="btn" id="training-weights-save" type="button">Save weights</button>
+      <button class="btn" id="training-appearance-cancel" type="button">Return outside</button>
     </section>
     <span class="battlebro-mock-badge" id="battlebro-source-badge">NOT CONNECTED</span>
   </aside>
@@ -5710,6 +5722,8 @@
   <script src="assets/transport-cube.js"></script>
   <script src="assets/unhatched-home.js"></script>
   <script src="assets/bro-appearance.js"></script>
+  <script src="assets/weight-eligibility.js"></script>
+  <script src="assets/training-weights.js"></script>
   <script src="assets/battlebro-terrain.js"></script>
   <script src="vendor/tiny-crowd-layer.js"></script>
   <script>
@@ -5743,6 +5757,7 @@
 
   function renderBattleBroPanel(state = battleBroFrontendState) {
     const bro = state && state.battleBro || {};
+    window.syncDefenseWeightVisibility?.();
     if(!bro.id) {
       document.getElementById('battlebro-name').textContent='No BattleBro selected';
       for(const id of ['core-stats','reserves','training','defense','capital','territory'])
@@ -5877,6 +5892,7 @@
 
   function renderBattleBroReadModel(model, sourceLabel) {
     activeBattleBroReadModel = model;
+    window.battleBrosTrainingWeights?.refreshEligibility(model);
     const bro = model.identity;
     const progression = model.progression;
     const capital = model.capital;
@@ -5908,6 +5924,7 @@
     if (status) status.textContent = 'Confirmed snapshot block ' + model.snapshot.blockNumber.toString() + '. ' + sourceLabel;
     if (badge) badge.textContent = 'CONFIRMED TERRITORY V2';
     window.__battleBrosReadModel = model;
+    window.syncDefenseWeightVisibility?.();
   }
 
   function battleBrosPublicDataConfig() {
@@ -5959,6 +5976,7 @@
       const bro=game.battleBros.find(b=>tokenId===null?b.active:String(b.tokenId)===String(tokenId));
       if(bro){
         const model=normalizeBattleBrosPublicDocuments(manifest,game,bro,BigInt(bro.tokenId));
+        window.__battleBrosWeightScope={chainId:game.chainId,deploymentId:game.deploymentId};
         renderBattleBroReadModel(model,'Territory publication.');
         window.updateUnhatchedHome?.(model,{chainId:game.chainId,deploymentId:game.deploymentId});
         window.battleBrosAppearanceBridge?.select(model,{chainId:game.chainId,deploymentId:game.deploymentId});
@@ -5980,6 +5998,7 @@
   window.selectBattleBrosReadModel=(model,scope)=>{
     window.__battleBrosSelectedTokenId=model.identity.tokenId.toString();
     if(window.history?.replaceState){const url=new URL(location.href);url.searchParams.set('battleBroId',window.__battleBrosSelectedTokenId);window.history.replaceState(null,'',url.href);}
+    window.__battleBrosWeightScope={chainId:scope.chainId,deploymentId:scope.deploymentId};
     renderBattleBroReadModel(model,'Selected owned BRO.');window.updateUnhatchedHome?.(model,scope);window.battleBrosAppearanceBridge?.select(model,scope);
   };
 
@@ -7273,9 +7292,14 @@
     shootingStarGeometry.attributes.position.needsUpdate = true;
   }
 
+  window.battleBrosTrainingWeights=window.createTrainingWeightsEditor?.({document,
+    getRecords:()=>window.battleBrosWeightTransactions?.()||[],
+    getEligibility:(model,scope)=>window.battleBrosWeightEligibility?.(String(model.identity.tokenId),scope)
+      ||window.BattleBrosWeightEligibility(model,{transactions:false}),
+    onValidity:valid=>{document.getElementById('training-weights-save').disabled=!valid;}});
   // Training-center appearance mode owns the camera while its menu is open.
   const trainingAppearance = {active:false, elapsed:0, cooldown:0, display:null, room:null,
-    controls:null, saved:null, yaw:0, zoom:1, drag:null, cameraEnd:new THREE.Vector3(),
+    controls:null, saved:null, saving:false, yaw:0, zoom:1, drag:null, cameraEnd:new THREE.Vector3(),
     start:new THREE.Vector3(), end:new THREE.Vector3(),
     look:new THREE.Vector3(), rotation:new THREE.Quaternion(), destination:new THREE.Quaternion(), doors:[]};
   function trainingAppearanceCharacter(root) {
@@ -7339,7 +7363,7 @@
       if(freshDebris[i]?.node)sync(entry.node,freshDebris[i].node);
     }
   }
-  function changeTrainingAppearance() {
+  function changeTrainingAppearance(notify=true) {
     if(!trainingAppearance.active)return;
     const controls=trainingAppearance.controls,old=baseBattleBroPrototype;
     const colors=Object.fromEntries(['core','glow','eye'].map(role=>[role,controls[role].value]));
@@ -7360,8 +7384,8 @@
       }
     }
     refreshTrainingDisplay();
-    document.getElementById('training-appearance-status').textContent='Appearance updated locally. Your changes will be saved when you leave the training facility.';
-    if(typeof CustomEvent==='function')document.dispatchEvent?.(new CustomEvent('battlebros:appearance-edited'));
+    document.getElementById('training-appearance-status').textContent='Appearance preview updated. Save appearance to keep these changes before returning outside.';
+    if(notify&&typeof CustomEvent==='function')document.dispatchEvent?.(new CustomEvent('battlebros:appearance-edited'));
   }
   function setupTrainingColorPicker(select, label, title) {
     select.hidden=true;
@@ -7407,7 +7431,9 @@
       options.append(label);controls[role]=select;
     }
     trainingAppearance.controls=controls;
-    document.getElementById('training-appearance-done').onclick=()=>leaveTrainingAppearance();
+    document.getElementById('training-appearance-done').onclick=()=>saveTrainingSettings('appearance');
+    document.getElementById('training-weights-save').onclick=()=>saveTrainingSettings('weights');
+    document.getElementById('training-appearance-cancel').onclick=()=>leaveTrainingAppearance();
   }
   function enterTrainingAppearance() {
     if (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched()) return false;
@@ -7448,21 +7474,67 @@
       state.controls[role].value=baseBattleBroPrototype.userData.colors?.[role]||'default';
       state.controls[role].updateSwatch?.();
     }
+    window.battleBrosTrainingWeights?.begin(window.__battleBrosReadModel,window.__battleBrosWeightScope);
+    state.saved.appearance=Object.fromEntries(Object.entries(state.controls).map(([role,control])=>[role,control.value]));
     refreshTrainingDisplay();resetTransportCube(false);fpKeys.clear();leaveExcavation();
     fpToolMenu.hidden=true;
     document.body.classList.add('training-appearance-active');
     document.getElementById('training-appearance-controls').hidden=false;
-    document.getElementById('training-appearance-status').textContent='Drag character to rotate · Scroll to zoom · Esc to return outside.';
+    document.getElementById('training-appearance-status').textContent='Drag character to rotate · Scroll to zoom · Esc to return outside (unsaved changes will be discarded).';
     document.getElementById('battlebro-sidebar').classList.remove('is-collapsed');
     document.getElementById('battlebro-sidebar-toggle').setAttribute('aria-expanded','true');
     if(document.pointerLockElement && document.exitPointerLock)document.exitPointerLock();
     if(typeof CustomEvent==='function')document.dispatchEvent?.(new CustomEvent('battlebros:training-entered'));
     state.controls.skin.focus({preventScroll:true});return true;
   }
+  function trainingAppearanceValues(){return Object.fromEntries(Object.entries(trainingAppearance.controls).map(([role,control])=>[role,control.value]));}
+  function trainingHasUnsavedChanges(){
+    return JSON.stringify(trainingAppearanceValues())!==JSON.stringify(trainingAppearance.saved.appearance)
+      ||!!window.battleBrosTrainingWeights?.dirty();
+  }
+  async function saveTrainingSettings(kind){
+    const state=trainingAppearance;if(!state.active||state.saving)return;
+    const visit=state.saved;state.saving=true;
+    window.battleBrosTrainingWeights?.setBusy(true);
+    for(const id of ['training-appearance-done','training-weights-save','training-appearance-cancel'])document.getElementById(id).disabled=true;
+    for(const control of Object.values(state.controls))control.disabled=true;
+    const status=document.getElementById('training-appearance-status');
+    status.textContent=kind==='appearance'?'Confirm the appearance save with your wallet.':'Confirm each changed weight group with your wallet. Waiting for confirmation.';
+    try{
+      if(kind==='appearance'){
+        const values=trainingAppearanceValues(),detail={promise:null};
+        document.dispatchEvent(new CustomEvent('battlebros:training-save-appearance',{detail}));
+        if(!detail.promise)throw Error('Connect your wallet and select an owned BRO before saving appearance.');
+        await detail.promise;if(state.saved===visit)state.saved.appearance=values;
+        if(state.saved===visit)status.textContent='Appearance saved. You can continue editing or return outside.';
+      }else{
+        if(!window.battleBrosSaveWeights)throw Error('Connect your wallet to save weights.');
+        const request=window.battleBrosTrainingWeights?.request();
+        if(!request)throw Error('Select a confirmed, hatched BRO before editing weights.');
+        if(!request.groups.length){status.textContent='Weights are unchanged.';return;}
+        await window.battleBrosSaveWeights(request);
+        if(state.saved===visit)status.textContent='Weight transactions submitted. Confirmation status appears beside each group. Pending transactions continue if you leave.';
+      }
+    }catch(error){if(state.saved===visit)status.textContent=error.message||'Save failed. Your edits are still open.';}
+    finally{
+      state.saving=false;
+      window.battleBrosTrainingWeights?.setBusy(false);
+      for(const id of ['training-appearance-done','training-weights-save','training-appearance-cancel'])document.getElementById(id).disabled=false;
+      for(const control of Object.values(state.controls))control.disabled=false;
+      window.battleBrosTrainingWeights?.update(window.battleBrosWeightTransactions?.()||[]);
+    }
+  }
   function leaveTrainingAppearance(resume=true) {
     const state=trainingAppearance;if(!state.active)return;
+    if(resume&&state.saving)return;
+    if(resume&&trainingHasUnsavedChanges()&&window.confirm&&!window.confirm('Discard unsaved training changes and return outside? Saved changes are kept. Transactions already submitted will continue.'))return;
+    window.battleBrosTrainingWeights?.finish();
+    {
+      for(const [role,value] of Object.entries(state.saved.appearance))state.controls[role].value=value;
+      changeTrainingAppearance(false);
+    }
     state.active=false;state.cooldown=2;
-    // Capture and submit edits before a BRO switch can replace the live actor.
+    // Leaving only discards unsaved previews; saves happen inside the facility.
     const commit={pending:false};
     if(typeof CustomEvent==='function')document.dispatchEvent?.(new CustomEvent('battlebros:training-exited',{detail:commit}));
     if(state.drag && renderer.domElement.hasPointerCapture(state.drag.id))renderer.domElement.releasePointerCapture(state.drag.id);
@@ -7473,6 +7545,7 @@
     fp.pos.copy(state.saved.position);fp.yaw=state.saved.yaw;fp.pitch=state.saved.pitch;fpKeys.clear();
     document.body.classList.remove('training-appearance-active');
     document.getElementById('training-appearance-controls').hidden=true;
+    window.syncDefenseWeightVisibility?.();
     const sidebar=document.getElementById('battlebro-sidebar');sidebar.classList.toggle('is-collapsed',state.saved.collapsed);
     document.getElementById('battlebro-sidebar-toggle').setAttribute('aria-expanded',String(!state.saved.collapsed));
     if(resume&&fp.active){resetTransportCube(false);tickFP(0);
@@ -31036,11 +31109,13 @@ function neighborStarVector(edge, index) {
       if(ringSystem)ringSystem.position.set(0,0,0);
       homeWasVisible=xrWorldRoot.visible;xrWorldRoot.visible=false;group.visible=true;explorationActive=true;
       if(typeof syncMinimapVisibility==='function')syncMinimapVisibility();
+      if(typeof window!=='undefined')window.syncDefenseWeightVisibility?.();
       applyDistanceMistSettings(currentSkyBgHex);
     }
     function deactivate() {
       group.visible=false;xrWorldRoot.visible=homeWasVisible;explorationActive=false;
       if(typeof syncMinimapVisibility==='function')syncMinimapVisibility();
+      if(typeof window!=='undefined')window.syncDefenseWeightVisibility?.();
       scene.background=homeBackground;applyDistanceMistSettings(currentSkyBgHex);
     }
     // HUD snapshot reads loaded cells only: never invoke collision sampling or
@@ -38026,7 +38101,6 @@ function neighborStarVector(edge, index) {
       mountainRadius: size * .42 };
   }
   function trainingFacilityOccupiesCell(x, z, size = GRID) {
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return false;
     const layout = trainingFacilityLayout(size);
     const dx = x - layout.x, dz = z - layout.z;
     const across = (dx - dz) * Math.SQRT1_2;
@@ -38201,7 +38275,6 @@ function neighborStarVector(edge, index) {
       disposeGroup(trainingFacility);
     }
     trainingFacility = null;
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return;
     const layout = trainingFacilityLayout(GRID);
     const root = new THREE.Group();
     root.name = 'permanentTrainingFacility';
@@ -40616,7 +40689,14 @@ function neighborStarVector(edge, index) {
       }
     }
 
-    } // Home-only landmark foundations.
+    } else {
+      // Keep the permanent Territory facility accessible in saved boards too.
+      for(let x=0;x<Math.min(GRID,17);x++)for(let z=0;z<Math.min(GRID,17);z++){
+        const level=BattleBrosTerritoryWorld.trainingTerrainLevel(x,z);if(!level)continue;
+        const key=x+','+z,cell=overrides.get(key)||{__x:x,__z:z};
+        overrides.set(key,{...cell,terrain:'stone',terrainFloors:level,kind:null,buildingType:null,floors:1,extras:[],appearance:null});
+      }
+    } // Permanent landmark foundations.
 
     if (useWindowedHomeRendering()) {
       resetHomeWorldIntent();
@@ -42846,6 +42926,7 @@ function neighborStarVector(edge, index) {
     const state = territoryWorldState;
     if (state.switching || neighborInspectionState.active || explorationActive || trainingAppearance.active) return false;
     state.switching = true;
+    window.syncDefenseWeightVisibility?.();
     const button = document.getElementById('territory-world-toggle');
     if (button) button.disabled = true;
     if (fp.active) exitFP();
@@ -42892,13 +42973,25 @@ function neighborStarVector(edge, index) {
       throw error;
     } finally {
       state.switching=false;
+      window.syncDefenseWeightVisibility?.();
       if (button) { button.disabled=false; button.textContent=state.active ? 'Return to Home World' : 'Enter Territory World (dev)'; }
     }
   }
   window.__toggleTerritoryWorld = toggleTerritoryWorld;
   // Small renderer adapter; cloud documents contain visual cell intent only.
+  function syncDefenseWeightVisibility() {
+    const section=document.getElementById('battlebro-defense-section');if(!section)return false;
+    const model=window.__battleBrosReadModel,view=window.battleBrosWorldBridge?.currentTarget?.(),address=window.battleBrosWalletAddress?.(model?.identity.tokenId);
+    const visible=!!(territoryWorldState.active&&!territoryWorldState.switching&&!explorationActive&&!trainingAppearance.active&&!neighborInspectionState.active
+      &&model?.identity.active&&model.territory!=null&&String(model.territory)!=='0'
+      &&view?.kind==='territory'&&String(view.id)===String(model.territory)
+      &&address&&model.identity.owner?.toLowerCase()===address.toLowerCase());
+    section.hidden=!visible;return visible;
+  }
+  window.syncDefenseWeightVisibility=syncDefenseWeightVisibility;
   let signedWorldTarget = null;
   window.battleBrosWorldBridge = {
+    currentTarget:()=>signedWorldTarget?{...signedWorldTarget}:null,
     capture:()=>getSerializableWorldState(),
     captureHome:()=>territoryWorldState.active ? territoryWorldState.home : getSerializableWorldState(),
     matches:target=>!!signedWorldTarget && signedWorldTarget.kind===target.kind && signedWorldTarget.id===target.id
@@ -42909,16 +43002,21 @@ function neighborStarVector(edge, index) {
       if(territoryWorldState.active!==(target.kind==='territory')){
         const changed=await toggleTerritoryWorld();if(!changed)throw new Error('This world cannot be opened in the current mode.');
       }
+      signedWorldTarget=null;
+      window.syncDefenseWeightVisibility?.();
       const source=data || (target.kind==='territory' ? BattleBrosTerritoryWorld.generate() : {v:4,gridSize:HOME_GRID_DEFAULT,environment:'EARTH',seed:'battlebros',cells:[]});
       clearTimeout(saveTimer);if(fp.active)exitFP();if(flight.active)exitFlightMode();
       await new Promise((resolve,reject)=>{
         if(!applyState(source,{territorySwitch:true,keepCamera:true,skipGhostBoards:territoryWorldState.active,onDone:resolve}))reject(new Error('Saved world was rejected.'));
       });
       signedWorldTarget={...target};
+      window.syncDefenseWeightVisibility?.();
       territoryWorldState[target.kind==='home'?'home':'territory']=getSerializableWorldState();
       window.__requestMinimapRepaint?.();
     }
   };
+
+  window.syncDefenseWeightVisibility();
 
   window.__territoryDefenderAreas = () => BattleBrosTerritoryWorld.generate().defenderAreas.map(area => ({...area}));
   document.getElementById('territory-world-toggle')?.addEventListener('click', () => {

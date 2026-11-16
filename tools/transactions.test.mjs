@@ -101,3 +101,14 @@ test('care receipts require confirmations, survive stale S3 and reconcile withou
   doc.battleBros[0].lastTrainingAt='2';doc.battleBros[0].need={active:false,sourceEpoch:null,activeSinceTimestamp:null};
   const restored=f.make({fetcher});await restored.poll();assert.equal(restored.list()[0].phase,'reflected');assert.equal(f.reflected,1);
 });
+test('setWeights uses canonical calldata and persists group metadata through confirmation and reload',async()=>{
+ const f=fixture(),service=f.make();f.publication=false;
+ const weights=[3334n,3333n,3333n],subject={type:'bro-weights',tokenId:'7',group:'training',weights:weights.map(String)};
+ const write={contract:'bros',functionName:'setWeights',args:[7n,weights,false],conflictKey:'weights:7:training',subject};
+ const record=await service.submit(write);
+ assert.equal(record.dataHash,keccak256(encodeFunctionData({abi:contractAbis.bros,functionName:'setWeights',args:[7n,weights,false]})));
+ assert.deepEqual(record.subject,subject);await assert.rejects(service.submit(write),/pending/);
+ f.include();await service.poll();assert.equal(service.list()[0].phase,'confirmed');service.stop();
+ const restored=f.make();assert.deepEqual(restored.list()[0].subject,subject);assert.equal(restored.list()[0].phase,'confirmed');restored.stop();
+ const reverted=fixture(),other=reverted.make();await other.submit(write);reverted.include(undefined,'reverted');await other.poll();assert.equal(other.list()[0].phase,'failed');other.stop();
+});

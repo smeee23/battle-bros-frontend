@@ -10,7 +10,7 @@ for(const seed of ['territory-v1','ice','lava']) {
   assert(Math.max(...cells.map(c=>c.terrainFloors))>100,'Major mountain exceeds Home limit');
   for(const material of ['sand','snow','grass','stone','water','lava','dirt'])assert(cells.some(c=>c.terrain===material),material);
   assert(cells.filter(c=>c.kind).length<180,'Sparse shared scenery');
-  assert(!cells.some(c=>c.kind==='house'),'No training building');
+  assert(!cells.some(c=>c.kind==='house'),'Permanent facility is environmental rather than a serialized house');
   const center=cells.filter(c=>Math.hypot(c.x-24.5,c.z-24.5)<9);
   assert(new Set(center.map(c=>c.terrainFloors)).size>30,'Irregular mountain relief');
   // A real traversable connected route reaches all staging clearings.
@@ -22,6 +22,9 @@ for(const seed of ['territory-v1','ice','lava']) {
       if(!b.kind&&!['water','lava'].includes(b.terrain)&&Math.abs(b.terrainFloors-a.terrainFloors)<=3&&!seen.has(nx+','+nz))queue.push([nx,nz]);
     }
   }
+  assert(seen.has('0,0'),'Training doorstep connects to the territory paths');
+  for(const c of cells.filter(c=>terrain.trainingTerrainLevel(c.x,c.z))){assert.equal(c.terrainFloors,terrain.trainingTerrainLevel(c.x,c.z));assert.equal(c.kind,null);}
+  assert.equal(at(0,0).terrainFloors,3);
   assert(seen.has('47,2'),'Ice transporter approach connects to all staging areas');
   for(const cell of cells.filter(c=>terrain.portalTerrainLevel(c.x,c.z))) {assert.equal(cell.terrain,'snow');assert.equal(cell.terrainFloors,8);assert.equal(cell.kind,null);}
   for(const area of world.defenderAreas){assert(seen.has(area.x+','+area.z),'Connected defender area');assert.equal(at(area.x,area.z).terrainFloors,8);}
@@ -57,7 +60,7 @@ vm.runInContext(section('  function canPersistActiveColony()', '  function selec
   vm.runInContext(section('  function terrainRiseForLevel(', '  function terrainLevelForCell('),heights);
   assert.equal(heights.terrainRiseForLevel(160),31.8);heights.MAX_TERRAIN_FLOORS=64;
   assert.equal(heights.terrainRiseForLevel(160),heights.terrainRiseForLevel(64),'Home height cap unchanged');
-  assert.match(source,/Home-only landmark foundations/);
+  assert(source.includes('BattleBrosTerritoryWorld.trainingTerrainLevel(x,z)'),'Saved Territory boards receive the permanent facility apron');
   assert.match(source,/function addTerraformGreenhouseBox[^]*?territoryWorldState.active\) return null/);
   console.log('Territory World: deterministic biomes, tall mountain, connected staging areas, independent edits/cameras, Home persistence isolation and switch guards passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
