@@ -331,3 +331,10 @@ Wait for the indexer/publisher, refresh the Territory dashboard, enter a name, a
 The selected BRO's published kind now selects its 3D character family automatically. The character preview tab remains available for temporary type/form testing. Skin and core/accent/eye colors are stored separately for each NFT, with local drafts and owner-signed cloud saves.
 
 Select a BRO in user stats and use the Training Center to edit its skin/colors. Leaving the facility requests an owner signature to save changed appearances; leaving without changes does not request a signature. Unsynced appearance drafts are retried when leaving a later facility visit. Signature rejection or a cloud revision conflict keeps the local draft. Cosmetics follow the NFT when ownership changes. Form/type overrides from the preview are not persisted. Restart the local stack to load the updated API/publisher; each local stack restart creates a fresh chain.
+
+
+### Temporary Endless World onchain battle entry
+
+After accepting an NPC encounter, Start battle submits `TerritoryCombat.challenge` against location 2 using the selected BRO and setup inputs. The setup displays wallet, confirmation, and VRF/settlement progress. Practice starts only after confirmed onchain resolution; the encountered NPC remains the visual opponent and practice combat keeps its existing mechanics. Errors or expiry leave practice unstarted. Closing preparation stops UI monitoring, not a submitted transaction.
+
+Restart `npm run local:dev` for the local-only automatic mock VRF fulfillment/retry worker. In the established fixture, BRO 3 defends location 2 and BRO 4 is a ready attacker (Counter resources). Real networks continue to use their configured VRF coordinator. No mock fulfillment code runs in the browser.

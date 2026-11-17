@@ -16,10 +16,10 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": 4
+      "const": 5
     },
     "projectionVersion": {
-      "const": 5
+      "const": 6
     },
     "chainId": {
       "type": "string",

@@ -22,9 +22,6 @@ export async function seedEstablishedGame({provider,ethers,admin,bros,combat,nee
       await advance(86400);await boost();
       const location=await combat.locations(1),defender=await bros.broState(7),id=await combat.nextChallengeId();
       await tx(combat.connect(owner).challenge(1,token,2,10,location.nonce,defender.defenseNonce,(await provider.getBlock('latest')).timestamp+120,defense));
-      const registration=await combat.registrations(id);
-      await provider.send('evm_setNextBlockTimestamp',[Number(registration.closesAt)]);
-      await tx(combat.advanceRegistration(id));
       const challenge=await combat.challengeState(id);
       const aw=20n+(10n*100n/challenge.attackerCapacity)*6n;
       const dw=20n*challenge.config.defenderBps/10000n;

@@ -10,7 +10,7 @@ try {
  assert.equal(generate({BATTLEBROS_WALLET_CHAIN_ID:'11155111'}).wallet.chainId,'11155111','Wallet target requires no RPC or deployment');
  assert.equal(generate({BATTLEBROS_WALLET_CHAIN_ID:'31337',BATTLEBROS_WALLET_RPC_URL:'http://127.0.0.1:8545'}).wallet.rpcUrl,'http://127.0.0.1:8545');
  assert.equal(generate({BATTLEBROS_MANIFEST_URL:'http://localhost:1234/manifest.json'}).manifestUrl,'http://localhost:1234/manifest.json','Explicit URL needs no deployment file or S3 settings');
- const deployment={schemaVersion:2,chainId:'31337',combat:'0x'+'a'.repeat(40),bros:'0x'+'b'.repeat(40),vault:'0x'+'c'.repeat(40),needs:'0x'+'d'.repeat(40)};
+ const deployment={schemaVersion:3,chainId:'31337',combat:'0x'+'a'.repeat(40),bros:'0x'+'b'.repeat(40),vault:'0x'+'c'.repeat(40),needs:'0x'+'d'.repeat(40)};
  fs.writeFileSync(path.join(temp,'deployment.json'),JSON.stringify(deployment));
  fs.writeFileSync(config,JSON.stringify({deploymentManifest:'deployment.json',publicDataOrigin:'http://localhost:1234',prefix:'test'}));
  assert.equal(generate().manifestUrl,`http://localhost:1234/test/v2/31337/${deployment.combat}/manifest.json`);
@@ -20,7 +20,7 @@ try {
  assert.equal(localRuntime(temp),null);
  for(const run of ['first','second']){
    const directory=path.join(temp,'.local-territory/runs',run,'public');fs.mkdirSync(directory,{recursive:true});
-   const snapshot={blockNumber:run==='first'?'1':'2'},manifest={schemaVersion:4,projectionVersion:5,deploymentId:run,snapshot,paths:{gameState:'state.json'}};
+   const snapshot={blockNumber:run==='first'?'1':'2'},manifest={schemaVersion:5,projectionVersion:6,deploymentId:run,snapshot,paths:{gameState:'state.json'}};
    fs.writeFileSync(path.join(directory,'manifest.json'),JSON.stringify(manifest));fs.writeFileSync(path.join(directory,'state.json'),JSON.stringify({deploymentId:run,snapshot,battleBros:[{tokenId:'1',active:true}]}));
    fs.writeFileSync(path.join(temp,'.local-territory/current.json'),JSON.stringify({run}));
    assert.equal(localRuntime(temp).manifestUrl,`/.local-territory/runs/${run}/public/manifest.json`,'Latest deployment is discovered on every request');

@@ -54,6 +54,7 @@ export async function startLocalDev(options={}) {
   if(externalDB&&!['127.0.0.1','localhost','[::1]'].includes(new URL(externalDB).hostname))throw Error('LOCAL_DATABASE_URL must point to a local PostgreSQL server.');
   if(!externalDB&&(!pgBin||!existsSync(path.join(pgBin,'initdb'))))throw Error('Set POSTGRES_BIN to PostgreSQL binaries, or LOCAL_DATABASE_URL to a local development database.');
   if(pgBin){const libs=path.resolve(pgBin,'../../../x86_64-linux-gnu');if(existsSync(libs))clean.LD_LIBRARY_PATH=libs+(clean.LD_LIBRARY_PATH?':'+clean.LD_LIBRARY_PATH:'');}
+  let battleTimer,battleBusy=false;
   let pool,provider,sink,front,node,pgStarted=false,stopping=false,workers={},runtime;
   const logs=name=>path.join(privateDir,name+'.log');
   async function stopChild(child) {
@@ -62,7 +63,7 @@ export async function startLocalDev(options={}) {
     let timeout;await Promise.race([ended,new Promise(resolve=>{timeout=setTimeout(()=>{child.kill('SIGKILL');resolve();},6000);})]);clearTimeout(timeout);
   }
   async function stop() {
-    if(stopping)return;stopping=true;
+    if(stopping)return;stopping=true;clearInterval(battleTimer);
     for(const signal of ['SIGINT','SIGTERM'])process.removeListener(signal,onSignal);
     await Promise.all(Object.values(workers).map(stopChild));
     await stopChild(front);await stopChild(node);
@@ -75,7 +76,7 @@ export async function startLocalDev(options={}) {
   try {
     console.log('Compiling contracts and building wallet assets…');
     await run(process.execPath,[cli,'compile'],contracts,{MAINNET_RPC_URL:''});
-    for(const name of ['TerritoryBro','TerritoryVault','TerritoryCombat','TerritoryRandomness','NeedsOracle','TerritoryMatchmaker']){
+    for(const name of ['TerritoryBro','TerritoryVault','TerritoryCombat','TerritoryRandomness','NeedsOracle']){
       const artifact=JSON.parse(await fs.readFile(path.join(contracts,`artifacts/contracts/territory/${name}.sol/${name}.json`),'utf8'));
       const abi=JSON.parse(await fs.readFile(path.join(contracts,`abis/territory/${name}.json`),'utf8'));
       if(JSON.stringify(artifact.abi)!==JSON.stringify(abi))throw Error('Compiled ABI drift: '+name);
@@ -111,7 +112,27 @@ export async function startLocalDev(options={}) {
       console.log('Seeding eight BROs, veteran battles, care history and territories…');
       scenario=await seedEstablishedGame({provider,ethers,admin,bros,combat,needs,stETH,vrf,playerAddress});
     }
-    const deployment={schemaVersion:2,chainId:'31337',deploymentBlock,stETH:String(stETH.target),randomness:String(randomness.target),needs:String(needs.target),vault:String(vault.target),bros:String(bros.target),combat:String(combat.target),matchmaker:String(await combat.matchmaker())};
+    // Local mock coordinator only: emulate asynchronous fulfillment, never choose a winner.
+    let nextMockBattle=await combat.nextChallengeId();
+    battleTimer=setInterval(async()=>{
+      if(stopping||battleBusy)return; battleBusy=true;
+      try{
+        const limit=await combat.nextChallengeId();
+        while(nextMockBattle<limit&&!stopping){
+          const id=nextMockBattle,b=await combat.challengeState(id);
+          if(b.status===1n){
+            const result=await randomness.result(b.requestId),now=(await provider.getBlock('latest')).timestamp;
+            if(result[0])await (await combat.resolve(id)).wait();
+            else if(BigInt(now)>=b.deadline)await (await combat.expire(id)).wait();
+            else await (await vrf.fulfillWithGas(b.requestId,ethers.keccak256(ethers.toUtf8Bytes('local-battle:'+id)),1200000,{gasLimit:2000000})).wait();
+          }
+          if((await combat.challengeState(id)).status===1n)break;
+          nextMockBattle++;
+        }
+      }catch(error){if(!stopping)console.error('Local battle fulfillment:',error.shortMessage||error.message);}
+      finally{battleBusy=false;}
+    },1500);
+    const deployment={schemaVersion:3,chainId:'31337',deploymentBlock,stETH:String(stETH.target),randomness:String(randomness.target),needs:String(needs.target),vault:String(vault.target),bros:String(bros.target),combat:String(combat.target)};
     const deploymentFile=path.join(privateDir,'deployment.json');await fs.writeFile(deploymentFile,JSON.stringify(deployment));
     let dbURL=externalDB;
     if(!dbURL){
@@ -184,7 +205,7 @@ export async function startLocalDev(options={}) {
     const anchor=await provider.getBlock('latest'),worldApiPort=await port();
     runtime={schemaVersion:4,tokenId:scenario?'1':null,worldApiUrl:`http://127.0.0.1:${worldApiPort}/`,manifestUrl:`/.local-territory/runs/${runId}/public${prefix}manifest.json`,localDev:{instanceId:runId,scenario},
       wallet:{chainId:'31337',rpcUrl:rpc,instanceId:runId,confirmations,anchor:{number:String(anchor.number),hash:anchor.hash},
-        deployment:{chainId:'31337',deploymentId:deployment.combat,contracts:Object.fromEntries(['combat','bros','vault','needs','randomness','matchmaker','stETH'].map(key=>[key,deployment[key]]))}}};
+        deployment:{chainId:'31337',deploymentId:deployment.combat,contracts:Object.fromEntries(['combat','bros','vault','needs','randomness','stETH'].map(key=>[key,deployment[key]]))}}};
     const runtimeFile=path.join(privateDir,'runtime.json');await fs.writeFile(runtimeFile,JSON.stringify(runtime));
     front=start(process.execPath,['tools/dev-server.js',String(frontendPort)],root,{BATTLEBROS_LOCAL_RUNTIME_FILE:runtimeFile,BATTLEBROS_LOCAL_CONTROL_ORIGIN:workerEnv.publisher.S3_ENDPOINT},logs('frontend'));
     origin=await new Promise((resolve,reject)=>{let text='';const timeout=setTimeout(()=>reject(Error('Frontend could not start; see '+logs('frontend'))),10000);front.stdout.on('data',data=>{text+=data;const match=text.match(/http:\/\/127\.0\.0\.1:\d+/);if(match){clearTimeout(timeout);resolve(match[0]);}});front.once('exit',()=>{clearTimeout(timeout);reject(Error('Frontend port unavailable'));});});

@@ -1,198 +1,11 @@
 {
-  "TerritoryMatchmaker": [
-    {
-      "name": "MATCH_GAS",
-      "signature": "MATCH_GAS()",
-      "selector": "0xed3fbf63",
-      "inputs": []
-    },
-    {
-      "name": "MAX_BATCH",
-      "signature": "MAX_BATCH()",
-      "selector": "0x950bff9f",
-      "inputs": []
-    },
-    {
-      "name": "MAX_DRAWS",
-      "signature": "MAX_DRAWS()",
-      "selector": "0xf28d6e77",
-      "inputs": []
-    },
-    {
-      "name": "advanceMatching",
-      "signature": "advanceMatching(uint256,uint256)",
-      "selector": "0xeb2b50ba",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "id",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "budget",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "bros",
-      "signature": "bros()",
-      "selector": "0xf2f0baa8",
-      "inputs": []
-    },
-    {
-      "name": "cancel",
-      "signature": "cancel(uint256)",
-      "selector": "0x40e58ee5",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "id",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "combat",
-      "signature": "combat()",
-      "selector": "0x08f2d4e8",
-      "inputs": []
-    },
-    {
-      "name": "matches",
-      "signature": "matches(uint256)",
-      "selector": "0x4768d4ef",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "nextMatchId",
-      "signature": "nextMatchId()",
-      "selector": "0xc5adf7c9",
-      "inputs": []
-    },
-    {
-      "name": "open",
-      "signature": "open(uint256,uint256,uint16,address)",
-      "selector": "0x66c1472b",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "id",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "requestId",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint16",
-          "name": "feeBps",
-          "type": "uint16"
-        },
-        {
-          "internalType": "address",
-          "name": "recipient",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "pools",
-      "signature": "pools(uint256)",
-      "selector": "0xac4afa38",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "randomness",
-      "signature": "randomness()",
-      "selector": "0x36013189",
-      "inputs": []
-    },
-    {
-      "name": "released",
-      "signature": "released(uint256,uint256)",
-      "selector": "0xfe6103a1",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "resolveSide",
-      "signature": "resolveSide(uint256)",
-      "selector": "0x1d53d55e",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "matchId",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "settleBatch",
-      "signature": "settleBatch(uint256[])",
-      "selector": "0x6c92e5f2",
-      "inputs": [
-        {
-          "internalType": "uint256[]",
-          "name": "ids",
-          "type": "uint256[]"
-        }
-      ]
-    },
-    {
-      "name": "start",
-      "signature": "start(uint256,uint256,uint32)",
-      "selector": "0x705cef4f",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "id",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "selected",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint32",
-          "name": "count",
-          "type": "uint32"
-        }
-      ]
-    },
-    {
-      "name": "vault",
-      "signature": "vault()",
-      "selector": "0xfbfa77cf",
-      "inputs": []
-    }
-  ],
   "TerritoryCombat": [
+    {
+      "name": "HOLDING_XP_INTERVAL",
+      "signature": "HOLDING_XP_INTERVAL()",
+      "selector": "0x94388018",
+      "inputs": []
+    },
     {
       "name": "MAX_FEE_BPS",
       "signature": "MAX_FEE_BPS()",
@@ -210,18 +23,6 @@
       "signature": "acceptOwnership()",
       "selector": "0x79ba5097",
       "inputs": []
-    },
-    {
-      "name": "advanceRegistration",
-      "signature": "advanceRegistration(uint256)",
-      "selector": "0x79773682",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "id",
-          "type": "uint256"
-        }
-      ]
     },
     {
       "name": "bros",
@@ -316,18 +117,6 @@
       ]
     },
     {
-      "name": "committedShares",
-      "signature": "committedShares(uint256)",
-      "selector": "0xb97901c6",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "token",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "config",
       "signature": "config()",
       "selector": "0x79502c55",
@@ -368,9 +157,9 @@
       "inputs": []
     },
     {
-      "name": "currentRegistrationConfig",
-      "signature": "currentRegistrationConfig()",
-      "selector": "0x5d6f4226",
+      "name": "currentTimingConfig",
+      "signature": "currentTimingConfig()",
+      "selector": "0x3df76707",
       "inputs": []
     },
     {
@@ -401,6 +190,24 @@
           "type": "uint256"
         }
       ]
+    },
+    {
+      "name": "holdingRewardQuarters",
+      "signature": "holdingRewardQuarters(uint256)",
+      "selector": "0xc3af6587",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "location",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "holdingXpQuarters",
+      "signature": "holdingXpQuarters()",
+      "selector": "0x20bed26a",
+      "inputs": []
     },
     {
       "name": "locationOf",
@@ -437,12 +244,6 @@
           "type": "uint256"
         }
       ]
-    },
-    {
-      "name": "matchmaker",
-      "signature": "matchmaker()",
-      "selector": "0x3baee363",
-      "inputs": []
     },
     {
       "name": "nextChallengeId",
@@ -507,59 +308,6 @@
       "name": "reclaimBlocks",
       "signature": "reclaimBlocks(uint256)",
       "selector": "0x3c4048cf",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "registrationConfig",
-      "signature": "registrationConfig()",
-      "selector": "0xbff74643",
-      "inputs": []
-    },
-    {
-      "name": "registrationConfigEffectiveAt",
-      "signature": "registrationConfigEffectiveAt()",
-      "selector": "0x9cd952e6",
-      "inputs": []
-    },
-    {
-      "name": "registrationEntries",
-      "signature": "registrationEntries(uint256,uint256)",
-      "selector": "0x06fe047c",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "registrationRelease",
-      "signature": "registrationRelease(uint256)",
-      "selector": "0xdf077945",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "id",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "registrations",
-      "signature": "registrations(uint256)",
-      "selector": "0xf4ddb5be",
       "inputs": [
         {
           "internalType": "uint256",
@@ -643,17 +391,12 @@
       ]
     },
     {
-      "name": "scheduleRegistrationConfiguration",
-      "signature": "scheduleRegistrationConfiguration((uint32,uint32,uint32))",
-      "selector": "0xaae80882",
+      "name": "scheduleTimingConfiguration",
+      "signature": "scheduleTimingConfiguration((uint32,uint32))",
+      "selector": "0x504b4282",
       "inputs": [
         {
           "components": [
-            {
-              "internalType": "uint32",
-              "name": "duration",
-              "type": "uint32"
-            },
             {
               "internalType": "uint32",
               "name": "cooldown",
@@ -665,7 +408,7 @@
               "type": "uint32"
             }
           ],
-          "internalType": "struct TerritoryCombat.RegistrationConfig",
+          "internalType": "struct TerritoryCombat.TimingConfig",
           "name": "value",
           "type": "tuple"
         }
@@ -678,22 +421,10 @@
       "inputs": []
     },
     {
-      "name": "scheduledRegistrationConfig",
-      "signature": "scheduledRegistrationConfig()",
-      "selector": "0xbd05841e",
+      "name": "scheduledTimingConfig",
+      "signature": "scheduledTimingConfig()",
+      "selector": "0xe532b35d",
       "inputs": []
-    },
-    {
-      "name": "selectAttacker",
-      "signature": "selectAttacker(uint256)",
-      "selector": "0xdb92ed4d",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "id",
-          "type": "uint256"
-        }
-      ]
     },
     {
       "name": "setEnabled",
@@ -711,6 +442,30 @@
           "type": "bool"
         }
       ]
+    },
+    {
+      "name": "setHoldingRate",
+      "signature": "setHoldingRate(uint32)",
+      "selector": "0x4433bea1",
+      "inputs": [
+        {
+          "internalType": "uint32",
+          "name": "quartersPerInterval",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "timingConfig",
+      "signature": "timingConfig()",
+      "selector": "0xfe6f4778",
+      "inputs": []
+    },
+    {
+      "name": "timingConfigEffectiveAt",
+      "signature": "timingConfigEffectiveAt()",
+      "selector": "0xf93f72a5",
+      "inputs": []
     },
     {
       "name": "transferOwnership",
@@ -799,6 +554,28 @@
         {
           "internalType": "uint256",
           "name": "tokenId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "awardHoldingXP",
+      "signature": "awardHoldingXP(uint256,uint256,uint256)",
+      "selector": "0xfdaa282f",
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "token",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "location",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "quarters",
           "type": "uint256"
         }
       ]
@@ -928,38 +705,6 @@
         {
           "internalType": "uint256",
           "name": "challenge",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "xpStakeValue",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "finalizeSideBattle",
-      "signature": "finalizeSideBattle(uint256,uint256,bool,uint256,uint256)",
-      "selector": "0x277e4e73",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "tokenA",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "tokenB",
-          "type": "uint256"
-        },
-        {
-          "internalType": "bool",
-          "name": "aWon",
-          "type": "bool"
-        },
-        {
-          "internalType": "uint256",
-          "name": "matchId",
           "type": "uint256"
         },
         {
@@ -1124,18 +869,6 @@
       "signature": "pendingOwner()",
       "selector": "0xe30c3978",
       "inputs": []
-    },
-    {
-      "name": "powerRegistration",
-      "signature": "powerRegistration(uint256)",
-      "selector": "0x7c3500bd",
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ]
     },
     {
       "name": "prepare",

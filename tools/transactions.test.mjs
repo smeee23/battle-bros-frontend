@@ -16,7 +16,7 @@ function fixture(){
     getTransactionReceipt:async({hash})=>{if(!receipts.has(hash))throw Object.assign(Error('missing'),{name:'TransactionReceiptNotFoundError'});return receipts.get(hash);}};
   const wallet={settings,session:async()=>({address:a,assertCurrent:async()=>{},provider:{request:async({method})=>{if(method==='eth_chainId')return '0x7a69';if(method==='eth_sendTransaction'){sendCount++;return h('a');}throw Error(method);}}})};
   const storage={getItem:key=>saved.get(key)??null,setItem:(key,value)=>saved.set(key,value)};
-  const document={schemaVersion:4,projectionVersion:5,chainId:'31337',deploymentId:b,contracts:{combat:b,bros:b},snapshot:{blockNumber:'12',blockHash:h('c'),timestamp:'1'},battleBros:[{tokenId:'7',active:true,hatchedAt:'0'}],history:[]};
+  const document={schemaVersion:5,projectionVersion:6,chainId:'31337',deploymentId:b,contracts:{combat:b,bros:b},snapshot:{blockNumber:'12',blockHash:h('c'),timestamp:'1'},battleBros:[{tokenId:'7',active:true,hatchedAt:'0'}],history:[]};
   const body=JSON.stringify(document),manifest={...document,contentHash:createHash('sha256').update(body).digest('hex'),paths:{gameState:'snapshots/test.json'}};
   const fetcher=async url=>publication?{ok:true,json:async()=>manifest,arrayBuffer:async()=>new TextEncoder().encode(body).buffer}:{ok:false};
   let reflected=0;

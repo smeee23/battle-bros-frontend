@@ -5,12 +5,12 @@ const html=fs.readFileSync('index.html','utf8');
 const source=html.slice(html.indexOf('  // ---------- exploration terrain ----------'),html.indexOf('  const homeFPTerrain ='));
 function setup(){
  const scene=new THREE.Scene(),xrWorldRoot=new THREE.Group();scene.add(xrWorldRoot);
- const context=vm.createContext({THREE,createBattleArena:require('../assets/battle-arena.js'),scene,xrWorldRoot,TILE:1,DIRT_H:.5,TOP_H:.18,BUILDABLE_LAND_Y_OFFSET:-.18,currentSkyBgHex:0,
+ const context=vm.createContext({THREE,persCam:new THREE.PerspectiveCamera(55,16/9,.02,1100),createBattleArena:require('../assets/battle-arena.js'),scene,xrWorldRoot,TILE:1,DIRT_H:.5,TOP_H:.18,BUILDABLE_LAND_Y_OFFSET:-.18,currentSkyBgHex:0,
  explorationActive:false,terrainRiseForLevel:n=>Math.max(0,(Math.min(64,n||1)-1)*.2),terrainLevelForCell:c=>c?.terrainFloors||1,
  applyDistanceMistSettings(){}});
  require('../tools/terrain-render-fixture')(context,html);
  // Inspect the actual solver without adding a production mutation/debug API.
- vm.runInContext(source.replace('return {group,getCell,','return {test:{islands,contact,simulate},group,getCell,')+'\nthis.terrain=explorationTerrain;',context);
+ vm.runInContext(source.replace('return {group,getCell,','return {test:{islands,contact,simulate,celestialHeight,CELESTIAL},group,getCell,')+'\nthis.terrain=explorationTerrain;',context);
  return {terrain:context.terrain,scene,xrWorldRoot,context};
 }
 const {terrain,scene,xrWorldRoot,context}=setup();
@@ -80,8 +80,8 @@ assert([...terrain.residentSpawns()].every(p=>p.root.parent===terrain.group),'Ev
 assert([...terrain.residentSpawns()].length<=terrain.diagnostics().islands*2,'Resident planning remains bounded after streaming');
 assert.equal(ringSystem.position.x,remote.pos.x);
 assert.equal(ringSystem.position.z,remote.pos.z);
-assert.equal(ringSystem.position.y,0,'Flying changes elevation above the rings');
-assert.equal(ringLogo.position.z,-420,'Endless walking retains a distant center');
+assert(ringSystem.position.y>0&&ringSystem.position.y<remote.pos.y*.35,'Partial compensation preserves real altitude change');
+assert.equal(ringLogo.position.z,-1680,'Endless walking retains a scaled distant center');
 const retainedRingGeometry=lanes.geometry;
 terrain.deactivate();assert(!terrain.group.visible,'Home hides the entire celestial backdrop');
 terrain.activate();

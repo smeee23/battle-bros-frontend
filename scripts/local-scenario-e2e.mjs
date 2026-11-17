@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {startLocalDev} from './local-dev.mjs';
 import {walletSettings} from '../wallet/config.mjs';
 import {createTransactionService} from '../wallet/transactions.mjs';
+import {createPracticeChallenge} from '../wallet/practice-challenge.mjs';
 import {createNeedsService} from '../wallet/needs.mjs';
 const player='0x0000000000000000000000000000000000001234';
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
@@ -35,9 +36,19 @@ try {
   const care=await needs.complete(assignment);
   await until(async()=>{await transactions.poll();return transactions.list().find(r=>r.id===care.id).phase==='reflected';},'care confirmation and publication');
   needs.update(await publication());assert.deepEqual(needs.list().map(n=>n.bro.tokenId),['2']);
+  const statuses=[];
+  const settled=await createPracticeChallenge({transactions,wallet,settings})({tokenId:'4',choices:{action:2,power:11,defenseWeights:[10000,0,0]},onStatus:s=>statuses.push(s)});
+  assert(settled.challengeId);assert(statuses.some(s=>s.includes('settled')));
+  // The real territory result may make BRO 4 a defender; release before testing claim.
+  await until(async()=>{const p=await publication();return p.challenges.some(c=>c.challengeId===settled.challengeId&&c.status==='RESOLVED');},'battle settlement publication');
+  const afterBattle=await publication(),held=afterBattle.battleBros.find(b=>b.tokenId==='4').locationId;
+  if(held)await transactions.submit({contract:'combat',functionName:'vacate',args:[4n],conflictKey:'vacate:4'});
+  if(held)await until(async()=>{await transactions.poll();return (await publication()).battleBros.find(b=>b.tokenId==='4').locationId===null;},'battle winner departure');
+  await stack.provider.send('evm_increaseTime',[86400]);await stack.provider.send('evm_mine',[]);
+  await until(async()=>BigInt((await publication()).battleBros.find(b=>b.tokenId==='4').projectedReserves[2])>=11n,'attack power recovery');
   const fresh=await publication(),location=fresh.locations.find(l=>l.locationId==='3');
   const claim=await transactions.submit({contract:'combat',functionName:'claim',args:[3n,4n,BigInt(location.nonce),[10000,0,0]],conflictKey:'claim:4'});
   await until(async()=>{await transactions.poll();return transactions.list().find(r=>r.id===claim.id).phase==='reflected';},'claim confirmation and publication');
   const after=await publication();assert.equal(after.battleBros.find(b=>b.tokenId==='4').locationId,'3');
-  console.log('PASS: eight-BRO scenario → real battles/levels/care/territories → owned Needs review and care transaction → open territory claim → confirmed publications.');
+  console.log('PASS: eight-BRO scenario → real battles/levels/care/territories → challenge location 2 → mock VRF and confirmed settlement → owned Needs review and care transaction → open territory claim → confirmed publications.');
 } finally {needs?.destroy();transactions?.stop();await stack?.stop();}

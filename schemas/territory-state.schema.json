@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "territory-state.schema.json",
-  "title": "BattleBros paired territory publication v4",
+  "title": "BattleBros immediate territory battles v5",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -20,15 +20,13 @@
     "history",
     "scheduledConfiguration",
     "projectionVersion",
-    "registrations",
-    "registrationConfiguration",
-    "scheduledRegistrationConfiguration",
-    "sidePools",
-    "sideMatches"
+    "timingConfiguration",
+    "scheduledTimingConfiguration",
+    "holdingXpQuarters"
   ],
   "properties": {
     "schemaVersion": {
-      "const": 4
+      "const": 5
     },
     "chainId": {
       "type": "string",
@@ -70,8 +68,7 @@
         "vault",
         "randomness",
         "needs",
-        "stETH",
-        "matchmaker"
+        "stETH"
       ],
       "properties": {
         "combat": {
@@ -95,10 +92,6 @@
           "pattern": "^0x[0-9a-fA-F]{40}$"
         },
         "stETH": {
-          "type": "string",
-          "pattern": "^0x[0-9a-fA-F]{40}$"
-        },
-        "matchmaker": {
           "type": "string",
           "pattern": "^0x[0-9a-fA-F]{40}$"
         }
@@ -187,10 +180,10 @@
           "occupiedAt",
           "pendingChallengeId",
           "departing",
-          "potShares",
           "minLevel",
           "maxLevel",
-          "cooldownUntil"
+          "cooldownUntil",
+          "holdingXpQuarters"
         ],
         "properties": {
           "locationId": {
@@ -219,10 +212,6 @@
           "departing": {
             "type": "boolean"
           },
-          "potShares": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
           "minLevel": {
             "type": "string",
             "pattern": "^[1-9][0-9]*$"
@@ -240,6 +229,10 @@
             "pattern": "^0x[0-9a-fA-F]{40}$"
           },
           "cooldownUntil": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "holdingXpQuarters": {
             "type": "string",
             "pattern": "^(0|[1-9][0-9]*)$"
           }
@@ -272,7 +265,9 @@
           "need",
           "locationId",
           "pendingChallengeId",
-          "name"
+          "name",
+          "xpQuarter",
+          "holdingRewardQuarters"
         ],
         "properties": {
           "tokenId": {
@@ -535,6 +530,14 @@
           "riskableShares": {
             "type": "string",
             "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "xpQuarter": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "holdingRewardQuarters": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
           }
         }
       }
@@ -552,7 +555,9 @@
           "requestId",
           "deadline",
           "power",
-          "status"
+          "status",
+          "cooldown",
+          "recoveryBackoff"
         ],
         "properties": {
           "challengeId": {
@@ -587,11 +592,18 @@
             "enum": [
               "PENDING",
               "RESOLVED",
-              "EXPIRED",
-              "REGISTERING"
+              "EXPIRED"
             ]
           },
           "xpStakeValueWei": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "cooldown": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "recoveryBackoff": {
             "type": "string",
             "pattern": "^(0|[1-9][0-9]*)$"
           }
@@ -715,393 +727,7 @@
       ]
     },
     "projectionVersion": {
-      "const": 5
-    },
-    "registrations": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "registrationId",
-          "location",
-          "defender",
-          "openedAt",
-          "closesAt",
-          "status",
-          "count",
-          "entries",
-          "selectedToken",
-          "finalizedAt"
-        ],
-        "properties": {
-          "registrationId": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "location": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "defender": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "openedAt": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "closesAt": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "count": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "requestId": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "deadline": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "selectedIndex": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "finalizedSeedCount": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "status": {
-            "enum": [
-              "REGISTERING",
-              "PENDING",
-              "RESOLVED",
-              "EXPIRED"
-            ]
-          },
-          "entries": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "index",
-                "owner",
-                "token",
-                "stakeShares",
-                "xpStakeValue",
-                "power",
-                "capacity",
-                "action",
-                "sideStakeShares",
-                "disposition",
-                "matchId"
-              ],
-              "properties": {
-                "index": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)$"
-                },
-                "token": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)$"
-                },
-                "stakeShares": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)$"
-                },
-                "xpStakeValue": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)$"
-                },
-                "power": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)$"
-                },
-                "capacity": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)$"
-                },
-                "action": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)$"
-                },
-                "owner": {
-                  "type": "string",
-                  "pattern": "^0x[0-9a-fA-F]{40}$"
-                },
-                "sideStakeShares": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)$"
-                },
-                "disposition": {
-                  "enum": [
-                    "WAITING",
-                    "TERRITORY",
-                    "ASSIGNED",
-                    "SETTLED",
-                    "BYE",
-                    "EXPIRED"
-                  ]
-                },
-                "matchId": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)$"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "selectedToken": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^(0|[1-9][0-9]*)$"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "finalizedAt": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^(0|[1-9][0-9]*)$"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      }
-    },
-    "registrationConfiguration": {
-      "anyOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "duration",
-            "cooldown",
-            "recoveryBackoff"
-          ],
-          "properties": {
-            "duration": {
-              "type": "string",
-              "pattern": "^(0|[1-9][0-9]*)$"
-            },
-            "cooldown": {
-              "type": "string",
-              "pattern": "^(0|[1-9][0-9]*)$"
-            },
-            "recoveryBackoff": {
-              "type": "string",
-              "pattern": "^(0|[1-9][0-9]*)$"
-            }
-          }
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "scheduledRegistrationConfiguration": {
-      "anyOf": [
-        {
-          "type": "object",
-          "required": [
-            "effectiveAt",
-            "configuration"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "effectiveAt": {
-              "type": "string",
-              "pattern": "^(0|[1-9][0-9]*)$"
-            },
-            "configuration": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "duration",
-                "cooldown",
-                "recoveryBackoff"
-              ],
-              "properties": {
-                "duration": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)$"
-                },
-                "cooldown": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)$"
-                },
-                "recoveryBackoff": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)$"
-                }
-              }
-            }
-          }
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "sidePools": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "poolId",
-          "requestId",
-          "totalEther",
-          "totalShares",
-          "remaining",
-          "waiting",
-          "generated",
-          "settled",
-          "started",
-          "complete"
-        ],
-        "properties": {
-          "poolId": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "requestId": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "totalEther": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "totalShares": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "remaining": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "waiting": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "generated": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "settled": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "started": {
-            "type": "boolean"
-          },
-          "complete": {
-            "type": "boolean"
-          }
-        }
-      }
-    },
-    "sideMatches": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "pool",
-          "matchId",
-          "indexA",
-          "indexB",
-          "stakeShares",
-          "xpStakeValue",
-          "tokenA",
-          "tokenB",
-          "assignedAt",
-          "status"
-        ],
-        "properties": {
-          "pool": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "matchId": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "indexA": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "indexB": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "stakeShares": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "xpStakeValue": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "tokenA": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "tokenB": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "assignedAt": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "status": {
-            "enum": [
-              "PENDING",
-              "RESOLVED"
-            ]
-          },
-          "winner": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "loser": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "weightA": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "weightB": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          },
-          "finishedAt": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]*)$"
-          }
-        }
-      }
+      "const": 6
     },
     "worlds": {
       "type": "array",
@@ -1141,6 +767,73 @@
           }
         }
       }
+    },
+    "timingConfiguration": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cooldown",
+            "recoveryBackoff"
+          ],
+          "properties": {
+            "cooldown": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            },
+            "recoveryBackoff": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "scheduledTimingConfiguration": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "effectiveAt",
+            "configuration"
+          ],
+          "properties": {
+            "effectiveAt": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            },
+            "configuration": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "cooldown",
+                "recoveryBackoff"
+              ],
+              "properties": {
+                "cooldown": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)$"
+                },
+                "recoveryBackoff": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)$"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "holdingXpQuarters": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
     }
   }
 }

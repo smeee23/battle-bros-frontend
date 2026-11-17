@@ -22,7 +22,7 @@ try {
  if(!postgresBin&&!process.env.E2E_DATABASE_URL)throw Error('Set POSTGRES_BIN to installed PostgreSQL binaries, or E2E_DATABASE_URL to an isolated local test server.');
  if(process.env.E2E_DATABASE_URL&&!['localhost','127.0.0.1','[::1]'].includes(new URL(process.env.E2E_DATABASE_URL).hostname))throw Error('E2E_DATABASE_URL must point to a local test server.');
  await run(contracts,['node_modules/hardhat/internal/cli/cli.js','compile'],{MAINNET_RPC_URL:''});
- for(const name of ['TerritoryBro','TerritoryVault','TerritoryCombat','TerritoryRandomness','NeedsOracle','TerritoryMatchmaker']) {
+ for(const name of ['TerritoryBro','TerritoryVault','TerritoryCombat','TerritoryRandomness','NeedsOracle']) {
    const artifact=JSON.parse(await fs.readFile(path.join(contracts,`artifacts/contracts/territory/${name}.sol/${name}.json`),'utf8'));
    const canonical=JSON.parse(await fs.readFile(path.join(contracts,`abis/territory/${name}.json`),'utf8'));
    assert.deepEqual(artifact.abi,canonical,`Canonical ABI drift for ${name}; run contracts interfaces:sync`);

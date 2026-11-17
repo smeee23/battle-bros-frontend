@@ -8,7 +8,7 @@ const config=JSON.parse(fs.readFileSync(configPath,'utf8'));
 const deploymentPath=env.BATTLEBROS_DEPLOYMENT_MANIFEST||config.deploymentManifest;
 let manifestUrl=env.BATTLEBROS_MANIFEST_URL||config.manifestUrl;
 const deployment=!manifestUrl&&deploymentPath?JSON.parse(fs.readFileSync(path.resolve(path.dirname(configPath),deploymentPath),'utf8')):null;
-if(deployment && deployment.schemaVersion!==2)throw Error('Only territory deployment manifests are supported');
+if(deployment && deployment.schemaVersion!==3)throw Error('Only territory deployment manifests are supported');
 if(!manifestUrl && deployment){
   const chainId=String(deployment.chainId),combat=String(deployment.combat).toLowerCase();
   if(!/^(0|[1-9][0-9]*)$/.test(chainId)||!/^0x[0-9a-f]{40}$/.test(combat))throw Error('Invalid territory deployment identity');

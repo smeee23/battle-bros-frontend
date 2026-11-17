@@ -17,7 +17,7 @@ test('player UI discovers Needs, launches care, opens worlds, signs saves and pr
   const stats=new Element(),needs=new Element(),worldMenu=new Element(),hosts=new Map([['bro-player-controls',stats],['bro-needs-controls',needs],['world-save-controls',worldMenu]]);
   const world={v:4,gridSize:50,environment:'EARTH',seed:'ui',cells:[]};let opened=null,signed=0,conflict=false,selectedProfile=null,cosmetics=defaultAppearance(),savedWorld=null,s3Loads=0;
   const worldLoads=[],walletListeners=[];let walletAddress=address,loadGate=null,loadError=false;
-  const doc={schemaVersion:4,projectionVersion:5,chainId:'31337',deploymentId:deployment,contracts:{combat:deployment},snapshot:{blockNumber:'10',blockHash:'0x'+'b'.repeat(64),timestamp:'100'},history:[],worlds:[],needs:{seeds:[]},battleBros:[{tokenId:'1',name:'Nova',active:true,owner:address,locationId:null,need:{active:true,sourceEpoch:'2',activeSinceTimestamp:'90',activity:{id:'need-1',type:'care',version:'1'}}}]};
+  const doc={schemaVersion:5,projectionVersion:6,chainId:'31337',deploymentId:deployment,contracts:{combat:deployment},snapshot:{blockNumber:'10',blockHash:'0x'+'b'.repeat(64),timestamp:'100'},history:[],worlds:[],needs:{seeds:[]},battleBros:[{tokenId:'1',name:'Nova',active:true,owner:address,locationId:null,need:{active:true,sourceEpoch:'2',activeSinceTimestamp:'90',activity:{id:'need-1',type:'care',version:'1'}}}]};
   doc.battleBros.push({...doc.battleBros[0],tokenId:'2',name:'Second',need:{active:false}});
   doc.battleBros.push({...doc.battleBros[0],tokenId:'3',name:'Third',locationId:'9',need:{...doc.battleBros[0].need,activity:{id:'need-3',type:'care',version:'1'}}});
   const runtime={manifestUrl:'https://game.example/manifest.json',worldApiUrl:'https://api.example/'};

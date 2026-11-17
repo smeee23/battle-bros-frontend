@@ -96,14 +96,14 @@ for(const family of ['longneck','juggernaut','monsters','specter']){
 // Exercise the actual browser adapter (expressions, terrain guards, menu and recall), using real rigs.
 {
  const a=actor('longneck',4,0),b=actor('specter',7,8);
- const handlers={},menu={hidden:true,style:{},querySelector:()=>({focus(){}}),addEventListener:(k,fn)=>{handlers[k]=fn;}};
+ const handlers={},menu={hidden:true,style:{},setAttribute(){},querySelector:()=>({focus(){}}),addEventListener:(k,fn)=>{handlers[k]=fn;}};
  const hud={hidden:true,focus(){},contains:()=>false,addEventListener(){},querySelectorAll:()=>[...buttons].filter(([id])=>/^practice-(shield|berserker)$/.test(id)).map(([,button])=>button)},buttons=new Map(),captures={},docEvents={},normalInputs={};let pointerLockRequests=0,captureMode='grant',pageFocused=true;
- Object.assign(context,{BattleBroEncounter:encounter,fp:{active:true,yaw:.3,pitch:.1},fpKeys:new Set(),trainingAppearance:{active:false},
+ Object.assign(context,{AbortController,createPracticeBattleSetup:require('../assets/practice-battle-setup.js'),BattleBroEncounter:encounter,fp:{active:true,yaw:.3,pitch:.1},fpKeys:new Set(),trainingAppearance:{active:false},
   fpToolMenu:{hidden:false},fpToolsToggle:{setAttribute(){}},
   createBattleBroPractice:require('../assets/practice-battle.js'),createBattleBroBattleActions:(three,hooks)=>require('../assets/character-battle-actions.js')(three,{...hooks,config:{...hooks.config,normalDamage:8,berserkerDamage:32,energyPerHit:20}}),
-  camera:new THREE.PerspectiveCamera(55,1,.02,2000),window:{addEventListener:(name,fn,options)=>{if(options?.capture)captures[name]=fn;else normalInputs[name]=fn;}},
+  camera:new THREE.PerspectiveCamera(55,1,.02,2000),window:{__battleBrosReadModel:{identity:{tokenId:1n}},battleBrosChallengePractice:()=>({then(fn){fn({challengeId:'1'});return {catch(){}};}}),addEventListener:(name,fn,options)=>{if(options?.capture)captures[name]=fn;else normalInputs[name]=fn;}},
   flight:{active:false},fpJourney:{warp:0},markCameraMoving(){},escapeFP(){context.fp.active=false;vm.runInContext('fpResumeCapture=false;fpResumeCaptureInFlight=false',context);},
-  document:{body:{classList:{toggle(){}}},hasFocus:()=>pageFocused,addEventListener:(name,fn)=>docEvents[name]=fn,getElementById:id=>{if(id==='bro-encounter-menu')return menu;if(id==='practice-battle-hud')return hud;if(!buttons.has(id))buttons.set(id,{hidden:true,dataset:{},style:{setProperty(key,value){this[key]=value;}},focus(){context.document.activeElement=this;},blur(){context.document.activeElement=null;},contains:target=>['practice-berserker','practice-shield'].some(id=>buttons.get(id)===target||target?.control===buttons.get(id))});return buttons.get(id);},exitPointerLock(){this.pointerLockElement=null;docEvents.pointerlockchange?.();}},renderer:{domElement:{clientWidth:1280,clientHeight:720,
+  document:{body:{classList:{toggle(){}}},hasFocus:()=>pageFocused,addEventListener:(name,fn)=>docEvents[name]=fn,getElementById:id=>{if(id==='bro-encounter-menu')return menu;if(id==='practice-battle-hud')return hud;if(!buttons.has(id))buttons.set(id,{hidden:true,dataset:{},style:{setProperty(key,value){this[key]=value;}},setAttribute(){},focus(){context.document.activeElement=this;},blur(){context.document.activeElement=null;},contains:target=>['practice-berserker','practice-shield'].some(id=>buttons.get(id)===target||target?.control===buttons.get(id))});return buttons.get(id);},exitPointerLock(){this.pointerLockElement=null;docEvents.pointerlockchange?.();}},renderer:{domElement:{clientWidth:1280,clientHeight:720,
    focus(){context.document.activeElement=this;},requestPointerLock(){
     pointerLockRequests++;if(captureMode==='throw')throw Error('Capture denied');
     if(captureMode==='reject')return {catch:fn=>fn(Error('Capture denied'))};
@@ -129,7 +129,12 @@ for(const family of ['longneck','juggernaut','monsters','specter']){
  assert.equal(menu.hidden,false,'Production prompt opens before square off finishes');
  assert.equal(a.root.userData.slots.face.userData.expression.name,'veryAngry');
  assert.equal(a.root.userData.expressionCycleEnabled,false);
- handlers.click({target:{dataset:{broChoice:'yes'}}});assert(menu.hidden);
+ handlers.click({target:{dataset:{broChoice:'yes'}}});
+ assert(!menu.hidden&&hud.hidden,'Yes opens setup without starting combat');
+ buttons.get('practice-setup-attack-weight').value='20';buttons.get('practice-setup-defend-weight').value='30';
+ buttons.get('practice-setup-action').value='2';buttons.get('practice-setup-strength').value='75';buttons.get('practice-setup-strength').oninput();
+ buttons.get('practice-setup-form').onsubmit({preventDefault(){}});assert(menu.hidden);
+ assert.deepEqual(JSON.parse(JSON.stringify(a.encounter.practiceSetup)),{defenseWeights:[2000,3000,5000],action:2,commitmentPercent:75,power:75,capacity:100},'Inputs belong to this temporary practice encounter');
  assert.equal(hud.hidden,false,'Yes enters the production practice HUD');
  assert.equal(buttons.get('practice-health-0').value,100);assert.equal(buttons.get('practice-health-1').value,100);
  assert.equal(buttons.get('practice-energy-0').value,0);assert(buttons.get('practice-berserker').disabled,'Berserker starts unavailable');
@@ -175,7 +180,7 @@ for(const family of ['longneck','juggernaut','monsters','specter']){
  assert(a.root.userData.transportActor.encounter&&b.encounter,'Releasing near the same NPC starts a fresh encounter without separation');
  for(let i=1;i<800&&menu.hidden;i++)update(5.1+i*.05);
  assert.equal(menu.hidden,false,'The same NPC prompts again after recall and release');
- handlers.click({target:{dataset:{broChoice:'yes'}}});assert(!hud.hidden);
+ handlers.click({target:{dataset:{broChoice:'yes'}}});assert(hud.hidden);buttons.get('practice-setup-form').onsubmit({preventDefault(){}});assert(!hud.hidden);
  context.document.pointerLockElement=context.renderer.domElement;docEvents.pointerlockchange();
  assert.equal(context.document.pointerLockElement,null,'A stale capture cannot hide the cursor during a new battle');
  assert(buttons.get('practice-battle-result').hidden,'A new battle clears the previous result');

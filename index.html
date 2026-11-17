@@ -5659,13 +5659,43 @@
   </div>
 
   <div id="bro-encounter-menu" hidden role="dialog" aria-modal="true" aria-labelledby="bro-encounter-question" style="position:fixed;inset:0;z-index:10000;background:#07121a99;place-items:center">
-    <div style="background:#142d42;color:#fff;padding:28px;border:1px solid #92e8ef;border-radius:12px;text-align:center">
+    <div id="bro-encounter-card" style="background:#142d42;color:#fff;padding:28px;border:1px solid #92e8ef;border-radius:12px;text-align:center">
+      <div id="bro-encounter-prompt">
       <p id="bro-encounter-question">Do you want to battle?</p>
       <button type="button" data-bro-choice="yes" style="padding:10px 28px">Yes</button>
       <button type="button" data-bro-choice="no" style="padding:10px 28px">No</button>
+      </div>
+      <form id="practice-setup-form" hidden aria-labelledby="practice-setup-title">
+        <h2 id="practice-setup-title">Prepare for practice</h2>
+        <fieldset><legend>Defense weights</legend>
+          <label>Attack % <input id="practice-setup-attack-weight" type="number" min="0" max="100" step="0.01" required></label>
+          <label>Defend % <input id="practice-setup-defend-weight" type="number" min="0" max="100" step="0.01" required></label>
+          <label>Counter % <input id="practice-setup-counter-weight" type="number" readonly></label>
+          <p id="practice-setup-status" role="status" aria-live="polite"></p>
+        </fieldset>
+        <label>Attack choice <select id="practice-setup-action"><option value="0">Attack</option><option value="1">Defend</option><option value="2">Counter</option></select></label>
+        <label>Commit strength <output id="practice-setup-strength-label" for="practice-setup-strength"></output>
+          <input id="practice-setup-strength" type="range" min="10" max="100" step="1" value="10">
+        </label>
+        <p>Temporary onchain test: challenge location 2, then practice against this NPC.</p>
+        <button id="practice-setup-start" type="submit">Start battle</button>
+        <button id="practice-setup-cancel" type="button">Cancel</button>
+      </form>
     </div>
   </div>
   <style>
+    #bro-encounter-card{width:min(420px,calc(100vw - 32px));box-sizing:border-box;max-height:90vh;overflow:auto}
+    #bro-encounter-menu [hidden]{display:none!important}
+    #practice-setup-form{text-align:left;font:14px system-ui}
+    #practice-setup-form h2{font-size:20px;margin:0 0 18px}
+    #practice-setup-form fieldset{border:1px solid #6ba4b6;border-radius:8px;margin:0 0 16px;padding:12px}
+    #practice-setup-form label{display:block;margin:10px 0}
+    #practice-setup-form input:not([type="range"]),#practice-setup-form select{box-sizing:border-box;width:100%;padding:8px;background:#0b2031;color:#fff;border:1px solid #6ba4b6;border-radius:5px}
+    #practice-setup-form input[type="range"]{width:100%;accent-color:#92e8ef}
+    #practice-setup-form input[readonly]{opacity:.7}
+    #practice-setup-form p{font-size:12px;color:#c1dce5}
+    #practice-setup-form button{padding:10px 16px;margin:4px 8px 0 0}
+    #practice-setup-form output{float:right}
     #practice-battle-hud{position:fixed;inset:0;z-index:10001;pointer-events:none;color:#efffff;font:14px system-ui;outline:none}
     #practice-battle-hud[hidden],#practice-battle-hud [hidden]{display:none!important}
     .practice-health-anchor{position:absolute;width:clamp(90px,16vw,150px);transform:translate(-50%,-50%);text-shadow:0 1px 4px #07121a}
@@ -5713,6 +5743,7 @@
   <script src="vendor/three/GLTFLoader.r128.js"></script>
   <script src="assets/battlebro-encounter.js"></script>
   <script src="assets/practice-battle.js"></script>
+  <script src="assets/practice-battle-setup.js"></script>
   <script src="assets/territory-world.js"></script>
   <script src="assets/longneck-animation.js"></script>
   <script src="assets/juggernaut-animation.js"></script>
@@ -5792,7 +5823,7 @@
     ]);
     battleBroStatRows('battlebro-territory', [
       ['Location', bro.locationId == null ? 'Unoccupied' : '#'+bro.locationId],
-      ['Active registration / battle', bro.pendingChallengeId == null ? 'None' : '#'+bro.pendingChallengeId],
+      ['Active battle', bro.pendingChallengeId == null ? 'None' : '#'+bro.pendingChallengeId],
     ]);
   }
 
@@ -5861,7 +5892,7 @@
   }
 
   function normalizeBattleBrosPublicDocuments(manifest, game, bro, requestedTokenId) {
-    if (manifest.schemaVersion !== 4 || game.schemaVersion !== 4 || game.projectionVersion !== 5 || manifest.projectionVersion !== 5) throw new Error('Unsupported territory publication version.');
+    if (manifest.schemaVersion !== 5 || game.schemaVersion !== 5 || game.projectionVersion !== 6 || manifest.projectionVersion !== 6) throw new Error('Unsupported territory publication version.');
     if (manifest.chainId !== game.chainId || manifest.deploymentId !== game.deploymentId || game.contracts.combat.toLowerCase() !== game.deploymentId.toLowerCase() || JSON.stringify(manifest.snapshot) !== JSON.stringify(game.snapshot)) throw new Error('Territory snapshot identity mismatch.');
     if (!bro || BigInt(bro.tokenId) !== requestedTokenId) throw new Error('BattleBro not found.');
     const lanes = a => ({attack:BigInt(a[0]),defend:BigInt(a[1]),counter:BigInt(a[2])});
@@ -5869,7 +5900,7 @@
       progression:{xp:BigInt(bro.xp),level:BigInt(bro.level),capacity:BigInt(bro.capacity),reserves:lanes(bro.projectedReserves)},
       training:{weightsBps:lanes(bro.training),lastTrainingAt:BigInt(bro.lastTrainingAt)},
       need:{...bro.need},
-      capital:{committedShares:BigInt(bro.committedShares??0),availableShares:BigInt(bro.availableShares??bro.freeShares),freeShares:BigInt(bro.freeShares),reservedShares:BigInt(bro.reservedShares),totalShares:BigInt(bro.freeShares)+BigInt(bro.reservedShares),currentValue:BigInt(bro.currentValueWei??0),protectedPrincipal:BigInt(bro.protectedPrincipal),riskableShares:BigInt(bro.riskableShares??0)},
+      capital:{committedShares:BigInt(bro.reservedShares),availableShares:BigInt(bro.availableShares??bro.freeShares),freeShares:BigInt(bro.freeShares),reservedShares:BigInt(bro.reservedShares),totalShares:BigInt(bro.freeShares)+BigInt(bro.reservedShares),currentValue:BigInt(bro.currentValueWei??0),protectedPrincipal:BigInt(bro.protectedPrincipal),riskableShares:BigInt(bro.riskableShares??0)},
       defense:{weightsBps:lanes(bro.defense)},snapshot:{...game.snapshot,blockNumber:BigInt(game.snapshot.blockNumber)},territory:bro.locationId,pendingChallengeId:bro.pendingChallengeId};
   }
 
@@ -5951,11 +5982,11 @@
     if(!config.manifestUrl)throw new Error('No territory publication is configured.');
     const manifestUrl=new URL(config.manifestUrl,location.href);
     const manifest=await fetchBattleBrosPublicJson(manifestUrl.href,'Manifest');
-    if(manifest.schemaVersion!==4 || manifest.projectionVersion!==5 || !manifest.paths?.gameState)
+    if(manifest.schemaVersion!==5 || manifest.projectionVersion!==6 || !manifest.paths?.gameState)
       throw new Error('Only current territory publications are supported.');
     const gameUrl=new URL(manifest.paths.gameState,manifestUrl);
     const game=await fetchBattleBrosPublicJson(gameUrl.href,'Territory state');
-    if(game.schemaVersion!==4 || game.projectionVersion!==5 || game.chainId!==manifest.chainId
+    if(game.schemaVersion!==5 || game.projectionVersion!==6 || game.chainId!==manifest.chainId
       || game.deploymentId!==manifest.deploymentId || game.contracts?.combat?.toLowerCase()!==manifest.deploymentId.toLowerCase()
       || JSON.stringify(game.snapshot)!==JSON.stringify(manifest.snapshot)
       || !Array.isArray(game.battleBros) || !Array.isArray(game.challenges) || !Array.isArray(game.history))
@@ -6015,10 +6046,6 @@
     const battles=game.challenges.filter(c=>c.attacker!=='0'&&(c.attacker===id||c.defender===id))
       .map(c=>({...c,role:c.attacker===id?'Attack':'Defense',opponent:c.attacker===id?c.defender:c.attacker}))
       .sort((a,b)=>BigInt(a.challengeId)>BigInt(b.challengeId)?-1:1);
-    for(const m of game.sideMatches??[])if(m.tokenA===id||m.tokenB===id){
-      const pool=game.registrations.find(r=>r.registrationId===m.pool),own=pool.entries[m.tokenA===id?m.indexA:m.indexB],other=pool.entries[m.tokenA===id?m.indexB:m.indexA];
-      battles.push({...m,challengeId:m.matchId,location:pool.location,role:'Side',opponent:other.token,action:own.action,power:own.power,defenderAction:other.action,acceptedAt:m.assignedAt});
-    }
     const resolved=battles.filter(c=>c.status==='RESOLVED');
     const wins=resolved.filter(c=>c.winner===id).length;
     return {battles,resolved:resolved.length,wins,losses:resolved.filter(c=>c.loser===id).length,
@@ -6066,15 +6093,8 @@
       ['Total challenges',summary.battles.length],['Attacks initiated',summary.attacks],['Defenses',summary.defenses],
       ['Resolved battles',summary.resolved],['Wins / losses',summary.wins+' / '+summary.losses],['Pending / expired',summary.pending+' / '+summary.expired]];
     for(const [label,value] of rows)stats.append(historyMetric(label,String(value)));content.append(stats);
-    for(const registration of (game.registrations??[]).filter(r=>Object.values(r.entries).some(e=>e.token===id)).slice().reverse()){
-      const row=document.createElement('p');
-      const entry=Object.values(registration.entries).find(e=>e.token===id);
-      const disposition=({WAITING:'Waiting for pairing; commitment locked',TERRITORY:'Selected territory attacker',ASSIGNED:'Side battle pending; commitment locked',SETTLED:'Battle complete; power consumed',BYE:'Bye; commitment released',EXPIRED:'Expired; commitment released'})[entry.disposition];
-      row.textContent='Registration #'+registration.registrationId+' · '+registration.status+' · '+disposition;
-      content.append(row);
-    }
     const filter=document.createElement('select');filter.setAttribute('aria-label','Filter battle history');
-    for(const [value,label] of [['all','All battles'],['Attack','Attacks initiated'],['Defense','Defenses'],['Side','Side battles']]) {
+    for(const [value,label] of [['all','All battles'],['Attack','Attacks initiated'],['Defense','Defenses']]) {
       const option=document.createElement('option');option.value=value;option.textContent=label;filter.append(option);
     }
     const list=document.createElement('div');list.className='battle-history-list';
@@ -30467,6 +30487,13 @@ function neighborStarVector(edge, index) {
   }
   const explorationTerrain = (() => {
     const SPACING=24, STREAM_RADIUS=2, MAX_DRIFT=2.2, SKY_DRIFT=3.5, STEP=1/30;
+    // Presentation only: retain ground-level angular framing, independent of gameplay scale.
+    const CELESTIAL=Object.freeze({scale:4,far:5000,starRadius:4300,innerRadii:Object.freeze([175,300,365,410,450,490,520]),innerHeightOffset:-26,debrisNearGap:140,debrisFadeNear:350,debrisFadeFar:1600,altitudeStart:12,altitudeSoftness:40,altitudeGain:.35});
+    let celestialPreviousFar=null;
+    function celestialHeight(y){
+      const height=Math.max(0,y-CELESTIAL.altitudeStart);
+      return CELESTIAL.altitudeGain*height*height/(height+CELESTIAL.altitudeSoftness);
+    }
     const cells=new Map(), edits=new Map(), sites=new Map(), islands=new Map(), sleeping=new Map(), skyBodies=new Set();
     const residentPlacements=new Map();
     const group=new THREE.Group();group.name='explorationWorld';group.visible=false;scene.add(group);
@@ -31028,7 +31055,7 @@ function neighborStarVector(edge, index) {
       for(const b of islands.values()){b.dx=b.ox-b.dx;b.dz=b.oz-b.dz;b.root.position.set(b.site.x+b.ox,b.site.elevation||0,b.site.z+b.oz);}
       if(starfield)starfield.position.copy(player.pos);
       if(ringSystem) {
-        ringSystem.position.set(player.pos.x,0,player.pos.z);
+        ringSystem.position.set(player.pos.x,celestialHeight(player.pos.y),player.pos.z);
       }
       if(support){player.pos.x+=support.dx;player.pos.z+=support.dz;}
       if(deployedSupport&&!deployedCharacter.userData.transportActor?.motion){deployedCharacter.position.x+=deployedSupport.dx;deployedCharacter.position.z+=deployedSupport.dz;}
@@ -31041,14 +31068,14 @@ function neighborStarVector(edge, index) {
       }
     }
     // A distant visual continuation of the streamed terrain. Camera-relative X/Z
-    // keeps an infinite walk on the same local ring sector; Y stays in the
-    // terrain plane so ascending in flight reveals the actual annular shape.
+    // keeps an infinite walk on the same local ring sector. Partial vertical
+    // compensation softens extreme climbs while retaining real altitude parallax.
     function createRingSystem() {
       if(typeof createBattleArena==='undefined')return;
       ringSystem=new THREE.Group();ringSystem.name='endless-ethereum-rings';group.add(ringSystem);
       ringLogo=createBattleArena.createEthereumLogo(THREE);
-      ringLogo.scale.setScalar(1.25);
-      ringLogo.position.set(0,12,-420);ringLogo.rotation.y=-.16;ringSystem.add(ringLogo);
+      ringLogo.scale.setScalar(1.25*CELESTIAL.scale);
+      ringLogo.position.set(0,12*CELESTIAL.scale,-420*CELESTIAL.scale);ringLogo.rotation.y=-.16;ringSystem.add(ringLogo);
       const positions=[],colors=[];
       const palette=[0x293442,0x1b2634,0x3a414a,0x243746,0x303b47];
       // Uneven, shadowed debris arcs continue the islands into the distance.
@@ -31086,9 +31113,64 @@ function neighborStarVector(edge, index) {
             float opacity=smoothstep(48.0,110.0,distanceToViewer)*0.32;
             gl_FragColor=vec4(ringColor,opacity);}`
       });
-      const lanes=new THREE.Mesh(geometry,material);lanes.name='endless-ring-lanes';ringSystem.add(lanes);
+      const lanes=new THREE.Mesh(geometry,material);lanes.name='endless-ring-lanes';
+      lanes.scale.setScalar(CELESTIAL.scale);
+      lanes.position.y=CELESTIAL.innerHeightOffset+8+2.5*CELESTIAL.scale;ringSystem.add(lanes);
+      // Solid visual-only fragments bridge the empty middle distance. They are
+      // cached in one instanced draw, with no terrain cells, colliders or movers.
+      const debrisGeometry=new THREE.CylinderGeometry(1,.48,1,5,1,false);
+      const debrisColors=[],normals=debrisGeometry.attributes.normal;
+      for(let i=0;i<normals.count;i++){
+        const shade=.66+.25*normals.getY(i)+.07*normals.getX(i)-.04*normals.getZ(i);
+        debrisColors.push(shade,shade,shade);
+      }
+      debrisGeometry.setAttribute('color',new THREE.Float32BufferAttribute(debrisColors,3));
+      const debrisMaterial=new THREE.MeshBasicMaterial({vertexColors:true,fog:false});
+      // Dim distant fragments toward the sky instead of dissolving their
+      // surfaces: intact opaque geometry avoids perforated silhouettes.
+      debrisMaterial.onBeforeCompile=shader=>{
+        shader.uniforms.debrisFadeRange={value:new THREE.Vector2(CELESTIAL.debrisFadeNear,CELESTIAL.debrisFadeFar)};
+        shader.vertexShader='varying vec3 debrisWorld;\n'+shader.vertexShader;
+        shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+          vec4 debrisPoint=vec4(transformed,1.0);
+          #ifdef USE_INSTANCING
+            debrisPoint=instanceMatrix*debrisPoint;
+          #endif
+          debrisWorld=(modelMatrix*debrisPoint).xyz;`);
+        shader.fragmentShader='uniform vec2 debrisFadeRange; varying vec3 debrisWorld;\n'+shader.fragmentShader;
+        shader.fragmentShader=shader.fragmentShader.replace('#include <encodings_fragment>',`#include <encodings_fragment>
+          float debrisDistance=length(debrisWorld.xz-cameraPosition.xz);
+          float debrisFade=smoothstep(debrisFadeRange.x,debrisFadeRange.y,debrisDistance);
+          gl_FragColor.rgb=mix(gl_FragColor.rgb,vec3(0.03137255,0.05098039,0.10588235),debrisFade*0.85);`);
+      };
+      const debris=new THREE.InstancedMesh(debrisGeometry,debrisMaterial,CELESTIAL.innerRadii.length*192);
+      debris.name='endless-inner-ring-fragments';debris.frustumCulled=false;
+      const transform=new THREE.Object3D(),tint=new THREE.Color();let count=0;
+      for(let band=0;band<CELESTIAL.innerRadii.length;band++)for(let segment=0;segment<192;segment++){
+        if(hash(band,Math.floor(segment/3),221)<.03||hash(band,segment,222)<.04)continue;
+        const angle=(segment+hash(band,segment,223)*.45)/192*Math.PI*2;
+        const radius=(CELESTIAL.innerRadii[band]+(hash(band,segment,224)-.5)*24)*CELESTIAL.scale;
+        const depth=(8+hash(band,segment,225)*22)*CELESTIAL.scale,top=CELESTIAL.innerHeightOffset+2+hash(band,segment,226)*13;
+        transform.position.set(Math.cos(angle)*radius,top-depth/2,Math.sin(angle)*radius-420*CELESTIAL.scale);
+        // The outer bands wrap around the observer; keep a clear gap around
+        // the streamed gameplay islands so decorative pieces remain distant.
+        transform.rotation.set(0,angle+hash(band,segment,227)*.5,0);
+        transform.scale.set((10+hash(band,segment,228)*11)*CELESTIAL.scale,depth,(4+hash(band,segment,229)*7)*CELESTIAL.scale);
+        if(Math.hypot(transform.position.x,transform.position.z)-Math.max(transform.scale.x,transform.scale.z)<CELESTIAL.debrisNearGap)continue;
+        transform.updateMatrix();debris.setMatrixAt(count,transform.matrix);
+        // The translucent lane shader writes its palette directly; compensate
+        // for the standard solid material's sRGB output so the two match.
+        tint.setHex(palette[(band+segment)%palette.length]).convertSRGBToLinear().multiplyScalar(.55+hash(band,segment,230)*.25);
+        debris.setColorAt(count,tint);count++;
+      }
+      debris.count=count;debris.instanceMatrix.needsUpdate=true;debris.instanceColor.needsUpdate=true;
+      ringSystem.add(debris);
     }
     function activate() {
+      if(typeof persCam!=='undefined'&&persCam.isPerspectiveCamera){
+        if(celestialPreviousFar===null)celestialPreviousFar=persCam.far;
+        persCam.far=Math.max(persCam.far,CELESTIAL.far);persCam.updateProjectionMatrix();
+      }
       ensureAround(0,0);lastSafe={x:0,z:0};
       homeBackground=scene.background;
       if(!starfield) {
@@ -31102,7 +31184,9 @@ function neighborStarVector(edge, index) {
         const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
         geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
         starfield=new THREE.Points(geometry,new THREE.PointsMaterial({size:2.4,sizeAttenuation:false,vertexColors:true,transparent:false,depthTest:true,fog:false,depthWrite:false}));
-        starfield.name='endless-space-stars';starfield.frustumCulled=false;group.add(starfield);
+        starfield.name='endless-space-stars';starfield.frustumCulled=false;
+        // Keep the existing angular star pattern, behind the celestial geometry.
+        starfield.scale.setScalar(CELESTIAL.starRadius/150);group.add(starfield);
       }
       starfield.position.set(0,0,0);
       if(!ringSystem)createRingSystem();
@@ -31113,6 +31197,9 @@ function neighborStarVector(edge, index) {
       applyDistanceMistSettings(currentSkyBgHex);
     }
     function deactivate() {
+      if(typeof persCam!=='undefined'&&persCam.isPerspectiveCamera&&celestialPreviousFar!==null){
+        persCam.far=celestialPreviousFar;persCam.updateProjectionMatrix();celestialPreviousFar=null;
+      }
       group.visible=false;xrWorldRoot.visible=homeWasVisible;explorationActive=false;
       if(typeof syncMinimapVisibility==='function')syncMinimapVisibility();
       if(typeof window!=='undefined')window.syncDefenseWeightVisibility?.();
@@ -31589,7 +31676,10 @@ function neighborStarVector(edge, index) {
     e.preventDefault();e.stopImmediatePropagation();startExcavationSwing();
   },true);
   window.addEventListener('keydown',e=>{
-    if(!fpToolsAvailable() || e.ctrlKey || e.metaKey || e.altKey)return;
+    // Capture-phase tool hotkeys must not consume digits or Q while editing a dialog.
+    if(!fpToolsAvailable() || e.ctrlKey || e.metaKey || e.altKey
+      || e.target?.closest?.('input, textarea, select, [contenteditable="true"]')
+      || (typeof broEncounterMenu!=='undefined'&&!broEncounterMenu.hidden))return;
     const key=e.key?.toLowerCase();
     const toggle=e.code==='KeyQ' || key==='q';
     const tool=FP_TOOLS.find(tool=>e.code===`Digit${tool.key}` || key===tool.key);
@@ -31664,6 +31754,8 @@ function neighborStarVector(edge, index) {
   //   - ground height comes from the active first-person terrain provider.
   //   - props remain non-colliding, as in the existing first-person mode.
   const broEncounterMenu=document.getElementById('bro-encounter-menu');
+  const practiceSetup=createPracticeBattleSetup(document);
+  let practiceChallengeAbort=null;
   const practiceHud=document.getElementById('practice-battle-hud');
   const practiceControls=document.getElementById('practice-battle-controls');
   const practiceHealthAnchors=[document.getElementById('practice-health-anchor-0'),document.getElementById('practice-health-anchor-1')];
@@ -31759,6 +31851,7 @@ function neighborStarVector(edge, index) {
     },
     menu:show=>{
       fpKeys.clear();
+      if(!show){practiceChallengeAbort?.abort();practiceChallengeAbort=null;practiceSetup.close();document.getElementById('bro-encounter-prompt').hidden=false;broEncounterMenu.setAttribute('aria-labelledby','bro-encounter-question');}
       broEncounterMenu.hidden=!show;broEncounterMenu.style.display=show?'grid':'none';
       if(show){
         fpResumeCapture=false;fpResumeCaptureInFlight=false;
@@ -31769,8 +31862,30 @@ function neighborStarVector(edge, index) {
     }
   });
   function chooseBroEncounter(choice){
+    if(choice==='yes'&&broEncounter.active?.phase==='prompt'){
+      if(practiceSetup.active)return;
+      document.getElementById('bro-encounter-prompt').hidden=true;
+      broEncounterMenu.setAttribute('aria-labelledby','practice-setup-title');
+      practiceSetup.open(window.__battleBrosReadModel,choices=>{
+        const session=broEncounter.active,tokenId=window.__battleBrosReadModel?.identity?.tokenId;
+        if(!session||session.phase!=='prompt')return;
+        if(tokenId==null||!window.battleBrosChallengePractice){practiceSetup.retry('Select an owned BRO and connect to the configured chain first.');return;}
+        const abort=new AbortController();practiceChallengeAbort=abort;
+        practiceSetup.setBusy(true,'Preparing challenge for location 2…');
+        window.battleBrosChallengePractice({tokenId:String(tokenId),choices,signal:abort.signal,
+          onStatus:text=>{if(!abort.signal.aborted)practiceSetup.setBusy(true,text);}}).then(result=>{
+          if(abort.signal.aborted||broEncounter.active!==session)return;
+          session.practiceSetup=choices;session.onchainBattle=result;
+          broEncounter.end('yes');
+          if(fp.active&&!practiceBattle.active)resumeFPAfterBattle();
+        }).catch(error=>{if(!abort.signal.aborted)practiceSetup.retry(error.message||'Challenge failed.');});
+      },()=>chooseBroEncounter('no'));
+      return;
+    }
+    practiceChallengeAbort?.abort();practiceChallengeAbort=null;
+    practiceSetup.close();
     broEncounter.end(choice);
-    if(fp.active&&!practiceBattle.active)resumeFPAfterBattle();
+    if(fp.active&&!practiceBattle.active&&broEncounterMenu.hidden)resumeFPAfterBattle();
   }
   function exitPracticeBattle(){
     const combat=practiceBattle.combat();
@@ -31802,9 +31917,11 @@ function neighborStarVector(edge, index) {
   });
   broEncounterMenu.addEventListener('keydown',event=>{
     if(event.key==='Escape'){event.preventDefault();event.stopPropagation();chooseBroEncounter('no');}
+    event.stopPropagation();
     if(event.key==='Tab'){
-      const buttons=[...broEncounterMenu.querySelectorAll('button')];
-      event.preventDefault();buttons[(buttons.indexOf(document.activeElement)+1)%buttons.length].focus();
+      const controls=[...broEncounterMenu.querySelectorAll('button,input,select')].filter(el=>!el.disabled&&!el.closest('[hidden]'));
+      if(!controls.length)return;
+      event.preventDefault();controls[(controls.indexOf(document.activeElement)+(event.shiftKey?-1:1)+controls.length)%controls.length].focus();
     }
   });
 

@@ -1,3 +1,4 @@
+import {createPracticeChallenge} from './practice-challenge.mjs';
 import { walletSettings } from './config.mjs';
 import { createInjectedDriver } from './driver.mjs';
 import { createWalletService } from './service.mjs';
@@ -27,3 +28,5 @@ export const transactionsReady=settings.rpcUrl&&settings.deployment
 if(window.__battleBrosPublicData.localDev?.instanceId){const link=document.getElementById('local-transactions-link');if(link)link.hidden=false;}
 
 transactionsReady.then(transactions=>mountNeedsInfrastructure({wallet,transactions,storage}));
+
+window.battleBrosChallengePractice=async options=>createPracticeChallenge({transactions:await transactionsReady,wallet,settings})(options);
