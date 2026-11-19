@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync('index.html', 'utf8');
 const source = html.slice(html.indexOf('  const FP_EYE_H ='), html.indexOf('  // ---------- first-person flight ----------'));
 const terrainSource = html.slice(html.indexOf('  function terrainRiseForLevel('), html.indexOf('  function materialHex('));
-function setup(floors,other=false,territory=false) {
+function setup(floors,other=false) {
   class Vector3 {
     constructor(x, y, z) { this.set(x, y, z); }
     set(x, y, z) { Object.assign(this, {x, y, z}); }
@@ -23,7 +23,7 @@ function setup(floors,other=false,territory=false) {
   };
   const handlers = {};
   const context = vm.createContext({THREE: {Vector3}, TOP_H: .18, BUILDABLE_LAND_Y_OFFSET: -.18, MAX_TERRAIN_FLOORS: 64, GRID: 20, world, getWorldCell: (x,z) => world[x]?.[z], persCam: camera,
-    explorationActive:other,territoryWorldState:{active:territory},fpJourney:{warp:0}, activeFPTerrain:()=>terrain, document: {addEventListener() {}}, window: {addEventListener(name, fn) { handlers[name] = fn; }}, markCameraMoving() {}});
+    explorationActive:other,fpJourney:{warp:0}, activeFPTerrain:()=>terrain, document: {addEventListener() {}}, window: {addEventListener(name, fn) { handlers[name] = fn; }}, markCameraMoving() {}});
   vm.runInContext(terrainSource + source + '\nthis.api = {fp, fpKeys, tickFP, fpGroundYAt, FP_TERRAIN_LIFT_MAX, settings:{height:fpEyeHeight(),fov:FP_FOV,near:FP_NEAR,lookahead:FP_TERRAIN_LOOKAHEAD,liftMax:FP_TERRAIN_LIFT_MAX,liftLerp:FP_TERRAIN_LIFT_LERP,stepLerp:FP_STEP_LERP,landingDip:FP_LANDING_DIP_MAX,landingDuration:FP_LANDING_DURATION,landingFullSpeed:FP_LANDING_FULL_SPEED,fallThreshold:FP_FALL_THRESHOLD}};', context);
   const api = context.api;
   api.fp.active = true;

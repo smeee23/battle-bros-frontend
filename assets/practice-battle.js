@@ -3,8 +3,9 @@
   'use strict';
   let encounter=null,actors=null,savedCamera=null,heights=null,widths=null,facings=null,lastState='',lastBusy=null,lastRevision=-1;
   const resultDurationSeconds=3;
+  const pendingNoticeSeconds=45;
   const resultPivotSeconds=1.2;
-  let frontReach=0;
+  let frontReach=0,settlementAge=null,pendingAge=0,outcomeRevealed=false;
   let resultAge=0,resultStarted=false,resultExitRequested=false,resultStartYaw=0,resultStartRadius=0,resultStartHeight=0;
   const camera=new THREE.PerspectiveCamera(58,1,.02,2000);
   const forward=new THREE.Vector3(),right=new THREE.Vector3(),up=new THREE.Vector3(0,1,0),eye=new THREE.Vector3(),aim=new THREE.Vector3(),size=new THREE.Vector3();
@@ -16,6 +17,7 @@
   }
   function begin(session){
     if(encounter)return false;
+    host.outcome?.(null);settlementAge=null;pendingAge=0;outcomeRevealed=false;
     encounter=session;actors=session.sides.map(s=>s.actor);savedCamera=host.camera();
     heights=[];widths=[];
     forward.subVectors(actors[1].root.position,actors[0].root.position);forward.y=0;
@@ -32,7 +34,7 @@
       }
     }
     for(const actor of actors)actor.root.userData.deferLooseRockAttachments=true;
-    host.actions.start(actors,host.combatOptions||{opponentEnabled:true});
+    host.actions.start(actors,{...(host.combatOptions||{opponentEnabled:true}),awaitSettlement:!!session.pendingOnchain,...(session.onchainBattle&&typeof session.onchainBattle.playerWon==='boolean'?{authoritativeWinner:session.onchainBattle.playerWon?0:1}:{})});
     facings=actors.map(actor=>heading(actor.root));
     camera.position.copy(savedCamera.position);camera.quaternion.copy(savedCamera.quaternion);camera.far=savedCamera.far;camera.updateProjectionMatrix();
     resultAge=0;resultStarted=false;resultExitRequested=false;
@@ -55,6 +57,10 @@
     // Native controllers have finished and the encounter has captured clean poses.
     // Advance projectile/body animation exactly once, using the suspended session's
     // contacts, then apply the same attack/hit layer as the Arena.
+    if(encounter.pendingOnchain&&settlementAge===null){pendingAge+=Math.max(0,dt);if(pendingAge>pendingNoticeSeconds)host.notice?.('Battle still pending. Press Esc to return; the onchain battle continues.');}
+    if(settlementAge!==null){settlementAge+=Math.max(0,dt);const winner=encounter.onchainBattle.playerWon?0:1;
+      if(settlementAge>=host.actions.config.finishingDeadline&&host.actions.canAttack(winner))encounter.sides[winner].session.run(()=>host.actions.attack(actors,winner,{finisher:true}));
+    }
     for(const side of encounter.sides)side.session.run(()=>host.attachments(side.actor,t,dt));
     for(const actor of actors)host.actions.tick(actor,t,dt);
     const combat=host.actions.combat();
@@ -67,6 +73,7 @@
       }else resultAge+=Math.max(0,Math.min(dt,.05));
     }
     updateCamera(dt);healthAnchors();report();
+    if(resultStarted&&!outcomeRevealed&&resultAge>=resultPivotSeconds){outcomeRevealed=true;host.outcome?.(encounter.onchainBattle||null);}
     if(resultStarted&&!resultExitRequested&&resultAge>=resultDurationSeconds-1e-8){
       resultExitRequested=true;
       // Last operation: the host may finish this session and capture the BRO.
@@ -136,10 +143,12 @@
     const next=THREE.MathUtils.lerp(camera.fov,value,immediate?1:1-Math.exp(-dt*7));
     if(Math.abs(next-camera.fov)>.01){camera.fov=next;camera.updateProjectionMatrix();}
   }
+  function settle(result){if(!actors||!encounter.pendingOnchain||settlementAge!==null)return false;if(!host.actions.settle(result.playerWon?0:1))return false;encounter.onchainBattle=result;encounter.pendingOnchain=false;settlementAge=0;host.notice?.('');return true;}
+  function unavailable(message){if(!actors)return;encounter.pendingOnchain=false;host.actions.cancel();host.notice?.(message+' Press Esc to return.');report();}
   function attack(berserker=false){if(!actors)return false;
     const result=encounter.sides[0].session.run(()=>host.actions.attack(actors,0,{berserker}));
     report();return result.ok;
   }
-  function finish(){if(!actors)return;host.actions.cancel(actors);for(let i=0;i<actors.length;i++){actors[i].root.rotation.set(0,facings[i],0);delete actors[i].root.userData.deferLooseRockAttachments;}host.camera(savedCamera);host.show(false);encounter=null;actors=null;savedCamera=null;facings=null;}
-  return {begin,restore,tick,attack,finish,camera,combat:()=>host.actions.combat(),canAttack:berserker=>host.actions.canAttack(0,berserker),get active(){return !!encounter;}};
+  function finish(){if(!actors)return;host.actions.cancel(actors);for(let i=0;i<actors.length;i++){actors[i].root.rotation.set(0,facings[i],0);delete actors[i].root.userData.deferLooseRockAttachments;}host.camera(savedCamera);host.show(false);host.outcome?.(null);encounter=null;actors=null;savedCamera=null;facings=null;}
+  return {begin,settle,unavailable,restore,tick,attack,finish,camera,combat:()=>host.actions.combat(),canAttack:berserker=>host.actions.canAttack(0,berserker),get active(){return !!encounter;}};
 });

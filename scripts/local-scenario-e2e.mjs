@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {startLocalDev} from './local-dev.mjs';
 import {walletSettings} from '../wallet/config.mjs';
 import {createTransactionService} from '../wallet/transactions.mjs';
+import {createTerritoryClaim} from '../wallet/territory-claim.mjs';
 import {createPracticeChallenge} from '../wallet/practice-challenge.mjs';
 import {createNeedsService} from '../wallet/needs.mjs';
 const player='0x0000000000000000000000000000000000001234';
@@ -37,7 +38,7 @@ try {
   await until(async()=>{await transactions.poll();return transactions.list().find(r=>r.id===care.id).phase==='reflected';},'care confirmation and publication');
   needs.update(await publication());assert.deepEqual(needs.list().map(n=>n.bro.tokenId),['2']);
   const statuses=[];
-  const settled=await createPracticeChallenge({transactions,wallet,settings})({tokenId:'4',choices:{action:2,power:11,defenseWeights:[10000,0,0]},onStatus:s=>statuses.push(s)});
+  const settled=await createPracticeChallenge({transactions,wallet,settings})({locationId:'2',tokenId:'4',choices:{action:2,power:11,defenseWeights:[10000,0,0]},onStatus:s=>statuses.push(s)});
   assert(settled.challengeId);assert(statuses.some(s=>s.includes('settled')));
   // The real territory result may make BRO 4 a defender; release before testing claim.
   await until(async()=>{const p=await publication();return p.challenges.some(c=>c.challengeId===settled.challengeId&&c.status==='RESOLVED');},'battle settlement publication');
@@ -47,7 +48,7 @@ try {
   await stack.provider.send('evm_increaseTime',[86400]);await stack.provider.send('evm_mine',[]);
   await until(async()=>BigInt((await publication()).battleBros.find(b=>b.tokenId==='4').projectedReserves[2])>=11n,'attack power recovery');
   const fresh=await publication(),location=fresh.locations.find(l=>l.locationId==='3');
-  const claim=await transactions.submit({contract:'combat',functionName:'claim',args:[3n,4n,BigInt(location.nonce),[10000,0,0]],conflictKey:'claim:4'});
+  const claim=await createTerritoryClaim({transactions,settings})({locationId:'3',tokenId:'4',defenseWeights:[10000,0,0]});
   await until(async()=>{await transactions.poll();return transactions.list().find(r=>r.id===claim.id).phase==='reflected';},'claim confirmation and publication');
   const after=await publication();assert.equal(after.battleBros.find(b=>b.tokenId==='4').locationId,'3');
   console.log('PASS: eight-BRO scenario → real battles/levels/care/territories → challenge location 2 → mock VRF and confirmed settlement → owned Needs review and care transaction → open territory claim → confirmed publications.');

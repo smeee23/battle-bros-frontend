@@ -6,9 +6,12 @@ const scene=new THREE.Scene(),group=new THREE.Group();scene.add(group,api.worldG
 const islandMesh=new THREE.Group();islandMesh.name='floating-fragment-test';group.add(islandMesh);
 const camera=new THREE.PerspectiveCamera();camera.position.set(0,.6,0);
 const fp={active:true,pos:new THREE.Vector3(0,.6,0),yaw:0};
-let voidGround=false,blocked=false;
+let voidGround=false,blocked=false,cubeClaimChecks=0;
+context.EndlessTerritories={create:()=>({requestClaim:(point,islandId)=>{
+ assert.equal(islandId,'test');assert(Number.isFinite(point.x));cubeClaimChecks++;
+}})};
 const terrain={group,groundYAt:()=>voidGround?-Infinity:0,
- worldToCell:(x,z)=>({x:Math.floor(x),z:Math.floor(z),islandId:'test'}),
+ worldToCell:(x,z)=>({x:Math.floor(x),z:Math.floor(z)}),
  cellToWorld:(x,z)=>({x:x+.5,z:z+.5}),getCell:()=>voidGround?null:{terrain:'stone',terrainFloors:1,islandId:'test',kind:blocked?'house':null},
  blocksBodyAt:()=>blocked};
 Object.assign(context,{scene,fp,persCam:camera,explorationActive:true,trainingAppearance:{active:false},
@@ -22,14 +25,14 @@ vm.runInContext(html.slice(html.indexOf('  // Sparse local scenery inhabitants')
 const start=html.indexOf('  // ---------- transport cube ----------');
 const access=html.indexOf('  function fpToolsAvailable()');vm.runInContext(html.slice(access,html.indexOf('\n',access)),context);
 vm.runInContext(html.slice(start,html.indexOf('  function fpGroundYAt(',start))+
- '\nthis.transport={ensureTransportCube,throwTransportCube,resetTransportCube,tickTransportCube,transportLanding,transportCubeBlocked,pauseTransportBattleBro,bindTransportBattleBro,state:transportCube};',context);
+ '\nthis.transport={syncHomeBroPresence,ensureTransportCube,throwTransportCube,resetTransportCube,tickTransportCube,transportLanding,transportCubeBlocked,pauseTransportBattleBro,bindTransportBattleBro,state:transportCube};',context);
 const transport=context.transport;
 // Lifecycle fixtures do not model camera visibility; recall eligibility is
 // exercised with a real camera in transport-recall.test.js.
 context.transportRecallVisibility=()=>null;
 // Use the production world-transition function, with the existing terrain fixtures.
-terrain.activate=()=>{context.explorationActive=true;};terrain.deactivate=()=>{context.explorationActive=false;};
-Object.assign(context,{fpKeys:new Set(),leaveExcavation(){},fpJourney:{home:null},fpGroundYAt:(x,z)=>context.activeFPTerrain().groundYAt(x,z)+.6});
+terrain.activate=()=>{context.explorationActive=true;return {x:0,y:.6,z:0,yaw:0};};terrain.deactivate=()=>{context.explorationActive=false;};
+Object.assign(context,{fpEyeHeight:()=>.6,fpKeys:new Set(),leaveExcavation(){},fpJourney:{home:null},fpGroundYAt:(x,z)=>context.activeFPTerrain().groundYAt(x,z)+.6});
 vm.runInContext(html.slice(html.indexOf('  function switchFPWorld('),html.indexOf('  function cancelFPWarp(')),context);
 
 let time=0;
@@ -44,10 +47,11 @@ assert.equal(transport.throwTransportCube(),false,'No selected character cannot 
 for(const character of ['longneck','specter','juggernaut','monsters'])for(let form=1;form<=7;form++){
  const source=api.createBattleBroCharacter({character,form,variant:'ice',colors:{core:'cyan'}});
  context.baseBattleBroPrototype=source;transport.resetTransportCube();fp.pos.set(0,.6,0);camera.position.copy(fp.pos);camera.rotation.set(0,0,0);
- frames(1);assert.equal(transport.state.root,null,'Equipping does not deploy automatically');
+ cubeClaimChecks=0;frames(1);assert.equal(transport.state.root,null,'Equipping does not deploy automatically');
  assert(transport.throwTransportCube(),`${character} ${form}: throws`);
  assert(!transport.throwTransportCube(),'Repeated click cannot create a duplicate projectile');
  frames(240);
+ assert.equal(cubeClaimChecks,1,'Successful cube deployment requests a territory claim exactly once');cubeClaimChecks=0;
  const root=transport.state.root;assert(root,`${character} ${form}: emerges on safe terrain`);
  assert.equal(root.userData.form,form);assert.equal(root.userData.visualVariant,'ice');assert.equal(root.userData.colors.core,'cyan');
  assert.equal(root,source,'Cube carries the original instance');
@@ -98,6 +102,7 @@ for(const character of ['longneck','specter','juggernaut','monsters'])for(let fo
 }
 context.baseBattleBroPrototype=api.createBattleBroCharacter({character:'longneck',form:4,variant:'lava'});
 assert.equal(transport.transportLanding(0,0),null,'Player exclusion radius applies to landing');
+assert.equal(transport.transportLanding(5,0).cell.islandId,'test','Native ground landings resolve their island ID from the supporting terrain cell');
 const originalGround=terrain.groundYAt;
 terrain.groundYAt=()=>3;
 assert(transport.transportCubeBlocked(new THREE.Vector3(0,1,0),new THREE.Vector3(1,1,0)),'Cube cannot pass through the side of raised terrain');
@@ -201,6 +206,13 @@ fp.active=false;frames(30,true);assert.equal(traveling.parent,api.worldGroup,'Ex
 assert.equal(registrations(traveling)[0],retainedHomeMover,'Leaving first person preserves active home controller');
 fp.active=true;transport.resetTransportCube();
 console.log('Home transport: 28 forms, blocked home tools, automatic packing/home return, repeated endless capture-release, same identity/gameplay, rebuilt contacts and normal movement passed.');
+transport.syncHomeBroPresence({territory:'2'});
+assert.equal(traveling.parent,null);assert.equal(registrations(traveling).length,0,'Defenders leave Home movement registries');
+context.switchFPWorld(true);assert.equal(transport.throwTransportCube(),false,'A defender cannot be redeployed from its territory');
+context.switchFPWorld(false);transport.syncHomeBroPresence();assert.equal(traveling.parent,null,'Returning Home does not bring back a defender');
+transport.syncHomeBroPresence({territory:null});assert.equal(traveling.parent,api.worldGroup);assert.equal(registrations(traveling).length,1,'Confirmed departure restores exactly one Home controller');
+transport.resetTransportCube();
+console.log('Defender transport: real actor/controller parking, travel isolation and confirmed departure restoration passed.');
 // Real streaming keeps the island supporting a deployed character, even when
 // the player leaves its render window. Recall releases that retention.
 const fixture=fs.readFileSync('tools/exploration-world.test.js','utf8').split('const {terrain,scene,xrWorldRoot,context}=setup();')[0];

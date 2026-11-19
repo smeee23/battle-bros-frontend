@@ -4,8 +4,8 @@
   const defaults=()=>({v:1,skin:'lava',colors:{core:'default',glow:'default',eye:'default'}});
   const copy=value=>JSON.parse(JSON.stringify(value));
   const formForLevel=level=>{const value=BigInt(level);return value<1n?1:value>=7n?7:Number(value);};
-  function create({actor,character,replace,applyColors,onType=()=>{},beforeSelect=()=>{}}){
-    let selected=null,key='',rendered='';const records=new Map();
+  function create({actor,character,replace,applyColors,onType=()=>{},beforeSelect=()=>{},deferSelect=()=>false}){
+    let selected=null,key='',rendered='',pendingSelection=null;const records=new Map();
     function sync(force=false){
       if(!selected)return;
       const family=kinds[Number(selected.identity.type)];onType(family,selected);
@@ -21,7 +21,8 @@
       rendered=signature;
     }
     return {
-      select(model,scope){const previous=selected;const next=scope.chainId+':'+scope.deploymentId.toLowerCase()+':'+model.identity.tokenId;const changed=next!==key;if(changed||previous?.identity.hatched!==model.identity.hatched||previous?.identity.type!==model.identity.type||(previous&&formForLevel(previous.progression.level)!==formForLevel(model.progression.level)))beforeSelect();selected=model;key=next;if(changed)rendered='';sync();},
+      select(model,scope){const previous=selected;const next=scope.chainId+':'+scope.deploymentId.toLowerCase()+':'+model.identity.tokenId;const changed=next!==key;if(!changed&&deferSelect()){pendingSelection=[model,scope];return;}pendingSelection=null;if(changed||previous?.identity.hatched!==model.identity.hatched||previous?.identity.type!==model.identity.type||(previous&&formForLevel(previous.progression.level)!==formForLevel(model.progression.level)))beforeSelect();selected=model;key=next;if(changed)rendered='';sync();},
+      flush(){if(pendingSelection&&!deferSelect()){const next=pendingSelection;pendingSelection=null;this.select(...next);}},
       apply(value){if(!selected)return;beforeSelect();records.set(key,copy(value));sync(true);},
       remember(value){if(!selected)return;records.set(key,copy(value));rendered='';},
       restore(){beforeSelect();sync(true);},

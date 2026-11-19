@@ -7,7 +7,7 @@ let time=0,mode='fp';
 const draw={fillRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){}};
 const home=new THREE.Group(),scene=new THREE.Scene();scene.add(home);
 const fp={active:true,pos:new THREE.Vector3(0,1,0),yaw:.3,pitch:.1};
-const ctx=vm.createContext({THREE,scene,xrWorldRoot:home,worldGroup:home,GRID:50,TILE:1,DIRT_H:.5,TOP_H:.18,
+const ctx=vm.createContext({EndlessTerritories:require('../assets/endless-territories'),THREE,scene,xrWorldRoot:home,worldGroup:home,GRID:50,TILE:1,DIRT_H:.5,TOP_H:.18,
  BUILDABLE_LAND_Y_OFFSET:-.18,currentSkyBgHex:0,explorationActive:false,TRAINING_FACILITY_SCALE:4.5,
  fp,transporterObjects:new Set(),fpEyeHeight:()=>.6,fpKeys:new Set(['w']),performance:{now:()=>time},window:{innerWidth:800,innerHeight:600},
  document:{createElement:()=>({style:{},setAttribute(){},getContext:()=>draw}),body:{appendChild(){}}},
@@ -139,31 +139,16 @@ for(const other of [false,true]) {
     assert.equal(ctx.api.fpJourney.warp,0,'Exit cancels portal travel');
   }
 }
-// The same wormhole works while the underlying building board is Territory.
-ctx.territoryWorldState={active:true};
-ctx.BattleBrosTerritoryWorld=require('../assets/territory-world');
-ctx.enterFP({world:'home'});
-fp.pos.set(20,2, -20);fp.yaw=.8;fp.pitch=.2;
-const territoryReturn=fp.pos.clone();
-ctx.switchFPWorld(true);
-assert(ctx.explorationActive&&!home.visible,'Territory departure activates Endless terrain');
-assert(ctx.territoryWorldState.active,'Underlying Territory board identity persists');
-ctx.switchFPWorld(false);
-assert(!ctx.explorationActive&&home.visible,'Return restores Territory terrain');
-assert.equal(fp.pos.x,territoryReturn.x);assert.equal(fp.pos.z,territoryReturn.z);
-assert.equal(fp.yaw,.8);assert.equal(fp.pitch,.2);
-// A transporter entry must still start and complete the animated warp.
-ctx.transporterObjects.clear();ctx.transporterObjects.add(gate);home.add(gate);
-const outside=gate.localToWorld(new THREE.Vector3(0,.6,2));
-const inside=gate.localToWorld(new THREE.Vector3(0,.6,.8));
-fp.pos.copy(outside);ctx.api.fpJourney.previous=null;ctx.tickFPJourney(.016);
-fp.pos.copy(inside);assert(ctx.tickFPJourney(.016));
-assert(ctx.api.fpJourney.warp>0,'Territory entry starts wormhole animation');
-ctx.tickFPJourney(.7);assert(ctx.explorationActive,'Territory warp midpoint enters Endless');
-ctx.cancelFPWarp();ctx.switchFPWorld(false);
-assert(fp.pos.distanceTo(new THREE.Vector3(outside.x,fp.pos.y,outside.z))<1e-8,'Return is outside entry volume');
-assert(!ctx.tickFPJourney(.016),'Safe return does not immediately retrigger');
-ctx.enterFP({world:'other'});
-assert(!walkElements.get('minimap-wrap').hidden);ctx.exitFP();
-assert(walkElements.get('minimap-wrap').hidden,'Endless exit restores Territory with no minimap');
-console.log('Territory travel: actual entry, animated warp, Endless departure, same-board return and no immediate retrigger passed.');
+
+// A defending NFT enters at its contract location; H still returns to Home.
+ctx.api.explorationTerrain.setTerritories(Array.from({length:5},(_,i)=>({locationId:String(i+1)})));
+ctx.window.__battleBrosReadModel={territory:'5'};fp.active=true;fp.pos.set(1,1,2);fp.yaw=.3;fp.pitch=.1;
+ctx.switchFPWorld(true);assert(ctx.explorationActive);
+const defended=[...ctx.api.explorationTerrain.territoryBodies()].find(b=>b.site.territoryId==='5');assert(defended);
+assert(Math.hypot(fp.pos.x-defended.root.position.x,fp.pos.z-defended.root.position.z)<10,'Portal arrives at the selected NFT’s territory');
+assert(Math.abs(fp.pos.y-ctx.api.explorationTerrain.groundYAt(fp.pos.x,fp.pos.z,.6))<1e-8);
+ctx.switchFPWorld(false);assert.equal(fp.pos.x,1);assert.equal(fp.pos.z,2);assert.equal(fp.yaw,.3);assert.equal(fp.pitch,.1);
+ctx.window.__battleBrosReadModel={territory:'999'};assert.equal(ctx.switchFPWorld(true),false);assert(!ctx.explorationActive,'Missing location data never sends a defender to the default origin');
+assert(ctx.api.fpJourney.error.includes('territory'));
+ctx.window.__battleBrosReadModel={territory:null};ctx.switchFPWorld(true);assert.equal(fp.pos.x,0);assert.equal(fp.pos.z,0,'Unassigned BROs retain normal entry');ctx.switchFPWorld(false);
+console.log('Territory portal: contract-ID arrival, correct ground, Home return, missing-data guard and normal unassigned entry passed.');

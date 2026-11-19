@@ -36,9 +36,10 @@ const context=vm.createContext({THREE,Math:math,setTimeout:fn=>fn(),buildToolThu
   canMutateActiveColony:()=>true,battleArenaView:{active:false},trainingFacilityOccupiesCell:(x,z)=>x===2&&z===2,
   getBoxGeometry:(...args)=>new THREE.BoxGeometry(...args),terrainVoxelMaterials:()=>({low:palette}),playSfx(group){sounds.push(group);},
   escapeFP(){context.api.toggleFPToolMenu(false);fp.active=false;dom.exitPointerLock();},
-  fpKeys,renderer,document:dom,window:{addEventListener(name,fn){handlers[name]=fn;}}});
+  fpKeys,renderer,document:dom,window:{battleBrosMessages:require('../assets/game-messages')(),addEventListener(name,fn){handlers[name]=fn;}}});
 vm.runInContext(html.slice(html.indexOf('  // ---------- frontend excavation ----------'),html.indexOf('  // ---------- first-person walk ----------'))+
   '\nthis.api={excavation,validExcavationCell,createExcavationVisuals,equipExcavationTool,pickExcavationTarget,startExcavationSwing,tickExcavationSwing,leaveExcavation,updateExcavationAxePose,rollExcavationGem,toggleFPToolMenu,syncFPTools};',context);
+context.battleBrosMessages=context.window.battleBrosMessages;
 const {excavation:e,validExcavationCell:valid,createExcavationVisuals:create,equipExcavationTool:equip,
   pickExcavationTarget:pick,startExcavationSwing:start,tickExcavationSwing:tick,
   leaveExcavation:leave,toggleFPToolMenu:menu}=context.api;
@@ -47,7 +48,7 @@ create();assert(!e.tool,'No scanner is created');
 const options=element('fp-tool-options').children;
 assert.equal(options.length,4,'Tool menu has None, Axe, Transport cube and Terrain raiser');
 assert.equal(options[2].dataset.tool,'transport-cube');
-equip('transport-cube');assert.equal(element('fp-equipped-tool-label').textContent,'BRO teleport cube equipped');
+equip('transport-cube');assert.equal(e.equipped,'transport-cube');
 equip('hands');
 assert.equal(options[0].children[0].textContent,'None');
 assert(!options[0].children.some(child=>child.tagName==='canvas'),'None has no thumbnail');
@@ -84,7 +85,7 @@ assert.equal(world[10][10].terrainFloors,1);assert.equal(e.gems.blue,1,'A succes
 assert.deepEqual(Object.keys(e.gems),['blue'],'Only one gem type is collected');
 assert.equal(e.gem.material.color.getHexString(),'62b5ff','Discovered gems are blue');
 assert.match(element('excavation-inventory').innerHTML,/Gems: <b>1<\/b>/,'Inventory shows one gem total');
-assert.equal(element('excavation-status').textContent,'Blue gem collected!');
+assert.equal(context.window.battleBrosMessages.current.text,'Blue gem collected!');
 assert.equal(e.gemAge,0);tick(.5);
 random=.1;world[10][10].terrainFloors=2;aim(10,10);assert(start());tick(.31);
 assert.equal(e.gems.blue,1,'The probability boundary does not award a gem');tick(.5);

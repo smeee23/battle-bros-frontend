@@ -16,9 +16,9 @@
   const cube=createTransportCube.createModel(THREE,hooks.box),top=cube.children[0];
   cube.visible=false;hooks.scene.add(cube);
   let phase='carried',root=null,source=null,stored=null,age=0,actorScale=null,landing=null,returnStart=null;
-  let deployed=false,flightAge=0,recallStart=null,recallDuration=0,feedbackRemaining=0;
+  let deployed=false,flightAge=0,recallStart=null,recallDuration=0;
   const velocity=new THREE.Vector3(),hand=new THREE.Vector3(),previous=new THREE.Vector3();
-  function status(message){hooks.status?.(message);}
+  function status(message,options){hooks.status?.(message,options);}
   // Keep the selected instance (and its gameplay data), never a visual clone.
   function storeActor(){
     if(root){
@@ -54,9 +54,9 @@
     if(!['carried','deployed'].includes(phase))return false;
     if(root){
       const origin=hooks.playerPosition?.()||hooks.camera.position;
-      if(origin.distanceTo(root.position)>15){status('Move within 15m of your BattleBro to recall');feedbackRemaining=2;return false;}
+      if(origin.distanceTo(root.position)>15){status('Move within 15m of your BattleBro to recall',{category:'warning'});return false;}
       const obstruction=hooks.recallVisibility?.(root);
-      if(obstruction){status(obstruction);feedbackRemaining=2;return false;}
+      if(obstruction){status(obstruction,{category:'warning'});return false;}
       hooks.pause(root);
       hooks.hand(hand);cube.position.copy(hand);recallStart=hand.clone();
       recallDuration=Math.max(.5,Math.min(2,hand.distanceTo(root.position)/12));
@@ -66,8 +66,8 @@
     else launch();
     return true;
   }
-  function returnCube(message){
-    phase='returning';age=0;returnStart=cube.position.clone();top.position.y=.055;status(message);
+  function returnCube(message,category){
+    phase='returning';age=0;returnStart=cube.position.clone();top.position.y=.055;if(category)status(message,{category});
   }
   // Scripted return from a completed encounter. Start at the BRO so capture
   // remains available even when the exploration camera is far away or turned.
@@ -88,7 +88,6 @@
     landing.x+=dx;landing.z+=dz;landing.anchor=point;
   }
   function tick(dt,t){
-    feedbackRemaining=Math.max(0,feedbackRemaining-dt);
     syncSource();
     if(!hooks.active()){cube.visible=false;return;}
     hooks.hand(hand);
@@ -96,7 +95,7 @@
     if(phase==='carried'||phase==='deployed'){
       cube.visible=equipped;cube.position.copy(hand);cube.quaternion.copy(hooks.camera.quaternion);
       cube.rotateY(.35);cube.rotateX(.15);
-      if(equipped&&!feedbackRemaining)status(root?'Recall BattleBro · Within 15m and in clear view':'Click to throw your BattleBro · Aim at clear ground');
+      if(equipped)status(root?'Recall BattleBro · Within 15m and in clear view':'Click to throw your BattleBro · Aim at clear ground');
     }else if(phase==='recall-flight'){
       age+=dt;const u=Math.min(1,age/recallDuration);
       const target=root.position.clone();target.y+=.1;
@@ -120,32 +119,33 @@
         const ground=hooks.ground(cube.position.x,cube.position.z,previous.y+.11);
         if(velocity.y<=0&&Number.isFinite(ground)&&previous.y>=ground&&cube.position.y<=ground+.1){
           landing=hooks.landing(cube.position.x,cube.position.z,ground+.11);
-          if(!landing){returnCube('No safe landing here · Throw onto clear ground away from the player');break;}
+          if(!landing){returnCube('No safe landing here · Throw onto clear ground away from the player','warning');break;}
           cube.position.set(landing.x,landing.y+.1,landing.z);phase='opening';age=0;status('Deploying BattleBro');
-        }else if(hooks.blocked(previous,cube.position)){returnCube('The cube hit an obstacle · Try clear ground');}
-        else if(flightAge>6||cube.position.y < -24)returnCube('No ground reached · Cube returned');
+        }else if(hooks.blocked(previous,cube.position)){returnCube('The cube hit an obstacle · Try clear ground','warning');}
+        else if(flightAge>6||cube.position.y < -24)returnCube('No ground reached · Cube returned','warning');
       }
       cube.rotation.x+=dt*5;cube.rotation.z+=dt*3;
     }else if(phase==='opening'){
       carryLanding();age+=dt;top.position.y=.055+Math.min(.25,age*.4);
       // Revalidate while opening: the player or the island may have moved.
       const safe=hooks.landing(landing.x,landing.z,landing.maxY??landing.y+.11);
-      if(!safe){storeActor();returnCube('Landing became occupied · Cube returned');}
+      if(!safe){storeActor();returnCube('Landing became occupied · Cube returned','warning');}
       else if(age>=.25){
         if(!root){
-          root=stored;if(!root){returnCube('Choose a BattleBro before throwing');return;}
+          root=stored;if(!root){returnCube('Choose a BattleBro before throwing','warning');return;}
           root.scale.copy(actorScale);hooks.prepare(root);
           root.position.set(safe.x,safe.y+(hooks.hover(root)||0),safe.z);root.rotation.y=hooks.yaw();
           hooks.place(root);deployed=true;
         }
         const u=Math.min(1,(age-.25)/.7),ease=u*u*(3-2*u);
         root.scale.copy(actorScale).multiplyScalar(Math.max(.001,ease));
-        if(u===1){root.scale.copy(actorScale);hooks.bind(root);returnCube('BattleBro released · Click to recapture');}
+        if(u===1){root.scale.copy(actorScale);hooks.bind(root);returnCube('BattleBro released · Click to recapture');hooks.onDeploy?.(root,safe);}
       }
     }else if(phase==='returning'){
       age+=dt;cube.position.copy(returnStart).lerp(hand,Math.min(1,age/.4));
       if(age>=.4){phase=root?'deployed':'carried';cube.visible=equipped;}
     }
+    if(equipped&&!['carried','deployed'].includes(phase))status(phase==='flight'?'BRO teleport cube thrown':phase==='opening'?'Deploying BattleBro':phase==='returning'?(root?'BattleBro released · Click to recapture':'BattleBro recaptured · Click to deploy again'):'Returning BattleBro to the cube');
     if(root&&deployed&&['deployed','returning'].includes(phase))hooks.animate(root,t,dt);
     if(root)hooks.visual?.(root);
   }

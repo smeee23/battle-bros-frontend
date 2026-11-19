@@ -6,11 +6,11 @@ Run npm test and npm run build. Build only writes dist; it does not publish. Con
 
 From contracts, npm run interfaces:sync regenerates canonical ABIs, backend copies, frontend selectors, and public schemas. npm run interfaces:check checks all consumers.
 
-## Endless NPC residents
+## Endless territory defenders
 
-Wild BROs idle and roam locally on their islands. Approaching an NPC does not
-trigger a chase, camera lock, catch overlay, or forced regeneration. Encounters
-between a deployed Bro and wild residents remain available.
+Only active NFTs confirmed as territory occupants spawn as world residents.
+Defenders move within their assigned territories; there are no wild BROs or
+ordinary roaming NPC spawns. Challenges use the defender’s actual contract location.
 
 ## Wallet connectivity (first pass)
 
@@ -308,7 +308,7 @@ The **user stats** panel lists the connected wallet's BROs and active Needs. Sel
 
 The saved `npm run local:e2e` fixture leaves BRO #1 hatched with an active care Need, ready to inspect in Home (`index.html?battleBroId=1`). Its care regression uses BRO #4 so the default BRO's Need remains available. Rerun the fixture to refresh existing saved data. The fixture stops its chain after publication; wallet completion requires a running chain such as `npm run local:dev`.
 
-Configure `worldApiUrl` in the public-data configuration (or `BATTLEBROS_WORLD_API_URL`) to enable signed cloud saves. Selecting an owned BRO automatically loads its Home world, restoring its local draft or saved revision. The first owned BRO also loads automatically after connection. In the toolbar’s **World** menu, choosing **Occupied territory** loads that BRO’s territory; selecting another BRO returns to its Home. Switching preserves the outgoing world’s local draft, and background publication refreshes leave the editor unchanged. **Save world** becomes available after loading and asks you to sign that revision. If loading fails, **Refresh BROs** retries it. Local drafts survive refreshes without a signature. **Load saved world** explicitly discards a draft in favor of the latest accepted save if another device has updated the world. Homes stay with their NFTs and territory worlds stay with their locations.
+Configure `worldApiUrl` in the public-data configuration (or `BATTLEBROS_WORLD_API_URL`) to enable signed cloud saves. Selecting an owned BRO automatically loads its Home world, restoring its local draft or saved revision. The first owned BRO also loads automatically after connection. Territory locations and their defenders are in the endless world; the separate Territory World is retired. A BRO defending a territory is absent from its Home until its confirmed territory assignment clears. Switching preserves the outgoing world’s local draft, and background publication refreshes leave the editor unchanged. **Save world** becomes available after loading and asks you to sign that revision. If loading fails, **Refresh BROs** retries it. Local drafts survive refreshes without a signature. **Load saved world** explicitly discards a draft in favor of the latest accepted save if another device has updated the world. Saved Home worlds stay with their NFTs.
 
 `npm run local:dev` includes the world API. Hosted installations require the backend additive migration and the `dev:world-api` service; see [backend setup](../battle-bros-backend/docs/needs-and-worlds.md). No production deployment or S3 publication is performed by the frontend build.
 
@@ -333,8 +333,23 @@ The selected BRO's published kind now selects its 3D character family automatica
 Select a BRO in user stats and use the Training Center to edit its skin/colors. Leaving the facility requests an owner signature to save changed appearances; leaving without changes does not request a signature. Unsynced appearance drafts are retried when leaving a later facility visit. Signature rejection or a cloud revision conflict keeps the local draft. Cosmetics follow the NFT when ownership changes. Form/type overrides from the preview are not persisted. Restart the local stack to load the updated API/publisher; each local stack restart creates a fresh chain.
 
 
-### Temporary Endless World onchain battle entry
+### Endless World territories
 
-After accepting an NPC encounter, Start battle submits `TerritoryCombat.challenge` against location 2 using the selected BRO and setup inputs. The setup displays wallet, confirmation, and VRF/settlement progress. Practice starts only after confirmed onchain resolution; the encountered NPC remains the visual opponent and practice combat keeps its existing mechanics. Errors or expiry leave practice unstarted. Closing preparation stops UI monitoring, not a submitted transaction.
+The endless world has no ordinary roaming NPCs. Its only ambient BROs are active NFTs confirmed as territory occupants, moving within their own territories. Territories use existing streamed island fragments and the shared character navigation. The confirmed publication’s location list drives a deterministic presentation map in `assets/endless-territories.js`. Admin-created locations automatically receive native islands in outward rings after publication, including while exploring. Existing coordinates remain stable as sequential contract IDs are appended; disabled locations retain their islands. No contract/schema change or manual frontend placement entry is required. Coordinates are visual bindings, not onchain metadata.
 
-Restart `npm run local:dev` for the local-only automatic mock VRF fulfillment/retry worker. In the established fixture, BRO 3 defends location 2 and BRO 4 is a ready attacker (Counter resources). Real networks continue to use their configured VRF coordinator. No mock fulfillment code runs in the browser.
+The initial locations are within roughly 24–48 units of spawn: #1 lava to the east, #2 ice farther east, #3 sand to the south, #4 plant to the west. Shapes, shores, gaps, mass and drift use the existing island generator. A defending BRO’s owner enters the endless world on that territory, with safe footing/headroom beside its marker. Unassigned BROs retain the central entry. Missing location data prevents a territory arrival instead of silently using the origin. Home return preserves the departure position and view. Only territory relief and the central clear apron are gentler. All four biome material systems remain shared.
+
+Floating Ethereum logos show territory status: cyan is attackable, green is claimable, red is cooldown or pending battle, and gray is unavailable. A nearby label names the state. Geometry is shared, with no extra lights, shaders or particle systems. Defenders activate within 42 units, release beyond 70, build at most one rig per frame, and patrol with the existing terrain checks within three cells of their starting point. Unloaded landmarks are removed; the marker footprint is protected and collidable.
+
+Confirmed, hash-verified publications refresh every three seconds while exploring. Occupancy, cooldown, pending battles, NFT kind/level, Needs and locks control representation and eligibility. Invalid/missing data cannot offer claim/attack actions. Same-owner challenges remain allowed between distinct eligible BROs. Approach an available defender to use the existing setup/wallet flow for its actual location; approach a vacant territory marker to confirm a claim and choose defense weights. Live contract simulation and nonces remain the final eligibility/race checks.
+
+After challenge settlement, the existing interactive battle serves as presentation. The confirmed onchain winner is shown and cannot be contradicted by its health-bar outcome; controls, animations, hit reactions, Berserker and exit behavior remain shared. Territory ownership changes solely through the original contracts, never through local combat damage. Endless-world encounter targets come only from confirmed NFT territory defenders. Same-NFT level/form refreshes wait until the active encounter ends, preventing mid-presentation rig replacement.
+
+Start `npm run local:dev` for the seeded four-location fixture and automatic local mock VRF fulfillment. BRO 3 initially defends location 2; BRO 4 is a ready attacker. Obelisk claims and defender challenges use the same trusted wallet transaction service. Closing a waiting menu does not cancel a submitted transaction. Confirmed publications can lag chain inclusion by the configured confirmation depth and publisher interval.
+
+Validation includes four-biome terrain/landmark tests, real family factories/navigation, confirmed state transitions and streaming cleanup, dynamic challenge IDs, stale-defender rejection, claims, authoritative outcomes, unchanged Arena tests and the local Hardhat → VRF → settlement/publication scenario. Historical performance claims are not inferred from these tests; inspect actual FPS on target devices when expanding the active defender count.
+
+
+Territory combat presentation now begins when the challenge receipt is accepted, while VRF/confirmed settlement tracking continues. Pending fights regenerate health and reserve a minimum health band, preventing an invented early winner. Settlement selects the authoritative winner, accelerates that side's hit damage and stops loser regeneration. A finishing projectile is sent automatically eight seconds after settlement if the presentation is still running, so player inactivity cannot stall a victory. These visual values are centralized in `assets/character-battle-actions.js` and have no effect on contract stakes, XP or odds.
+
+Transaction details remain hidden until the face-camera pan completes. After 45 seconds pending, Return to exploration is offered; Escape remains available immediately. Closing never cancels a submitted challenge. Accepted battles continue being monitored, and pending tracking records resume after reload using deployment/chain/local-instance-scoped browser storage. Background resolution reports the outcome without reopening combat. Transient RPC failures retry; actual expiry stops the presentation without declaring a winner. Battle Arena defaults remain unchanged.

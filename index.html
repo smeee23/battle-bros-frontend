@@ -1308,10 +1308,9 @@
     scrollbar-width: none;
   }
   #fence-tool-hint {
-    position: fixed; bottom: 94px; left: 50%; transform: translateX(-50%);
+    position: fixed; bottom: 68px; left: 50%; transform: translateX(-50%);
     width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
-    padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,.92);
-    color: #243747; font-size: 12px; text-align: center; z-index: 12; pointer-events: none;
+    text-align: center; z-index: 151; pointer-events: none;
   }
   #fence-orientation { margin-top: 6px; pointer-events: auto; }
   #fence-orientation button { cursor: pointer; padding: 5px 10px; border: 1px solid #8fa7b5; border-radius: 6px; background: white; color: #243747; }
@@ -2976,33 +2975,7 @@
   body.showcase .showcase-exit { display: inline-flex; }
   .showcase-exit:hover { background: rgba(42,39,34,0.88); }
 
-  .flight-mode-hint {
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    z-index: 120;
-    transform: translateX(-50%);
-    padding: 9px 13px;
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    border-radius: 12px;
-    background: rgba(24, 34, 48, 0.76);
-    color: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
-    backdrop-filter: blur(14px);
-    pointer-events: none;
-    text-align: center;
-  }
-  .flight-mode-hint strong {
-    display: block;
-    margin-bottom: 3px;
-    font: 700 10px/1 var(--brand-font);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-  .flight-mode-hint span {
-    font: 10px/1.35 var(--ui-font);
-    white-space: nowrap;
-  }
+
 
   /* --- Minimap --- */
   .lower-left-ui {
@@ -4407,7 +4380,8 @@
   #battlebro-defense-section[hidden], .battlebro-panel-grid[hidden], .training-weight-editor[hidden] { display:none; }
   .training-weight-editor label { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0; }
   .training-weight-editor input { width:90px; padding:6px; border:1px solid #b9ad96; border-radius:6px; background:#fffaf0; color:#241c0b; }
-  #training-weights-save:disabled { opacity:.45; cursor:not-allowed; }
+  #battlebro-training-restriction { color:#b42828; font-weight:700; }
+  #training-appearance-done:disabled, #training-weights-save:disabled { opacity:.45; cursor:not-allowed; }
   .training-weight-editor input[readonly] { background:#e8e0cf; }
   .training-weight-editor input[aria-invalid="true"] { border-color:#b42828; }
   .training-color-picker { margin-top:5px; border:1px solid #b9ad96; border-radius:8px; background:#fffaf0; }
@@ -4419,7 +4393,6 @@
   .training-color-swatch { display:inline-block; width:16px; height:16px; margin-right:8px; border:1px solid #756d60; border-radius:4px; vertical-align:middle; flex-shrink:0; }
   body.training-appearance-active #battlebro-character-preview,
   body.training-appearance-active #fp-tools,
-  body.training-appearance-active #excavation-hud,
   body.training-appearance-active #excavation-reticle { display:none !important; }
   body.training-appearance-active .battlebro-panel-section:has(#battlebro-capital),
   body.training-appearance-active .battlebro-panel-section:has(#battlebro-territory),
@@ -4554,16 +4527,33 @@
   body.bro-unhatched #battlebro-character-preview, body.bro-unhatched #battlebro-arena-action { display:none !important; }
 </style>
 <link rel="stylesheet" href="assets/wallet.css">
+<style>
+  #world-loading { position:fixed; inset:0; z-index:2147483647; display:grid; place-items:center; background:#080f1b; color:#d8edff; font:16px var(--ui-font); }
+  #world-loading[hidden], #world-loading-recovery[hidden] { display:none; }
+  .world-loading-content { max-width:28em; padding:28px; text-align:center; }
+  .world-loading-spinner { display:inline-block; width:32px; height:32px; border:3px solid #26384b; border-top-color:#86edff; border-radius:50%; animation:world-loading-spin 1s linear infinite; }
+  @keyframes world-loading-spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion:reduce) { .world-loading-spinner { animation:none; } }
+  body.world-loading > :not(#world-loading):not(script):not(style) { visibility:hidden; }
+</style>
 </head>
-<body>
+<body class="world-loading">
+  <div id="world-loading" role="status" aria-live="polite" aria-label="World loading">
+    <div class="world-loading-content">
+      <span class="world-loading-spinner" aria-hidden="true"></span>
+      <p id="world-loading-message">World loading…</p>
+      <div id="world-loading-recovery" hidden>
+        <button class="btn" id="world-loading-retry" type="button">Retry</button>
+        <button class="btn" id="world-loading-continue" type="button">Continue</button>
+      </div>
+    </div>
+  </div>
+  <script src="assets/world-loading.js"></script>
   <div id="app"></div>
   <div id="root" style="position:fixed;top:0;left:0;width:0;height:0;pointer-events:none;"></div>
   <div id="cloud-layer"></div>
   <div id="tod-tint" aria-hidden="true"></div>
-  <div class="flight-mode-hint" id="flight-mode-hint" role="status" hidden>
-    <strong>Flight Mode</strong>
-    <span>Mouse: pitch / turn · A/D: roll · W/S: throttle · Q/E: yaw · Shift: boost · Space: level · Esc: exit</span>
-  </div>
+
 
   <!-- Lower-left controls, minimap, activity vehicles, and project link -->
   <div class="lower-left-ui" id="lower-left-ui">
@@ -4592,10 +4582,13 @@
   </div>
 
   <style>
-    #excavation-hud { position:fixed; bottom:28px; left:50%; transform:translateX(-50%); z-index:150; width:min(360px,90vw); padding:12px 16px; border:1px solid #68d9d0; border-radius:14px; background:#101e29ed; color:#e3fff8; box-shadow:0 8px 32px #0008; font:13px/1.6 system-ui; }
+    #excavation-hud { position:fixed; bottom:28px; left:50%; transform:translateX(-50%); z-index:150; pointer-events:none; box-sizing:border-box; width:min(360px,90vw); padding:12px 16px; border:1px solid #68d9d0; border-radius:14px; background:#101e29ed; color:#e3fff8; box-shadow:0 8px 32px #0008; font:13px/1.6 system-ui; }
     #excavation-hud[hidden], #excavation-reticle[hidden], #fp-tools[hidden], #fp-tool-menu[hidden] { display:none; }
     #excavation-inventory { display:flex; gap:12px; flex-wrap:wrap; }
-    #excavation-hud .btn { margin-top:10px; }
+    #excavation-hud[data-category="warning"] #excavation-status { color:#ffe09a; }
+    #excavation-hud[data-category="error"] #excavation-status { color:#ff8e8e; }
+    #excavation-hud[data-mode="home-building"] { bottom:110px; }
+    @media(max-width:600px){ #excavation-hud { width:min(360px,calc(100vw - 32px)); } }
     #fp-tools { position:fixed; right:18px; bottom:24px; z-index:151; color:#e3fff8; font:13px system-ui; }
     #fp-tools-toggle { border:1px solid #ffffff8c; border-radius:18px; padding:10px 16px; background:#ffffffb8; color:var(--ink); cursor:pointer; backdrop-filter:blur(22px) saturate(180%); }
     #fp-tool-menu { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); box-sizing:border-box; width:min(480px,calc(100vw - 32px)); max-height:calc(100dvh - 48px); padding:18px; border:1px solid #ffffff8c; border-radius:22px; background:rgba(255,255,255,.78); color:var(--ink); box-shadow:0 1px 0 #ffffffd9 inset,0 12px 36px -12px #28325038; backdrop-filter:blur(22px) saturate(180%); display:flex; flex-direction:column; }
@@ -4614,9 +4607,9 @@
     <div id="fp-tool-menu" role="dialog" aria-modal="true" aria-label="Walking tools" hidden><strong>Walking tools</strong><p>Click a tool to equip and resume walking.<br>Q or Esc: resume · Tab: select · Enter: equip</p><div id="fp-tool-options"></div></div>
     <button id="fp-tools-toggle" type="button" aria-controls="fp-tool-menu" aria-expanded="false">Q · Walking tools</button>
   </div>
-  <div id="excavation-hud" hidden>
+  <div id="excavation-hud" hidden role="status" aria-live="polite" aria-atomic="true">
     <strong id="fp-equipped-tool-label">Axe equipped · 10% gem chance per broken layer</strong>
-    <div id="excavation-status" role="status">Aim at raised terrain and click to dig.</div>
+    <div id="excavation-status"></div>
   </div>
   <div class="battlebro-sidebar" id="battlebro-sidebar">
   <button class="battlebro-sidebar-toggle" id="battlebro-sidebar-toggle" type="button" aria-controls="battlebro-panel" aria-expanded="true" aria-label="Collapse user stats">
@@ -4651,7 +4644,7 @@
       <summary>Combat reserves</summary>
       <div class="battlebro-panel-grid" id="battlebro-reserves"></div>
     </details>
-    <details class="battlebro-panel-section battlebro-panel-disclosure" open>
+    <details class="battlebro-panel-section battlebro-panel-disclosure" id="battlebro-training-section" open>
       <summary>Training weights</summary>
       <div class="battlebro-panel-grid" id="battlebro-training"></div>
       <div class="training-weight-editor" id="battlebro-training-editor" hidden></div>
@@ -4683,13 +4676,13 @@
       <button class="btn battlebro-info-action" id="battlebro-history-action" type="button">Battle history</button>
       <button class="btn battlebro-info-action" id="battlebro-opponent-action" type="button">Look up BattleBro</button>
     </div>
-    <section class="battlebro-panel-section" id="training-appearance-controls" hidden aria-label="Appearance selection">
+    <section class="battlebro-panel-section" id="training-appearance-controls" hidden aria-label="Training facility settings">
       <h3>Appearance</h3>
-      <p class="battlebro-panel-note">Choose your skin and colors. Save appearance signs your cosmetic changes. Save weights sends onchain transactions (one per changed group). Return outside discards unsaved changes.</p>
+      <p class="battlebro-panel-note">Choose your skin and colors. Save appearance signs your cosmetic changes. Save weights updates only your training allocation onchain. Return outside discards unsaved changes.</p>
       <div id="training-appearance-options"></div>
       <p class="battlebro-panel-note" id="training-appearance-status" role="status"></p>
-      <button class="btn" id="training-appearance-done" type="button">Save appearance</button>
-      <button class="btn" id="training-weights-save" type="button">Save weights</button>
+      <button class="btn" id="training-appearance-done" type="button" disabled>Save appearance</button>
+      <button class="btn" id="training-weights-save" type="button" disabled>Save weights</button>
       <button class="btn" id="training-appearance-cancel" type="button">Return outside</button>
     </section>
     <span class="battlebro-mock-badge" id="battlebro-source-badge">NOT CONNECTED</span>
@@ -5090,7 +5083,6 @@
       <div id="world-save-controls"><p class="battlebro-panel-note">Connect your wallet to save and load your BRO’s worlds.</p></div>
     </div>
     <div class="world-menu-section">
-      <button class="world-menu-item" id="territory-world-toggle" type="button">Enter Territory World (dev)</button>
     </div>
   </div>
 
@@ -5632,7 +5624,7 @@
     </form>
   </div>
 
-  <div id="fence-tool-hint" role="status" hidden>Plasma Fence — Hold Shift + Drag to place • Click to place one segment • Esc or right-click to cancel
+  <div id="fence-tool-hint" role="status" hidden>
     <div id="fence-orientation" role="group" aria-label="Single-piece fence orientation">
       <button type="button" data-fence-side="center-z" aria-pressed="false">N ↔ S</button>
       <button type="button" data-fence-side="center-x" aria-pressed="true">E ↔ W</button>
@@ -5658,6 +5650,7 @@
     </div>
   </div>
 
+
   <div id="bro-encounter-menu" hidden role="dialog" aria-modal="true" aria-labelledby="bro-encounter-question" style="position:fixed;inset:0;z-index:10000;background:#07121a99;place-items:center">
     <div id="bro-encounter-card" style="background:#142d42;color:#fff;padding:28px;border:1px solid #92e8ef;border-radius:12px;text-align:center">
       <div id="bro-encounter-prompt">
@@ -5666,18 +5659,19 @@
       <button type="button" data-bro-choice="no" style="padding:10px 28px">No</button>
       </div>
       <form id="practice-setup-form" hidden aria-labelledby="practice-setup-title">
-        <h2 id="practice-setup-title">Prepare for practice</h2>
+        <h2 id="practice-setup-title">Prepare for territory battle</h2>
         <fieldset><legend>Defense weights</legend>
           <label>Attack % <input id="practice-setup-attack-weight" type="number" min="0" max="100" step="0.01" required></label>
           <label>Defend % <input id="practice-setup-defend-weight" type="number" min="0" max="100" step="0.01" required></label>
           <label>Counter % <input id="practice-setup-counter-weight" type="number" readonly></label>
           <p id="practice-setup-status" role="status" aria-live="polite"></p>
         </fieldset>
-        <label>Attack choice <select id="practice-setup-action"><option value="0">Attack</option><option value="1">Defend</option><option value="2">Counter</option></select></label>
+        <div id="practice-setup-combat"><label>Attack choice <select id="practice-setup-action"><option value="0">Attack</option><option value="1">Defend</option><option value="2">Counter</option></select></label>
         <label>Commit strength <output id="practice-setup-strength-label" for="practice-setup-strength"></output>
           <input id="practice-setup-strength" type="range" min="10" max="100" step="1" value="10">
         </label>
-        <p>Temporary onchain test: challenge location 2, then practice against this NPC.</p>
+        </div>
+        <p id="practice-setup-note">Confirm your challenge to enter battle.</p>
         <button id="practice-setup-start" type="submit">Start battle</button>
         <button id="practice-setup-cancel" type="button">Cancel</button>
       </form>
@@ -5722,7 +5716,8 @@
     #practice-battle-result[data-outcome="loss"]{color:#ffb4a2}
     body.practice-active #fp-tools,body.practice-active #excavation-hud{visibility:hidden}
   </style>
-  <section id="practice-battle-hud" hidden tabindex="-1" aria-label="Practice battle">
+  <section id="practice-battle-hud" hidden tabindex="-1" aria-label="Territory battle">
+    <div id="practice-territory-outcome" hidden style="position:absolute;top:20px;left:50%;transform:translateX(-50%);background:#102336dd;padding:8px 14px;border-radius:8px;width:min(90vw,620px);overflow-wrap:anywhere;text-align:center;font-size:12px"></div>
     <div id="practice-health-anchor-0" class="practice-health-anchor" hidden><span>Your BRO</span><meter id="practice-health-0" min="0" max="100" value="100" aria-label="Player health">100</meter></div>
     <div id="practice-health-anchor-1" class="practice-health-anchor" hidden><span>Opponent</span><meter id="practice-health-1" min="0" max="100" value="100" aria-label="Opponent health">100</meter></div>
     <div id="practice-battle-result" hidden role="status" aria-live="polite" tabindex="-1"></div>
@@ -5730,12 +5725,14 @@
       <div class="practice-abilities">
         <button id="practice-berserker" class="practice-ability" type="button" disabled aria-describedby="practice-energy-0">Berserker<meter id="practice-energy-0" min="0" max="100" value="0" aria-label="Berserker energy">0</meter></button>
         <button id="practice-shield" class="practice-ability" type="button">Shield</button>
+      <button id="practice-leave-pending" type="button" hidden>Return to exploration</button>
       </div>
       <p>Click to attack · Esc to leave</p>
     </div>
   </section>
+  <script src="assets/game-messages.js"></script>
   <script src="assets/character-battle-actions.js"></script>
-  <script defer src="assets/battle-arena.js"></script>
+  <script src="assets/battle-arena.js"></script>
   <script src="runtime-config.js"></script>
   <link rel="stylesheet" href="assets/needs.css">
   <script type="module" src="build/wallet.js"></script>
@@ -5744,7 +5741,7 @@
   <script src="assets/battlebro-encounter.js"></script>
   <script src="assets/practice-battle.js"></script>
   <script src="assets/practice-battle-setup.js"></script>
-  <script src="assets/territory-world.js"></script>
+  <script src="assets/endless-territories.js"></script>
   <script src="assets/longneck-animation.js"></script>
   <script src="assets/juggernaut-animation.js"></script>
   <script src="assets/monster-animation.js"></script>
@@ -5955,6 +5952,7 @@
     if (status) status.textContent = 'Confirmed snapshot block ' + model.snapshot.blockNumber.toString() + '. ' + sourceLabel;
     if (badge) badge.textContent = 'CONFIRMED TERRITORY V2';
     window.__battleBrosReadModel = model;
+    if(typeof syncHomeBroPresence==='function')syncHomeBroPresence(model);
     window.syncDefenseWeightVisibility?.();
   }
 
@@ -6003,6 +6001,7 @@
     try {
       const publication=await fetchTerritoryPublication();
       const {manifest,game,manifestUrl}=publication;
+      window.battleBrosSetTerritories?.(game.locations);
       const tokenId=battleBrosPublicDataConfig().tokenId;
       const bro=game.battleBros.find(b=>tokenId===null?b.active:String(b.tokenId)===String(tokenId));
       if(bro){
@@ -6601,7 +6600,6 @@
   }
 
   function ghostBoardsEnabledForGrid() {
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return false;
     return ENABLE_GHOST_BOARDS && !!renderAutoExpand && renderBudgetForGrid(GRID).ghostRadius > 0;
   }
 
@@ -7313,6 +7311,7 @@
   }
 
   window.battleBrosTrainingWeights=window.createTrainingWeightsEditor?.({document,
+    getSelection:()=>({model:window.__battleBrosReadModel,scope:window.__battleBrosWeightScope}),
     getRecords:()=>window.battleBrosWeightTransactions?.()||[],
     getEligibility:(model,scope)=>window.battleBrosWeightEligibility?.(String(model.identity.tokenId),scope)
       ||window.BattleBrosWeightEligibility(model,{transactions:false}),
@@ -7404,6 +7403,7 @@
       }
     }
     refreshTrainingDisplay();
+    updateTrainingAppearanceSave();
     document.getElementById('training-appearance-status').textContent='Appearance preview updated. Save appearance to keep these changes before returning outside.';
     if(notify&&typeof CustomEvent==='function')document.dispatchEvent?.(new CustomEvent('battlebros:appearance-edited'));
   }
@@ -7496,6 +7496,7 @@
     }
     window.battleBrosTrainingWeights?.begin(window.__battleBrosReadModel,window.__battleBrosWeightScope);
     state.saved.appearance=Object.fromEntries(Object.entries(state.controls).map(([role,control])=>[role,control.value]));
+    updateTrainingAppearanceSave();
     refreshTrainingDisplay();resetTransportCube(false);fpKeys.clear();leaveExcavation();
     fpToolMenu.hidden=true;
     document.body.classList.add('training-appearance-active');
@@ -7508,18 +7509,24 @@
     state.controls.skin.focus({preventScroll:true});return true;
   }
   function trainingAppearanceValues(){return Object.fromEntries(Object.entries(trainingAppearance.controls).map(([role,control])=>[role,control.value]));}
+  function trainingAppearanceDirty(){
+    return !!trainingAppearance.saved?.appearance&&JSON.stringify(trainingAppearanceValues())!==JSON.stringify(trainingAppearance.saved.appearance);
+  }
+  function updateTrainingAppearanceSave(){
+    document.getElementById('training-appearance-done').disabled=!trainingAppearance.active||trainingAppearance.saving||!trainingAppearanceDirty();
+  }
   function trainingHasUnsavedChanges(){
-    return JSON.stringify(trainingAppearanceValues())!==JSON.stringify(trainingAppearance.saved.appearance)
+    return trainingAppearanceDirty()
       ||!!window.battleBrosTrainingWeights?.dirty();
   }
   async function saveTrainingSettings(kind){
-    const state=trainingAppearance;if(!state.active||state.saving)return;
+    const state=trainingAppearance;if(!state.active||state.saving||(kind==='appearance'&&!trainingAppearanceDirty()))return;
     const visit=state.saved;state.saving=true;
     window.battleBrosTrainingWeights?.setBusy(true);
     for(const id of ['training-appearance-done','training-weights-save','training-appearance-cancel'])document.getElementById(id).disabled=true;
     for(const control of Object.values(state.controls))control.disabled=true;
     const status=document.getElementById('training-appearance-status');
-    status.textContent=kind==='appearance'?'Confirm the appearance save with your wallet.':'Confirm each changed weight group with your wallet. Waiting for confirmation.';
+    status.textContent=kind==='appearance'?'Confirm the appearance save with your wallet.':'Confirm the training weights update with your wallet. Waiting for confirmation.';
     try{
       if(kind==='appearance'){
         const values=trainingAppearanceValues(),detail={promise:null};
@@ -7531,9 +7538,10 @@
         if(!window.battleBrosSaveWeights)throw Error('Connect your wallet to save weights.');
         const request=window.battleBrosTrainingWeights?.request();
         if(!request)throw Error('Select a confirmed, hatched BRO before editing weights.');
-        if(!request.groups.length){status.textContent='Weights are unchanged.';return;}
+        if(request.groups.some(group=>group!=='training'))throw Error('Only training weights can be saved in the training facility.');
+        if(!request.groups.length){status.textContent='Training weights are unchanged.';return;}
         await window.battleBrosSaveWeights(request);
-        if(state.saved===visit)status.textContent='Weight transactions submitted. Confirmation status appears beside each group. Pending transactions continue if you leave.';
+        if(state.saved===visit)status.textContent='Training weights submitted. Confirmation status appears below the training allocation. Pending transactions continue if you leave.';
       }
     }catch(error){if(state.saved===visit)status.textContent=error.message||'Save failed. Your edits are still open.';}
     finally{
@@ -7542,6 +7550,7 @@
       for(const id of ['training-appearance-done','training-weights-save','training-appearance-cancel'])document.getElementById(id).disabled=false;
       for(const control of Object.values(state.controls))control.disabled=false;
       window.battleBrosTrainingWeights?.update(window.battleBrosWeightTransactions?.()||[]);
+      updateTrainingAppearanceSave();
     }
   }
   function leaveTrainingAppearance(resume=true) {
@@ -8584,7 +8593,6 @@
   }
 
   function addTerraformGreenhouseBox(root, baseY = 0, heightScale = 1, visibleSides = null) {
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return null;
     if (!root) return null;
     const box = new THREE.Group();
     addCropGreenhouseDome(box, visibleSides);
@@ -9892,6 +9900,42 @@
     // roundedBox is base-origin (unlike BoxGeometry); keep the shell on the ground.
     body.position.y = 0;
     g.add(body);
+    // The exterior shell faces outward. Line the room with inward-facing walls,
+    // leaving real openings at the plasma bands and the sliding entrance.
+    function interiorWall(width, front) {
+      const key = 'training-interior-wall|' + width + '|' + totalH + '|' + front;
+      if (!geomCache.has(key)) {
+        const wall = new THREE.Shape();
+        wall.moveTo(-width / 2, 0);
+        if (front) {
+          wall.lineTo(-1, 0); wall.lineTo(-1, 1.5);
+          wall.lineTo(1, 1.5); wall.lineTo(1, 0);
+        }
+        wall.lineTo(width / 2, 0); wall.lineTo(width / 2, totalH);
+        wall.lineTo(-width / 2, totalH); wall.closePath();
+        const spans = front ? [[-width / 2 + .09, -1.18], [1.18, width / 2 - .09]] : [[-width / 2 + .09, width / 2 - .09]];
+        for (let i = 0; i < 6; i++) for (const [left, right] of spans) {
+          const bottom = (i + .5) * .30 - .08, top = bottom + .16;
+          const opening = new THREE.Path();
+          opening.moveTo(left, bottom); opening.lineTo(left, top);
+          opening.lineTo(right, top); opening.lineTo(right, bottom); opening.closePath();
+          wall.holes.push(opening);
+        }
+        const geometry = new THREE.ShapeGeometry(wall);
+        geometry.userData.cached = true; geomCache.set(key, geometry);
+      }
+      return geomCache.get(key);
+    }
+    for (const [name, width, x, z, yaw, front] of [
+      ['left', D, -W / 2 + .025, 0, Math.PI / 2, false],
+      ['right', D, W / 2 - .025, 0, -Math.PI / 2, false],
+      ['back', W, 0, -D / 2 + .025, 0, false],
+      ['front', W, 0, D / 2 - .025, Math.PI, true]
+    ]) {
+      const lining = new THREE.Mesh(interiorWall(width, front), M.habitatShell);
+      lining.name = 'trainingInteriorWall-' + name;
+      lining.position.set(x, 0, z); lining.rotation.y = yaw; g.add(lining);
+    }
     // Preserve the six window bands and the original shell/trim palette.
     for (let i = 0; i < 6; i++) {
       const y = (i + 0.5) * 0.30;
@@ -10392,7 +10436,6 @@
   }
 
   function addCropGreenhouseDome(g, visibleSides = null) {
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return;
     const assets = ensureCropDomeAssets();
     const half = CROP_DOME_SIZE / 2;
     const midY = CROP_DOME_BASE_Y + CROP_DOME_HEIGHT / 2;
@@ -12726,8 +12769,6 @@
   // objects at startup.
 
   const MAX_FLOORS = 8;
-  // Local development board; never part of authoritative territory state.
-  var territoryWorldState = { active:false, switching:false, home:null, territory:null, cameras:{} };
   let MAX_TERRAIN_FLOORS = 64;
   let activeEnvironment = 'LUNAR';
   let activeTerrainSeed = 'battlebros';
@@ -18690,6 +18731,7 @@ stone(torso, [0.39, 0.33, 0.44], 'greaterCrookedCollar', [0.17, 3.47, 0.05], mat
 
   function setupSelectedBroAppearance(){
   window.battleBrosAppearanceBridge=BattleBrosAppearance.create({
+    deferSelect:()=>typeof broEncounter!=='undefined'&&!!broEncounter.active,
     actor:()=>baseBattleBroPrototype,
     character:trainingAppearanceCharacter,
     beforeSelect:()=>{characterEnvironmentRequest++;if(trainingAppearance.active)leaveTrainingAppearance(false);},
@@ -21594,11 +21636,11 @@ function neighborStarVector(edge, index) {
   }
 
   function canMutateActiveColony() {
-    return !(typeof territoryWorldState !== 'undefined' && territoryWorldState.switching) && !neighborInspectionState.active;
+    return !neighborInspectionState.active;
   }
 
   function canPersistActiveColony() {
-    return !(typeof territoryWorldState !== 'undefined' && territoryWorldState.active) && !neighborInspectionState.active;
+    return !neighborInspectionState.active;
   }
 
   function selectedNeighborColonyContext() {
@@ -21662,7 +21704,6 @@ function neighborStarVector(edge, index) {
   }
 
   function enterNeighborInspection() {
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return false;
     if (neighborInspectionState.active) return false;
     const { slot, colony } = selectedNeighborColonyContext();
     const validation = validateNeighborWorldSnapshot(slot, colony);
@@ -21936,7 +21977,6 @@ function neighborStarVector(edge, index) {
   }
 
   function saveActiveControlledLandSnapshot() {
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return controlledLandState.lands.get(activeControlledLandId());
     const id = activeControlledLandId();
     const sourceSlot = id.startsWith('neighbor:')
       ? neighborSlotById.get(id.slice('neighbor:'.length))
@@ -21981,7 +22021,6 @@ function neighborStarVector(edge, index) {
   }
 
   function loadControlledLand(landId, opts = {}) {
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return false;
     const id = landId || HOME_CONTROLLED_LAND_ID;
     ensureHomeControlledLand();
     const land = controlledLandState.lands.get(id);
@@ -22976,7 +23015,7 @@ function neighborStarVector(edge, index) {
   rebuildNeighborSlotButtons();
   ensureSelectedNeighborStats();
   syncPlayerExpansionClaimAction();
-  loadNeighborNames();
+  if (!BATTLEBROS_MIGRATION_MODE) loadNeighborNames();
 
   // -------- home board border --------
   // No visible board marker. The old dark rectangle/outline under the start
@@ -24485,7 +24524,6 @@ function neighborStarVector(edge, index) {
     if (built) updateGhostRenderBubble();
   }
   function ensureGhostBoardsAroundTarget() {
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return;
     syncGhostRenderBudget();
     if (!ghostBoardsEnabledForGrid()) {
       clearPendingGhostBoards();
@@ -25106,7 +25144,6 @@ function neighborStarVector(edge, index) {
       let shadeVariant = cell.terrain === 'snow'
         ? terrainSnowShadeVariant(shadeRoll, tileLevelForCell(cell))
         : shadeRoll < 0.18 ? 1 : (shadeRoll > 0.82 ? 2 : 0);
-      if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active && cell.terrain === 'stone' && x >= GRID/2 && z >= GRID/2) shadeVariant = 3;
       setHomeTileInstance(x, z, cell.terrain, instancePos.x, instancePos.z, terrainRiseAt(x, z), shadeVariant);
       tile.userData.batchedHomeTerrain = true;
     } else if (insideHome) {
@@ -27163,7 +27200,6 @@ function neighborStarVector(edge, index) {
 
   function applyCatalogCellMutation(x, z, opts) {
     if (BATTLEBROS_MIGRATION_MODE) return setCell(x, z, opts);
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return setCell(x, z, opts);
     const beforeCell = cloneCellIntent(getWorldCell(x, z));
     const beforeTotals = catalogCellTotals(beforeCell);
     const previousSuppressSave = suppressSave;
@@ -27656,7 +27692,6 @@ function neighborStarVector(edge, index) {
   }
 
   function setCell(x, z, opts) {
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.switching && setCellMutationAuthority !== 'restore') return false;
     if (terrainConsumeLocks.has(x+','+z) && setCellMutationAuthority !== 'terrain-consume') return false;
     if (neighborInspectionState.active && !neighborInspectionState.applying) return false;
     const { terrain, terrainFloors, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, impactDust = true, forceTile = false, rotationY, offsetX, offsetZ, appearance } = opts;
@@ -29214,6 +29249,7 @@ function neighborStarVector(edge, index) {
     cancelFenceLine();
     selectedTool = t;
     document.getElementById('fence-tool-hint').hidden = t.kind !== 'fence';
+    globalThis.battleBrosMessages?.context('fence',t.kind==='fence'?'Hold Shift + Drag to place · Click to place one segment · Esc or right-click to cancel':'',{title:'Plasma Fence',priority:20});
     if (t.kind === 'fence') setSingleFenceOrientation(singleFenceSide);
     updateToolActiveStates();
     hoverMesh.material = t.erase ? M.hoverErase : M.hover;
@@ -29690,7 +29726,7 @@ function neighborStarVector(edge, index) {
       if (msg.indexOf('API key') !== -1 && openGenerateModal) {
         openGenerateModal('enter an API key for Auto');
       } else {
-        alert('Auto could not choose a cell: ' + msg.slice(0, 120));
+        globalThis.battleBrosMessages?.notify('Auto could not choose a cell: ' + msg.slice(0, 120),{source:'auto-placement',category:'error'});
       }
     } finally {
       setAutoBusy(false);
@@ -30393,7 +30429,7 @@ function neighborStarVector(edge, index) {
       if (!applyState(data)) throw new Error('schema check failed');
     } catch (err) {
       console.error('Import failed:', err);
-      alert('Could not import that file — not a valid BattleBros world JSON.');
+      globalThis.battleBrosMessages?.notify('Could not import that file — not a valid BattleBros world JSON.',{source:'world-import',category:'error'});
     }
     e.target.value = '';
   });
@@ -30480,8 +30516,8 @@ function neighborStarVector(edge, index) {
   // ---------- exploration terrain ----------
   // Stable logical terrain cells retain edits; streamed island groups supply
   // their current world transforms. Only nearby rigid bodies are simulated.
-  // Exploration columns have an independent height range; Home and Territory
-  // retain their own editor limits regardless of the board used to travel here.
+  // Exploration columns have an independent height range; Home retains its
+  // own editor limits.
   function explorationTerrainRiseForLevel(level) {
     return (Math.max(1,Math.min(4096,Number(level)||1))-1)*.20;
   }
@@ -30495,7 +30531,7 @@ function neighborStarVector(edge, index) {
       return CELESTIAL.altitudeGain*height*height/(height+CELESTIAL.altitudeSoftness);
     }
     const cells=new Map(), edits=new Map(), sites=new Map(), islands=new Map(), sleeping=new Map(), skyBodies=new Set();
-    const residentPlacements=new Map();
+    const territoryIslands=new Map();
     const group=new THREE.Group();group.name='explorationWorld';group.visible=false;scene.add(group);
     const dummy=new THREE.Object3D(),box=new THREE.BoxGeometry(TILE,1,TILE);
     let centerX=null,centerZ=null,homeWasVisible=true,clock=0,accumulator=0,lastSafe={x:0,z:0};
@@ -30506,6 +30542,9 @@ function neighborStarVector(edge, index) {
       let n=Math.imul(x,374761393)^Math.imul(z,668265263)^Math.imul(salt+1,1442695041);
       n=Math.imul(n^(n>>>13),1274126177);return ((n^(n>>>16))>>>0)/4294967296;
     };
+    const territoryLayout=globalThis.EndlessTerritories?.createLayout({
+      exists:territorySectorExists
+    });
     // Eight sectors (192 units) per region: neighboring islands share a
     // biome. Repeat the Territory quadrant layout across the infinite plane.
     function biomeAt(sx,sz) {
@@ -30527,6 +30566,7 @@ function neighborStarVector(edge, index) {
     const plantKinds=['tuft','tuft','bush','flower','flower','crop','corn','wheat','pumpkin','carrot','sunflower'];
     const desertPlantKinds=['bush','tuft','tuft','flower'];
     function vegetationForCell(site,x,z) {
+      if(site.territoryId&&Math.hypot(x-site.x,z-site.z)<9)return null;
       // Scenery is visual: keep existing walkable cells, mining and resident routes.
       // Leave the arrival area and its mountain approach clear.
       if(site.sky||Math.hypot(x,z)<7||(Math.abs(x)<2&&z<0&&z>-62))return null;
@@ -30617,22 +30657,37 @@ function neighborStarVector(edge, index) {
       }
       return wave+mountain;
     }
-    function sectorSites(sx,sz) {
-      // Missing seeds grow broad islands; twin seeds create small splinters.
+    function nativeSites(sx,sz) {
+      // Pure seed geometry is also used to reserve spacious native territories.
       if((sx!==0||sz!==0)&&hash(sx,sz,1)<.14)return [];
-      const roll=hash(sx,sz,2);
-      const count=sx===0&&sz===0?1:roll>.86?4:roll>.65?2:1;
+      const roll=hash(sx,sz,2),count=sx===0&&sz===0?1:roll>.86?4:roll>.65?2:1;
+      return Array.from({length:count},(_,part)=>{
+        const angle=hash(sx,sz,3)*Math.PI*2+(count===4?part*Math.PI/2:0),offset=count===4?6.5:count===2?(part?5:-5):0;
+        return {sx,sz,part,
+          x:sx*SPACING+(sx===0&&sz===0?0:(hash(sx,sz,4)-.5)*8)+Math.cos(angle)*offset,
+          z:sz*SPACING+(sx===0&&sz===0?0:(hash(sx,sz,5)-.5)*8)+Math.sin(angle)*offset,
+          gap:count===1&&hash(sx,sz,8)>.88?4.5:.55+hash(sx,sz,9)*.5};
+      });
+    }
+    function territorySectorExists(sx,sz) {
+      const seeds=nativeSites(sx,sz);if(seeds.length!==1)return false;
+      const seed=seeds[0];
+      // Exact Voronoi clearance leaves a broad flat apron without enlarging land.
+      // More distant seeds cannot clip this radius with the generator's offsets.
+      for(let x=sx-1;x<=sx+1;x++)for(let z=sz-1;z<=sz+1;z++){
+        if(x===sx&&z===sz)continue;
+        for(const other of nativeSites(x,z))if(Math.hypot(seed.x-other.x,seed.z-other.z)/2-(seed.gap+other.gap)/2<12)return false;
+      }
+      return true;
+    }
+    function sectorSites(sx,sz) {
       const result=[];
-      for(let part=0;part<count;part++) {
-        const id=key(sx,sz)+':'+part;
-        if(!sites.has(id)) {
-          const angle=hash(sx,sz,3)*Math.PI*2+(count===4?part*Math.PI/2:0),offset=count===4?6.5:count===2?(part?5:-5):0;
-          const x=sx*SPACING+(sx===0&&sz===0?0:(hash(sx,sz,4)-.5)*8)+Math.cos(angle)*offset;
-          const z=sz*SPACING+(sx===0&&sz===0?0:(hash(sx,sz,5)-.5)*8)+Math.sin(angle)*offset;
-          sites.set(id,{id,sx,sz,x,z,part,biome:biomeAt(sx,sz),style:Math.floor(hash(sx,sz,6+part)*4),
-            gap:count===1&&hash(sx,sz,8)>.88?4.5:.55+hash(sx,sz,9)*.5,
-            depth:4+hash(sx,sz,10)*8,phase:hash(sx,sz,11+part)*Math.PI*2});
-        }
+      for(const seed of nativeSites(sx,sz)) {
+        const {part}=seed,id=key(sx,sz)+':'+part;
+        if(!sites.has(id))sites.set(id,{...seed,id,biome:biomeAt(sx,sz),style:Math.floor(hash(sx,sz,6+part)*4),
+          depth:4+hash(sx,sz,10)*8,phase:hash(sx,sz,11+part)*Math.PI*2});
+        const territory=territoryLayout?.binding(sx,sz,part);
+        if(territory){sites.get(id).territoryId=territory.id;sites.get(id).biome=territory.biome;}
         result.push(sites.get(id));
       }
       return result;
@@ -30710,7 +30765,8 @@ function neighborStarVector(edge, index) {
       // A common low shelf makes neighboring shores jumpable; relief rises
       // inside each fragment, leaving broad routes around the mountains.
       let relief;
-      if(Math.abs(x)<24 && z<2 && z>-54)relief=duneHeight(x,z);
+      if(site.territoryId)relief=Math.hypot(lx,lz)<9?2:1+Math.abs(Math.sin(lx*.18)*Math.cos(lz*.23))*2;
+      else if(Math.abs(x)<24 && z<2 && z>-54)relief=duneHeight(x,z);
       else if(site.style===0)relief=duneHeight(lx*1.4,lz*1.4-25)*.68;
       else if(site.style===1)relief=3+18*Math.abs(Math.sin(lx*.23+site.phase)*Math.cos(lz*.19))
         +7*Math.abs(Math.sin(lx*.48-lz*.31));
@@ -30782,6 +30838,10 @@ function neighborStarVector(edge, index) {
       const hit=sample(wx,wz,maxY);return hit?surfaceY(hit)+eyeHeight:-Infinity;
     }
     function blocksBodyAt(wx,wz,feet,head,step=0) {
+      for(const body of territoryIslands.values())if(Math.abs(wx-body.root.position.x)<.8&&Math.abs(wz-body.root.position.z)<.8){
+        const cell=getCell(Math.floor(body.site.x),Math.floor(body.site.z));
+        if(cell){const top=columnTop(cell);if(feet+step<top+5.5&&head>top)return true;}
+      }
       return skyHits(wx,wz).some(hit=>hit.body.site.elevation-1.4<head-1e-6&&surfaceY(hit)>feet+step+1e-6);
     }
     function ceilingYAt(wx,wz,head) {
@@ -30861,7 +30921,7 @@ function neighborStarVector(edge, index) {
       body.entries.forEach(({x,z},i)=>writeInstance(body,x,z,i));
     }
     function disposeBody(body) {
-      for(const placement of body.residentPlacements||[])residentPlacements.delete(placement.key);
+      territoryIslands.delete(body.site.id);
       group.remove(body.root);body.hull.geometry.dispose();body.mesh.dispose();disposeSurfaces(body);disposeVegetation(body);
     }
     function convexHull(points) {
@@ -30872,28 +30932,6 @@ function neighborStarVector(edge, index) {
       for(let i=points.length-1;i>=0;i--){const p=points[i];while(upper.length>1&&cross(upper[upper.length-2],upper[upper.length-1],p)<=0)upper.pop();upper.push(p);}
       lower.pop();upper.pop();return lower.concat(upper);
     }
-    function planIslandResidents(body) {
-      body.residentPlacements=[];
-      if(body.site.sky)return;
-      const candidates=body.entries.slice().sort((a,b)=>
-        Math.hypot(a.x+.5-body.site.x,a.z+.5-body.site.z)-Math.hypot(b.x+.5-body.site.x,b.z+.5-body.site.z));
-      for(const {x,z} of candidates){
-        const cell=getCell(x,z),id=Math.floor(x/18)+','+Math.floor(z/18);
-        if(!cell||cell.terrainFloors>6||body.residentPlacements.some(p=>p.id===id||Math.hypot(p.x-x,p.z-z)<18))continue;
-        let flat=true;
-        for(let dx=-2;dx<=2&&flat;dx++)for(let dz=-2;dz<=2;dz++){
-          if(!body.indices.has(key(x+dx,z+dz))){flat=false;break;}
-          const nearby=getCell(x+dx,z+dz);
-          if(!nearby||nearby.terrainFloors!==cell.terrainFloors||nearby.kind||nearby.extras?.length||['water','lava'].includes(nearby.terrain)){flat=false;break;}
-        }
-        if(!flat)continue;
-        const placement={key:body.site.id+'|'+key(x,z),id,x,z,islandId:body.site.id,root:body.root,
-          offsetX:x+.5-body.site.x,offsetZ:z+.5-body.site.z,surfaceY:columnTop(cell)};
-        body.residentPlacements.push(placement);residentPlacements.set(placement.key,placement);
-        if(body.residentPlacements.length===2)break;
-      }
-    }
-    function residentSpawns(){return residentPlacements.values();}
     function buildIsland(site) {
       shape(site);
       const entries=[],indices=new Map(),{minX,maxX,minZ,maxZ}=site.bounds;
@@ -30929,8 +30967,8 @@ function neighborStarVector(edge, index) {
       const body={site,root,mesh,hull,indices,entries,collisionPolygon,ox:saved?.ox||0,oz:saved?.oz||0,
         vx:saved?.vx??Math.cos(site.phase)*(site.sky ? .07 : .025),vz:saved?.vz??Math.sin(site.phase)*(site.sky ? .07 : .025),
         mass:entries.length,dx:0,dz:0};
-      buildSurfaces(body);buildVegetation(body);planIslandResidents(body);mesh.instanceMatrix.needsUpdate=true;
-      root.position.set(site.x+body.ox,site.elevation||0,site.z+body.oz);group.add(root);islands.set(site.id,body);if(site.sky)skyBodies.add(body);
+      buildSurfaces(body);buildVegetation(body);mesh.instanceMatrix.needsUpdate=true;
+      root.position.set(site.x+body.ox,site.elevation||0,site.z+body.oz);group.add(root);islands.set(site.id,body);if(site.territoryId)territoryIslands.set(site.id,body);if(site.sky)skyBodies.add(body);
       return body;
     }
     let retainedCharacterIsland=null;
@@ -30962,9 +31000,49 @@ function neighborStarVector(edge, index) {
       for(const id of cells.keys()) {const [x,z]=id.slice(id.lastIndexOf('|')+1).split(',').map(Number);if(Math.abs(x-wx)>96||Math.abs(z-wz)>96)cells.delete(id);}
       for(const [id,site] of sites)if(Math.abs(site.sx-sx)>4||Math.abs(site.sz-sz)>4)sites.delete(id);
     }
+    function setTerritories(locations) {
+      if(!territoryLayout||!Array.isArray(locations)||!territoryLayout.update(locations))return false;
+      cells.clear();
+      const changed=[];
+      for(const site of [...sites.values()]) {
+        if(site.sky||site.part!==0)continue;
+        const placement=territoryLayout.binding(site.sx,site.sz,site.part);
+        if(site.territoryId===placement?.id)continue;
+        if(placement){site.territoryId=placement.id;site.biome=placement.biome;}
+        else {delete site.territoryId;site.biome=biomeAt(site.sx,site.sz);}
+        const body=islands.get(site.id);if(body)changed.push(body);
+      }
+      // Set every binding before rebuilding: shape/cell queries visit neighbors.
+      for(const body of changed){
+        sleeping.set(body.site.id,{ox:body.ox,oz:body.oz,vx:body.vx,vz:body.vz});
+        disposeBody(body);islands.delete(body.site.id);buildIsland(body.site);
+      }
+      return true;
+    }
+    function territoryArrival(id,eye=.6) {
+      const placement=territoryLayout?.get(id);if(!placement)return null;
+      const site=sectorSites(placement.sx,placement.sz).find(s=>s.territoryId===String(id));if(!site)return null;
+      ensureAround(site.x,site.z);
+      const body=islands.get(site.id)||buildIsland(site);if(!body)return null;
+      const cx=Math.floor(site.x),cz=Math.floor(site.z),candidates=[];
+      for(let r=5;r<=8;r++)candidates.push([cx-r,cz],[cx,cz-r],[cx,cz+r],[cx+r,cz]);
+      for(const [x,z] of candidates){
+        const cell=getCell(x,z);if(!cell||cell.islandId!==site.id||cell.kind||cell.extras?.length||['water','lava'].includes(cell.terrain))continue;
+        // Full footing and headroom, with no spawn in the landmark or a gap.
+        const level=cell.terrainFloors;
+        if([[-1,0],[1,0],[0,-1],[0,1]].some(([dx,dz])=>{const c=getCell(x+dx,z+dz);return !c||c.islandId!==site.id||c.terrainFloors!==level;}))continue;
+        const point=cellToWorld(x,z,site.id),y=groundYAt(point.x,point.z,eye);
+        if(!Number.isFinite(y)||blocksBodyAt(point.x,point.z,y-eye,y+.1,0))continue;
+        lastSafe={x,z};
+        return {x:point.x,y,z:point.z,yaw:Math.atan2(point.x-body.root.position.x,point.z-body.root.position.z),territoryId:String(id),islandId:site.id};
+      }
+      return null;
+    }
     function setCell(x,z,patch,islandId) {
       if(!Number.isInteger(x)||!Number.isInteger(z))return false;
       const cell=getCell(x,z,islandId);if(!cell)return false;
+      const territorySite=sites.get(cell.islandId);
+      if(territorySite?.territoryId&&Math.hypot(x+.5-territorySite.x,z+.5-territorySite.z)<2)return false;
       if(islandId?.endsWith(':sky') && patch.terrainFloors===0) {
         edits.set(islandId+'|'+key(x,z),null);
         const body=islands.get(cell.islandId);
@@ -30994,7 +31072,7 @@ function neighborStarVector(edge, index) {
       }
       return true;
     }
-    function canExcavate(x,z,islandId) {const cell=getCell(x,z,islandId);return !!cell&&!cell.kind&&!cell.extras?.length;}
+    function canExcavate(x,z,islandId) {const cell=getCell(x,z,islandId),site=cell&&sites.get(cell.islandId);return !!cell&&!cell.kind&&!cell.extras?.length&&!(site?.territoryId&&Math.hypot(x+.5-site.x,z+.5-site.z)<2);}
     function contact(a,b) {
       if(!!a.site.sky!==!!b.site.sky || (a.site.sky&&Math.abs(a.site.elevation-b.site.elevation)>3))return null;
       if(Math.hypot(a.root.position.x-b.root.position.x,a.root.position.z-b.root.position.z)>a.site.radius+b.site.radius+1)return null;
@@ -31166,12 +31244,14 @@ function neighborStarVector(edge, index) {
       debris.count=count;debris.instanceMatrix.needsUpdate=true;debris.instanceColor.needsUpdate=true;
       ringSystem.add(debris);
     }
-    function activate() {
+    function activate(territoryId=null,eye=.6) {
+      const arrival=territoryId?territoryArrival(territoryId,eye):null;
+      if(territoryId&&!arrival)return null;
       if(typeof persCam!=='undefined'&&persCam.isPerspectiveCamera){
         if(celestialPreviousFar===null)celestialPreviousFar=persCam.far;
         persCam.far=Math.max(persCam.far,CELESTIAL.far);persCam.updateProjectionMatrix();
       }
-      ensureAround(0,0);lastSafe={x:0,z:0};
+      if(!arrival){ensureAround(0,0);lastSafe={x:0,z:0};}
       homeBackground=scene.background;
       if(!starfield) {
         const positions=[],colors=[];
@@ -31195,6 +31275,7 @@ function neighborStarVector(edge, index) {
       if(typeof syncMinimapVisibility==='function')syncMinimapVisibility();
       if(typeof window!=='undefined')window.syncDefenseWeightVisibility?.();
       applyDistanceMistSettings(currentSkyBgHex);
+      return arrival||{x:0,z:0,y:groundYAt(0,0,eye),yaw:0};
     }
     function deactivate() {
       if(typeof persCam!=='undefined'&&persCam.isPerspectiveCamera&&celestialPreviousFar!==null){
@@ -31229,9 +31310,10 @@ function neighborStarVector(edge, index) {
     }
     function diagnostics() {return {islands:islands.size,pending:pending.length,cells:cells.size,sites:sites.size,sleeping:sleeping.size,
       fragments:[...islands.values()].map(b=>({id:b.site.id,sky:!!b.site.sky,elevation:b.site.elevation||0,width:b.site.width,length:b.site.length,style:b.site.style,biome:b.site.biome,count:b.mass,ox:b.ox,oz:b.oz,vx:b.vx,vz:b.vz}))};}
-    return {group,getCell,setCell,worldToCell,cellToWorld,groundYAt,blocksBodyAt,ceilingYAt,nearbyColumns,residentSpawns,ensureAround,canExcavate,activate,deactivate,tick,diagnostics,
-      minimapCells};
+    return {group,getCell,setCell,worldToCell,cellToWorld,groundYAt,blocksBodyAt,ceilingYAt,nearbyColumns,ensureAround,canExcavate,activate,deactivate,tick,diagnostics,
+      minimapCells,setTerritories,territoryArrival,territoryBodies:()=>territoryIslands.values()};
   })();
+  if(typeof window!=='undefined')window.battleBrosSetTerritories=locations=>explorationTerrain.setTerritories(locations);
   const homeFPTerrain = {
     get group() { return worldGroup; },
     blocksBodyAt: (x,z,low,high) => typeof unhatchedHomeBlocksBody==='function' && unhatchedHomeBlocksBody(x,z,low,high),
@@ -31254,7 +31336,7 @@ function neighborStarVector(edge, index) {
   };
   function activeFPTerrain() { return explorationActive ? explorationTerrain : homeFPTerrain; }
 
-  const fpJourney = {home:null, previous:null, warp:0, transferred:false, overlay:null};
+  const fpJourney = {home:null, previous:null, warp:0, transferred:false, overlay:null, error:''};
   function switchFPWorld(other) {
     if (other && (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched())) return false;
     leaveExcavation();
@@ -31262,14 +31344,17 @@ function neighborStarVector(edge, index) {
     fpKeys.clear();
     if(other) {
       fpJourney.home={x:fp.pos.x,z:fp.pos.z,yaw:fp.yaw,pitch:fp.pitch};
-      explorationTerrain.activate();
-      fp.pos.set(0,fpGroundYAt(0,0),0);fp.yaw=0;fp.pitch=0;
+      const location=typeof selectedBroTerritoryId==='function'?selectedBroTerritoryId():window.__battleBrosReadModel?.territory;
+      const arrival=explorationTerrain.activate(location&&String(location)!=='0'?String(location):null,fpEyeHeight());
+      if(!arrival){fpJourney.error='Your territory is not ready for a safe arrival. Refresh BROs and try again.';globalThis.battleBrosMessages?.notify(fpJourney.error,{source:'world-arrival',category:'error'});return false;}
+      fpJourney.error='';fp.pos.set(arrival.x,arrival.y,arrival.z);fp.yaw=arrival.yaw;fp.pitch=0;
     } else {
       explorationTerrain.deactivate();
       const home=fpJourney.home||{x:0,z:0,yaw:0,pitch:0};
       fp.pos.set(home.x,fpGroundYAt(home.x,home.z),home.z);
       fp.yaw=home.yaw;fp.pitch=home.pitch;
     }
+    globalThis.battleBrosMessages?.setMode(other?'endless':'home-first-person');
     fp.vy=0;fp.grounded=true;fp.terrainLift=0;fp.landingTime=0;fp.landingDip=0;
     fpJourney.previous=null;
     resetTransportCube();
@@ -31358,8 +31443,6 @@ function neighborStarVector(edge, index) {
   const excavation = { active:false, gems:{blue:0},
     time:0, axe:null, gem:null, equipped:'hands', gemAge:1,
     swing:null, shots:[], target:null, fragmentAge:1, fragmentOrigin:null };
-  const excavationHud = document.getElementById('excavation-hud');
-  const excavationStatus = document.getElementById('excavation-status');
   function renderExcavationInventory() {
     document.getElementById('excavation-inventory').innerHTML = Object.entries(EXCAVATION_GEMS)
       .map(([key, gem]) => `<span style="color:${gem.color}">${gem.label}: <b>${excavation.gems[key]}</b></span>`).join('');
@@ -31449,20 +31532,20 @@ function neighborStarVector(edge, index) {
   function leaveExcavation() {
     excavation.active=false; excavation.swing=null; excavation.target=null;
     resetTerrainRaiseShots();
-    excavationHud.hidden=true; document.getElementById('excavation-reticle').hidden=true;
+    globalThis.battleBrosMessages?.context('tool','');globalThis.battleBrosMessages?.context('cube','');
+    document.getElementById('excavation-reticle').hidden=true;
     for (const name of ['axe','miningAxe','raiser','gem','marker','fragments']) if(excavation[name])excavation[name].visible=false;
   }
   function equipExcavationTool(tool) {
     if(!FP_TOOLS.some(option=>option.id===tool)||(tool!=='hands'&&!fpToolsAvailable()))return;
     excavation.equipped=tool; excavation.swing=null;resetTerrainRaiseShots();
-    document.getElementById('fp-equipped-tool-label').textContent=tool==='transport-cube'
-      ?'BRO teleport cube equipped':tool==='raiser'?'Terrain raiser equipped · Aim and click to fire a terrain charge':'Axe equipped · 10% gem chance per broken layer';
+
     if((tool==='axe'||tool==='raiser') && fp.active && canMutateActiveColony() && !battleArenaView.active){
       createExcavationVisuals();
       excavation.miningAxe.visible=false;excavation.raiser.visible=false;
       excavation.axe=tool==='raiser'?excavation.raiser:excavation.miningAxe;
       excavation.gemAge=2;excavation.gem.visible=false;
-      excavation.active=true;excavationHud.hidden=false;
+      excavation.active=true;
       excavation.axe.visible=true;
       document.getElementById('excavation-reticle').hidden=false;
     }else leaveExcavation();
@@ -31487,6 +31570,7 @@ function neighborStarVector(edge, index) {
   }
   function toggleFPToolMenu(open=fpToolMenu.hidden){
     if(!fpToolsAvailable())return;
+    globalThis.battleBrosMessages?.setVisible(!open);
     fpToolMenu.hidden=!open;fpToolsToggle.setAttribute('aria-expanded',String(open));
     fpKeys.clear();
     excavation.swing=null;
@@ -31596,7 +31680,7 @@ function neighborStarVector(edge, index) {
     excavation.fragmentAge=0; excavation.fragmentOrigin={wx:target.wx,wz:target.wz,y:target.y};
     excavation.fragments.material.color.copy(terrainVoxelMaterials(cell.terrain).low.color);
     const gem=raising?null:rollExcavationGem(target);
-    excavationStatus.textContent=raising?'Terrain raised one layer':gem?'Blue gem collected!':'Layer broken · Keep digging for gems';
+    globalThis.battleBrosMessages?.notify(raising?'Terrain raised one layer':gem?'Blue gem collected!':'Layer broken · Keep digging for gems',{source:'terrain-tool',duration:2});
     return true;
   }
   function resetTerrainRaiseShots() {
@@ -31679,7 +31763,8 @@ function neighborStarVector(edge, index) {
     // Capture-phase tool hotkeys must not consume digits or Q while editing a dialog.
     if(!fpToolsAvailable() || e.ctrlKey || e.metaKey || e.altKey
       || e.target?.closest?.('input, textarea, select, [contenteditable="true"]')
-      || (typeof broEncounterMenu!=='undefined'&&!broEncounterMenu.hidden))return;
+      || (typeof broEncounterMenu!=='undefined'&&!broEncounterMenu.hidden)
+      || (typeof practiceBattle!=='undefined'&&practiceBattle.active))return;
     const key=e.key?.toLowerCase();
     const toggle=e.code==='KeyQ' || key==='q';
     const tool=FP_TOOLS.find(tool=>e.code===`Digit${tool.key}` || key===tool.key);
@@ -31732,11 +31817,12 @@ function neighborStarVector(edge, index) {
     excavation.gemAge+=dt;
     excavation.gem.visible=excavation.gemAge<1.5;
     if(excavation.gem.visible){excavation.gem.position.y+=dt*.15;excavation.gem.rotation.y+=dt*3;}
-    if(!swing && excavation.gemAge>=1.5)excavationStatus.textContent=excavation.equipped==='raiser'
+    if(!swing)globalThis.battleBrosMessages?.context('tool',excavation.equipped==='raiser'
       ?removable?'Click to fire · Land hit grows one layer':target?.level>=EXCAVATION_TUNING.maxTerrainFloors?'Maximum terrain height reached':target?'Protected terrain · Cannot raise here':'Aim at land within 32 squares and click to fire'
       :removable?'Click to break a terrain layer'
       :target?.level===1?'Base layer · Cannot dig deeper'
-      :target?'Protected cell · Axe will not break terrain':'Aim at raised terrain to dig';
+      :target?'Protected cell · Axe will not break terrain':'Aim at raised terrain to dig',
+      {title:excavation.equipped==='raiser'?'Terrain raiser equipped':'Axe equipped · 10% gem chance per broken layer',priority:30});
     markCameraMoving();
   }
   renderExcavationInventory();
@@ -31756,14 +31842,15 @@ function neighborStarVector(edge, index) {
   const broEncounterMenu=document.getElementById('bro-encounter-menu');
   const practiceSetup=createPracticeBattleSetup(document);
   let practiceChallengeAbort=null;
+  let territoryClaimLocation=null;
   const practiceHud=document.getElementById('practice-battle-hud');
   const practiceControls=document.getElementById('practice-battle-controls');
   const practiceHealthAnchors=[document.getElementById('practice-health-anchor-0'),document.getElementById('practice-health-anchor-1')];
-  let fpResumeCapture=false,fpResumeCaptureInFlight=false;
+  let fpResumeCapture=false,fpResumeCaptureInFlight=false,fpResumeClick=false;
   function requestFPResumeCapture(){
-    if(!fpResumeCapture||fpResumeCaptureInFlight||!fp.active||practiceBattle.active||trainingAppearance.active||!fpToolMenu.hidden)return;
+    if(!fpResumeCapture||fpResumeCaptureInFlight||!fp.active||practiceBattle.active||trainingAppearance.active||!fpToolMenu.hidden||!broEncounterMenu.hidden)return;
     if(document.hasFocus&&!document.hasFocus())return;
-    if(document.pointerLockElement===renderer.domElement){fpResumeCapture=false;return;}
+    if(document.pointerLockElement===renderer.domElement){fpResumeCapture=false;globalThis.battleBrosMessages?.context('pointer-resume','');return;}
     if(!renderer.domElement.requestPointerLock)return;
     fpResumeCaptureInFlight=true;
     try{
@@ -31775,8 +31862,13 @@ function neighborStarVector(edge, index) {
     if(!fp.active)return;
     document.activeElement?.blur?.();
     renderer.domElement.tabIndex=-1;renderer.domElement.focus?.({preventScroll:true});
-    fpResumeCapture=true;fpResumeCaptureInFlight=false;requestFPResumeCapture();
+    fpResumeCapture=true;fpResumeCaptureInFlight=false;fpResumeClick=false;
+    globalThis.battleBrosMessages?.context('pointer-resume','Click the world or press a movement key to resume mouse control.',{priority:100});
+    requestFPResumeCapture();
   }
+  // Wallet confirmation can finish while its window still owns focus.
+  window.addEventListener('focus',requestFPResumeCapture);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)requestFPResumeCapture();});
   function paintCombatMeters(prefix,combat){
     if(!combat)return;
     for(let i=0;i<2;i++){
@@ -31794,12 +31886,15 @@ function neighborStarVector(edge, index) {
     camera:value=>{if(value)camera=value;return camera;},
     aspect:()=>renderer.domElement.clientWidth/Math.max(1,renderer.domElement.clientHeight),
     floor:(x,z,y)=>explorationTerrain.groundYAt(x,z,0,y),
-    show:visible=>{practiceHud.hidden=!visible;document.body.classList.toggle('practice-active',visible);fpKeys.clear();
+    show:visible=>{document.getElementById('practice-leave-pending').hidden=true;practiceHud.hidden=!visible;document.body.classList.toggle('practice-active',visible);fpKeys.clear();
       if(visible){fpResumeCapture=false;fpResumeCaptureInFlight=false;fpToolMenu.hidden=true;fpToolsToggle.setAttribute('aria-expanded','false');document.exitPointerLock?.();practiceHud.focus();}},
     healthAnchor:(index,x,y,visible)=>{
       const label=practiceHealthAnchors[index];label.hidden=!visible;
       if(visible){label.style.left=Math.max(14,Math.min(86,x*100))+'%';label.style.top=Math.max(8,Math.min(78,y*100))+'%';}
     },
+    notice:text=>{document.getElementById('practice-leave-pending').hidden=!text;const el=document.getElementById('practice-territory-outcome');el.hidden=!text;el.textContent=text;},
+    backgroundOutcome:result=>window.dispatchEvent(new CustomEvent('battlebros:territory-background-result',{detail:result})),
+    outcome:result=>{if(result)window.battleBrosAcknowledgeTerritoryResult?.(result.challengeId);const el=document.getElementById('practice-territory-outcome');el.hidden=!result;el.textContent=result?'Territory #'+result.locationId+' · Onchain '+(result.playerWon?'victory':'defeat')+' · Tx '+(result.transactionHash||''):'';},
     complete:()=>exitPracticeBattle(),
     status:(text,busy,combat)=>{
       const completed=!!combat&&!combat.running&&combat.winner!==null;
@@ -31820,7 +31915,7 @@ function neighborStarVector(edge, index) {
     enabled:()=>fp.active&&explorationActive&&!trainingAppearance.active&&(!practiceBattle.active||transportCubeController?.phase==='deployed'),
     player:()=>transportCubeController&&['deployed','returning'].includes(transportCubeController.phase)
       ?transportCube.root?.userData.transportActor:null,
-    npcs:()=>[...explorationResidents.values()],
+    npcs:()=>[...explorationResidents.values()].filter(a=>!a.territoryLocationId||a.encounter||a.territoryState==='ready'&&territoryActorEligible(a)),
     available:actor=>!!actor?.root.parent&&actor.root.visible&&!!actor.motion
       &&!actor.root.userData.characterJumping&&(!actor.root.userData.rockThrow||actor.encounter?.phase==='practice')&&!actor.root.userData.terrainConsume,
     practice:{begin:session=>transportCubeController?.phase==='deployed'&&practiceBattle.begin(session),restore:()=>practiceBattle.restore(),
@@ -31851,7 +31946,9 @@ function neighborStarVector(edge, index) {
     },
     menu:show=>{
       fpKeys.clear();
-      if(!show){practiceChallengeAbort?.abort();practiceChallengeAbort=null;practiceSetup.close();document.getElementById('bro-encounter-prompt').hidden=false;broEncounterMenu.setAttribute('aria-labelledby','bro-encounter-question');}
+      if(!show&&!broEncounter.active)window.battleBrosAppearanceBridge?.flush?.();
+      if(!show){if(broEncounter.active?.phase!=='practice'){practiceChallengeAbort?.abort();practiceChallengeAbort=null;}practiceSetup.close();document.getElementById('bro-encounter-prompt').hidden=false;broEncounterMenu.setAttribute('aria-labelledby','bro-encounter-question');}
+      if(show)document.getElementById('bro-encounter-question').textContent=broEncounter.active?.sides[1].actor.territoryLocationId?'Do you want to battle for this territory?':'Do you want to battle?';
       broEncounterMenu.hidden=!show;broEncounterMenu.style.display=show?'grid':'none';
       if(show){
         fpResumeCapture=false;fpResumeCaptureInFlight=false;
@@ -31862,23 +31959,46 @@ function neighborStarVector(edge, index) {
     }
   });
   function chooseBroEncounter(choice){
+    if(territoryClaimLocation){
+      if(choice!=='yes'){territoryClaimLocation=null;practiceChallengeAbort?.abort();practiceChallengeAbort=null;practiceSetup.close();document.getElementById('bro-encounter-prompt').hidden=false;broEncounterMenu.hidden=true;broEncounterMenu.style.display='none';resumeFPAfterBattle();return;}
+      if(practiceSetup.active)return;
+      document.getElementById('bro-encounter-prompt').hidden=true;
+      practiceSetup.open(window.__battleBrosReadModel,choices=>submitTerritoryClaim(choices),()=>chooseBroEncounter('no'));
+      document.getElementById('practice-setup-combat').hidden=true;
+      document.getElementById('practice-setup-title').textContent='Claim territory #'+territoryClaimLocation;
+      document.getElementById('practice-setup-start').textContent='Claim territory';return;
+    }
     if(choice==='yes'&&broEncounter.active?.phase==='prompt'){
       if(practiceSetup.active)return;
+      document.getElementById('practice-setup-combat').hidden=false;
+      const isTerritory=!!broEncounter.active.sides[1].actor.territoryLocationId;
+      document.getElementById('practice-setup-title').textContent=isTerritory?'Prepare for territory battle':'Prepare for battle';
+      document.getElementById('practice-setup-note').textContent=isTerritory?'Confirm your challenge to enter battle.':'Local encounter. Territory battles take place near a floating Ethereum logo.';
+      document.getElementById('practice-setup-start').textContent='Start battle';
       document.getElementById('bro-encounter-prompt').hidden=true;
       broEncounterMenu.setAttribute('aria-labelledby','practice-setup-title');
       practiceSetup.open(window.__battleBrosReadModel,choices=>{
         const session=broEncounter.active,tokenId=window.__battleBrosReadModel?.identity?.tokenId;
         if(!session||session.phase!=='prompt')return;
+        const locationId=session.sides[1].actor.territoryLocationId;
+        if(!locationId){session.practiceSetup=choices;broEncounter.end('yes');return;}
         if(tokenId==null||!window.battleBrosChallengePractice){practiceSetup.retry('Select an owned BRO and connect to the configured chain first.');return;}
         const abort=new AbortController();practiceChallengeAbort=abort;
-        practiceSetup.setBusy(true,'Preparing challenge for location 2…');
-        window.battleBrosChallengePractice({tokenId:String(tokenId),choices,signal:abort.signal,
-          onStatus:text=>{if(!abort.signal.aborted)practiceSetup.setBusy(true,text);}}).then(result=>{
-          if(abort.signal.aborted||broEncounter.active!==session)return;
-          session.practiceSetup=choices;session.onchainBattle=result;
-          broEncounter.end('yes');
-          if(fp.active&&!practiceBattle.active)resumeFPAfterBattle();
-        }).catch(error=>{if(!abort.signal.aborted)practiceSetup.retry(error.message||'Challenge failed.');});
+        practiceSetup.setBusy(true,'Preparing territory challenge…');
+        window.battleBrosChallengePractice({locationId,expectedDefender:session.sides[1].actor.broTokenId,tokenId:String(tokenId),choices,signal:abort.signal,
+          onStatus:text=>{if(!abort.signal.aborted&&broEncounter.active===session&&session.phase!=='practice')practiceSetup.setBusy(true,text);},
+          onAccepted:accepted=>{
+            if(abort.signal.aborted||broEncounter.active!==session)return;
+            session.practiceSetup=choices;session.onchainBattle=accepted;session.pendingOnchain=true;
+            broEncounter.end('yes');
+          }}).then(result=>{
+          if(abort.signal.aborted||broEncounter.active!==session){window.dispatchEvent(new CustomEvent('battlebros:territory-background-result',{detail:result}));return;}
+          practiceBattle.settle(result);
+        }).catch(error=>{
+          if(abort.signal.aborted){if(error.terminal)window.dispatchEvent(new CustomEvent('battlebros:territory-background-result',{detail:{locationId,message:error.message}}));return;}
+          if(broEncounter.active===session&&session.phase==='practice')practiceBattle.unavailable(error.message||'Battle could not settle.');
+          else practiceSetup.retry(error.message||'Challenge failed.');
+        });
       },()=>chooseBroEncounter('no'));
       return;
     }
@@ -31894,15 +32014,23 @@ function neighborStarVector(edge, index) {
     }
     chooseBroEncounter('exit');
   }
+  window.addEventListener('battlebros:territory-background-result',event=>{if(event.detail.challengeId)window.battleBrosAcknowledgeTerritoryResult?.(event.detail.challengeId);globalThis.battleBrosMessages?.notify(event.detail.message||('Territory #'+event.detail.locationId+' settled: '+(event.detail.playerWon?'Victory':'Defeat')+'.'),{source:'territory-result',duration:10,scope:'global'});});
+  document.getElementById('practice-leave-pending').onclick=()=>exitPracticeBattle();
   document.getElementById('practice-berserker').onclick=()=>practiceBattle.attack(true);
   document.getElementById('practice-shield').onclick=()=>{};
   // Capture before exploration hotkeys, cube recall, mouse-look and tool handlers.
   for(const name of ['keydown','keyup','pointerdown','pointerup','pointermove','mousedown','mouseup','mousemove','click','dblclick','wheel','contextmenu']){
     window.addEventListener(name,event=>{
+      if(!practiceBattle.active&&event.target===renderer.domElement){
+        if(name==='pointerdown'&&event.button===0&&fpResumeCapture&&fp.active&&broEncounterMenu.hidden&&fpToolMenu.hidden&&!trainingAppearance.active){
+          fpResumeClick=true;requestFPResumeCapture();event.preventDefault();event.stopImmediatePropagation();return;
+        }
+        if(name==='click'&&fpResumeClick){fpResumeClick=false;event.preventDefault();event.stopImmediatePropagation();return;}
+      }
       if(!practiceBattle.active)return;
       if(name==='keydown'&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();exitPracticeBattle();return;}
       if(name==='keydown'&&event.key==='Tab'){
-        const buttons=[...practiceHud.querySelectorAll('button')].filter(button=>!button.disabled),index=buttons.indexOf(document.activeElement);
+        const buttons=[...practiceHud.querySelectorAll('button')].filter(button=>!button.disabled&&!button.hidden&&!button.closest?.('[hidden]')),index=buttons.indexOf(document.activeElement);
         event.preventDefault();event.stopImmediatePropagation();if(!buttons.length)return;buttons[(index+(event.shiftKey?-1:1)+buttons.length)%buttons.length].focus();return;
       }
       if(practiceControls.contains(event.target))return;
@@ -31961,23 +32089,16 @@ function neighborStarVector(edge, index) {
   const fpKeys = new Set();
   if (typeof document !== 'undefined') document.addEventListener('battlebros:wallet-open', () => fpKeys.clear());
 
-  // Sparse local scenery inhabitants, anchored to logical cells as islands drift.
+  // Sparse local scenery inhabitants section: confirmed NFT defenders only.
+  // Keep territory actors anchored to their own islands as the islands drift.
   const explorationResidents = new Map();
-  const explorationResidentPlans = new Map();
-  let explorationResidentFrame = 0;
-  const explorationResidentViewPoint = new THREE.Vector3();
-  function residentHash(x,z,salt=0) {
-    let n=Math.imul(x,374761393)^Math.imul(z,668265263)^Math.imul(salt+1,1442695041);
-    n=Math.imul(n^(n>>>13),1274126177);
-    return ((n^(n>>>16))>>>0)/4294967296;
-  }
+  // Shared footing query; this does not plan or create any residents.
   function residentFlatCell(x,z,islandId) {
     const cell=explorationTerrain.getCell(x,z,islandId);
-    if(!cell || cell.terrainFloors>6)return false;
-    for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++) {
+    if(!cell||(islandId!==undefined&&cell.islandId!==islandId)||cell.terrainFloors>6)return false;
+    for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
       const nearby=explorationTerrain.getCell(x+dx,z+dz,islandId);
-      if(!nearby || nearby.islandId!==cell.islandId || nearby.terrainFloors!==cell.terrainFloors
-        || nearby.kind || nearby.extras?.length || ['water','lava'].includes(nearby.terrain))return false;
+      if(!nearby||nearby.islandId!==cell.islandId||nearby.terrainFloors!==cell.terrainFloors||nearby.kind||nearby.extras?.length||['water','lava'].includes(nearby.terrain))return false;
     }
     return !!explorationTerrain.group.getObjectByName('floating-fragment-'+cell.islandId);
   }
@@ -32091,7 +32212,7 @@ function neighborStarVector(edge, index) {
     const motion=actor.motion,directions=[[1,0],[-1,0],[0,1],[0,-1]],first=Math.floor(Math.random()*4);
     for(let i=0;i<4;i++){
       const [dx,dz]=directions[(first+i)%4],x=actor.x+dx,z=actor.z+dz;
-      if(Math.hypot(x-motion.homeX,z-motion.homeZ)>5)continue;
+      if(Math.hypot(x-motion.homeX,z-motion.homeZ)>(actor.patrolRadius||5))continue;
       const support=residentRoute(actor,x,z);if(!support)continue;
       const target=explorationTerrain.cellToWorld(x,z,actor.islandId),root=actor.root;
       const yaw=Math.atan2(target.x-root.position.x,target.z-root.position.z);
@@ -32196,7 +32317,7 @@ function neighborStarVector(edge, index) {
         const offset=Math.floor(Math.random()*4);
         for(let i=0;i<4;i++) {
           const [dx,dz]=directions[(offset+i)%4],x=actor.x+dx,z=actor.z+dz;
-          if(Math.hypot(x-motion.homeX,z-motion.homeZ)>5)continue;
+          if(Math.hypot(x-motion.homeX,z-motion.homeZ)>(actor.patrolRadius||5))continue;
           const support=residentRoute(actor,x,z);if(!support)continue;
           const destination=explorationTerrain.cellToWorld(x,z,actor.islandId);
           Object.assign(mover,{startX:point.x,
@@ -32239,12 +32360,67 @@ function neighborStarVector(edge, index) {
     disposeGroup(actor.root);
     explorationResidents.delete(id);
   }
+  function territoryActorEligible(actor){
+    const model=window.__battleBrosReadModel,bro=endlessTerritories?.bro(model?.identity?.tokenId),location=actor.territoryLocation;
+    return location&&!!window.battleBrosWalletAddress?.(bro?.tokenId)&&EndlessTerritories.eligible(bro,location,endlessTerritories.publication?.configuration)&&String(model?.identity?.tokenId)!==location.occupant;
+  }
+  async function submitTerritoryClaim(choices){
+    const id=territoryClaimLocation,tokenId=window.__battleBrosReadModel?.identity?.tokenId;
+    if(!id||tokenId==null||!window.battleBrosClaimTerritory){practiceSetup.retry('Select an owned, eligible BRO and connect your wallet.');return;}
+    const abort=new AbortController();practiceChallengeAbort=abort;practiceSetup.setBusy(true,'Preparing territory claim…');
+    try{await window.battleBrosClaimTerritory({locationId:id,tokenId:String(tokenId),defenseWeights:choices.defenseWeights,signal:abort.signal,onStatus:text=>{if(!abort.signal.aborted)practiceSetup.setBusy(true,text);}});
+      if(abort.signal.aborted)return;endlessTerritories.refresh();chooseBroEncounter('no');window.hydrateBattleBrosReadModel?.();
+    }catch(error){if(!abort.signal.aborted)practiceSetup.retry(error.message);}
+  }
+  const endlessTerritories=globalThis.EndlessTerritories?.create(THREE,{
+    createEthereumLogo:THREE=>createBattleArena.createEthereumLogo(THREE),
+    closePrompt:()=>{if(territoryClaimLocation)chooseBroEncounter('no');},
+    setLocations:locations=>explorationTerrain.setTerritories(locations),
+    status:text=>globalThis.battleBrosMessages?.context('territory',text,{priority:10}),
+    notify:text=>globalThis.battleBrosMessages?.notify(text,{source:'territory-claim',category:'error'}),
+    canClaim:(location,doc)=>{const id=String(window.__battleBrosReadModel?.identity?.tokenId),bro=doc?.battleBros.find(b=>b.tokenId===id);return !!window.battleBrosWalletAddress?.(id)&&EndlessTerritories.eligible(bro,location,doc.configuration)&&location.reclaimBlockedTokenId!==id&&location.reclaimBlockedOwner?.toLowerCase()!==bro.owner?.toLowerCase();},
+    claimBlockedMessage:(location,doc)=>{
+      const id=String(window.__battleBrosReadModel?.identity?.tokenId),bro=doc.battleBros.find(b=>b.tokenId===id);
+      return bro?.need?.active?'BRO #'+id+' has an open Need. Complete it in your Home world before claiming a territory.':'Your selected BRO is not eligible to claim territory #'+location.locationId+'. Check your BRO status and wallet connection.';
+    },
+    active:()=>fp.active&&explorationActive,player:()=>fp.pos,bodies:()=>explorationTerrain.territoryBodies(),
+    read:()=>window.battleBrosReadTerritories?.()??Promise.reject(Error('No confirmed publication')),
+    surface:body=>{const cell=explorationTerrain.getCell(Math.floor(body.site.x),Math.floor(body.site.z));return BUILDABLE_LAND_Y_OFFSET+TOP_H+explorationTerrainRiseForLevel(cell?.terrainFloors||5);},
+    canPrompt:()=>broEncounterMenu.hidden&&!broEncounter.active&&!practiceBattle.active&&fpToolMenu.hidden,
+    promptClaim:id=>{territoryClaimLocation=id;fpResumeCapture=false;fpResumeCaptureInFlight=false;practiceSetup.close();document.getElementById('bro-encounter-prompt').hidden=false;document.getElementById('bro-encounter-question').textContent='Claim territory #'+id+'?';broEncounterMenu.hidden=false;broEncounterMenu.style.display='grid';fpKeys.clear();document.exitPointerLock?.();broEncounterMenu.querySelector('button').focus();},
+    removeActor:(id,actor)=>removeExplorationResident(id,actor),
+    spawn:(body,bro,id)=>{
+      const character=['juggernaut','monsters','specter','longneck'][Number(bro.kind)];if(!character)return null;
+      const cx=Math.floor(body.site.x),cz=Math.floor(body.site.z),candidates=[];
+      for(let dx=-8;dx<=8;dx++)for(let dz=-8;dz<=8;dz++){
+        if(Math.hypot(dx,dz)<2.5||Math.hypot(dx,dz)>8)continue;
+        const x=cx+dx,z=cz+dz,cell=explorationTerrain.getCell(x,z,body.site.id);
+        if(cell?.islandId===body.site.id&&cell.terrainFloors<=6&&!cell.kind&&!cell.extras?.length&&!['water','lava'].includes(cell.terrain))candidates.push({x,z});
+      }
+      candidates.sort((a,b)=>Math.hypot(a.x-cx-4,a.z-cz)-Math.hypot(b.x-cx-4,b.z-cz));
+      if(!candidates.length)return null;
+      const root=createBattleBroCharacter({character,form:Math.max(1,Math.min(7,Number(bro.level))),variant:bro.appearance?.document?.skin||'lava'});
+      root.name='territory-defender-'+bro.tokenId;
+      const actor={root,mover:{root,parts:root.userData.locomotionRig||root.userData.rig,state:'IDLE',progress:0,ikTarget:new THREE.Vector3()},x:cx,z:cz,islandId:body.site.id,character,phase:0,broTokenId:bro.tokenId,territoryLocationId:body.site.territoryId,patrolRadius:3};
+      const hover=character==='specter'?SPECTER_HOVER_CLEARANCE:0;
+      for(const {x,z} of candidates){
+        const point=explorationTerrain.cellToWorld(x,z,body.site.id);
+        root.position.set(point.x,explorationTerrain.groundYAt(point.x,point.z)+hover,point.z);actor.x=x;actor.z=z;
+        // Validate this rig's actual footprint instead of a fixed 5x5 patch.
+        const support=residentSupport(actor);if(!support)continue;
+        root.position.y=support.y+hover;actor.supportY=support.y;
+        explorationTerrain.group.add(root);explorationResidents.set(id,actor);return actor;
+      }
+      removeExplorationResident(id,actor);return null;
+    }
+  });
   function tickExplorationResidents(t,dt) {
     if(!fp.active || !explorationActive) {
       for(const [id,actor] of explorationResidents)removeExplorationResident(id,actor);
-      explorationResidentPlans.clear();explorationResidentFrame=0;return;
+      return;
     }
     for(const [id,actor] of explorationResidents) {
+      if(!actor.territoryLocationId||!actor.broTokenId){removeExplorationResident(id,actor);continue;}
       actor.terrainTime=t;
       const point=explorationTerrain.cellToWorld(actor.x,actor.z,actor.islandId);
       if(Math.hypot(point.x-fp.pos.x,point.z-fp.pos.z)>70 || !residentSupport(actor)) {
@@ -32252,64 +32428,37 @@ function neighborStarVector(edge, index) {
       }
       tickExplorationResidentMotion(actor,t,dt);
     }
-    // Placement plans arrive with the streamed islands, even while both rig
-    // slots are occupied. Planning never allocates a character rig.
-    explorationResidentFrame++;
-    for(const record of explorationResidentPlans.values())if(!record.placement.root.parent)explorationResidentPlans.delete(record.placement.key);
-    for(const placement of explorationTerrain.residentSpawns?.()||[]){
-      if(explorationResidentPlans.get(placement.key)?.placement!==placement)
-        explorationResidentPlans.set(placement.key,{placement,arrival:explorationResidentFrame,nextCheck:0});
-    }
-    if(explorationResidents.size>=2)return;
-    const viewCamera=typeof camera!=='undefined'&&camera?.isCamera?camera:null;viewCamera?.updateMatrixWorld(true);
-    // At most eight footprint revalidations and one rig build per render frame.
-    for(let probe=0;probe<8;probe++){
-      let selected=null,priority=Infinity;
-      for(const record of explorationResidentPlans.values()){
-        const p=record.placement;if(record.nextCheck>t||explorationResidents.has(p.id))continue;
-        const dx=p.root.position.x+p.offsetX-fp.pos.x,dz=p.root.position.z+p.offsetZ-fp.pos.z;
-        const distance=Math.hypot(dx,dz),arriving=explorationResidentFrame-record.arrival<=1;
-        // Newly streamed islands and residents appear together. Older islands
-        // can replenish slots only beyond fog (46), preventing visible pop-in.
-        if(distance<10||distance>68||(!arriving&&distance<56))continue;
-        if(!arriving&&viewCamera){
-          // Fog uses camera depth, not radial distance. Leave a conservative
-          // body envelope so oblique views cannot reveal a replacement spawn.
-          explorationResidentViewPoint.set(p.root.position.x+p.offsetX,p.root.position.y+(p.surfaceY||0)+6,p.root.position.z+p.offsetZ).applyMatrix4(viewCamera.matrixWorldInverse);
-          if(explorationResidentViewPoint.z>-62&&explorationResidentViewPoint.z<16)continue;
-        }
-        let occupied=false;for(const actor of explorationResidents.values())if(Math.hypot(actor.x-p.x,actor.z-p.z)<18){occupied=true;break;}
-        if(occupied)continue;
-        const forward=-dx*Math.sin(fp.yaw||0)-dz*Math.cos(fp.yaw||0),score=distance+(forward<0?12:0);
-        if(score<priority){selected=record;priority=score;}
-      }
-      if(!selected)return;
-      selected.nextCheck=t+.5;
-      const {id,x,z,islandId}=selected.placement;
-      if(!residentFlatCell(x,z,islandId))continue;
-      const point=explorationTerrain.cellToWorld(x,z,islandId);
-      const characters=['monsters','juggernaut','longneck','specter'];
-      const variants=['lava','ice','mushroom','gem'];
-      const cores=['cyan','amber','violet','lime','pink','red'];
-      const character=characters[Math.floor(residentHash(x,z,40)*characters.length)];
-      const form=Math.max(1,Math.min(7,(transportCube.root?.userData.form||4)
-        +Math.floor(residentHash(x,z,41)*3)-1));
-      const core=cores[Math.floor(residentHash(x,z,42)*cores.length)];
-      const root=createBattleBroCharacter({character,form,
-        variant:variants[Math.floor(residentHash(x,z,43)*variants.length)],colors:{core,glow:core}});
-      root.name='exploration-resident-'+id;
-      root.rotation.y=residentHash(x,z,44)*Math.PI*2;
-      root.position.set(point.x,explorationTerrain.groundYAt(point.x,point.z)
-        +(character==='specter'?SPECTER_HOVER_CLEARANCE:0),point.z);
-      explorationTerrain.group.add(root);
-      const mover={root,parts:root.userData.locomotionRig||root.userData.rig,
-        state:'IDLE',progress:0,ikTarget:new THREE.Vector3()};
-      explorationResidents.set(id,{root,mover,x,z,islandId,character,phase:residentHash(x,z,45)*20});
-      return;
-    }
   }
 
   // ---------- transport cube ----------
+  // Confirmed location controls whether the selected actor is present at Home.
+  // Keep the last confirmed assignment while publication refreshes are in flight.
+  let homeBroDefending=false, homeDefenderPlacement=null, homeBroTerritory=null;
+  function selectedBroDefendsTerritory(){return homeBroDefending;}
+  function selectedBroTerritoryId(){return homeBroDefending?String(homeBroTerritory):null;}
+  function syncHomeBroPresence(model){
+    if(model){homeBroTerritory=model.territory;homeBroDefending=homeBroTerritory!=null&&String(homeBroTerritory)!=='0';}
+    const root=baseBattleBroPrototype;
+    if(!root)return;
+    if(homeBroDefending){
+      if(homeDefenderPlacement?.root!==root){
+        const saved=transportHomePlacement?.root===root?transportHomePlacement:null;
+        homeDefenderPlacement=saved||{root,position:root.position.clone(),yaw:root.rotation.y};
+        homeDefenderPlacement.fieldVisible=root.userData.looseRocks?.orbitField?.visible;
+      }
+      transportHomePlacement=null;
+      if(transportCubeController?.root===root)transportCubeController.suspend(true);
+      if(root.parent){pauseTransportBattleBro(root);root.parent.remove(root);}
+      const field=root.userData.looseRocks?.orbitField;if(field)field.visible=false;
+      return;
+    }
+    if(explorationActive||!homeDefenderPlacement)return;
+    const saved=homeDefenderPlacement;homeDefenderPlacement=null;
+    if(saved.root!==root||(typeof isHomeBroUnhatched==='function'&&isHomeBroUnhatched()))return;
+    transportHomePlacement=saved;restoreHomeTransportBattleBro();
+    const field=root.userData.looseRocks?.orbitField;if(field)field.visible=saved.fieldVisible??true;
+  }
+
   // A single selected-character deployment. No follow targets or recovery teleports.
   let transportCubeController=null;
   let transportHomePlacement=null;
@@ -32323,7 +32472,7 @@ function neighborStarVector(edge, index) {
   }
   function restoreHomeTransportBattleBro(){
     const saved=transportHomePlacement;transportHomePlacement=null;
-    if(!saved||explorationActive||saved.root!==baseBattleBroPrototype)return;
+    if(!saved||explorationActive||selectedBroDefendsTerritory()||saved.root!==baseBattleBroPrototype)return;
     const root=saved.root,ground=activeFPTerrain().groundYAt(saved.position.x,saved.position.z,0);
     if(!Number.isFinite(ground))return;
     root.position.copy(saved.position);root.position.y=ground+(battleBroFamily(root)==='specter'?SPECTER_HOVER_CLEARANCE:0);
@@ -32391,7 +32540,10 @@ function neighborStarVector(edge, index) {
     const y=support.y;
     if(!explorationActive&&support.samples.some(p=>trainingFacilityOccupiesCell(p.cell.x,p.cell.z)||stargateOccupiesCell(p.cell.x,p.cell.z)))return null;
     if(residentBodyOccupied(source,x,y,z))return null;
-    const cell=terrain.worldToCell(x,z,maxY),anchor=terrain.cellToWorld(cell.x,cell.z,cell.islandId);
+    const cell=terrain.worldToCell(x,z,maxY);
+    // Native ground coordinates omit islandId; claims need the supporting island.
+    cell.islandId=terrain.getCell(cell.x,cell.z,cell.islandId)?.islandId;
+    const anchor=terrain.cellToWorld(cell.x,cell.z,cell.islandId);
     return {x,y,z,cell,anchor,maxY:support.max+.11};
   }
   function transportCubeBlocked(from,to){
@@ -32423,7 +32575,7 @@ function neighborStarVector(edge, index) {
     transportCubeController=createTransportCube(THREE,{
       scene,camera:persCam,box:getBoxGeometry,
       active:fpToolsAvailable,
-      equipped:()=>excavation.equipped==='transport-cube',source:()=>baseBattleBroPrototype,
+      equipped:()=>excavation.equipped==='transport-cube',source:()=>selectedBroDefendsTerritory()?null:baseBattleBroPrototype,
       hand:out=>out.set(.28,-.22,-.55).applyQuaternion(persCam.quaternion).add(persCam.position),
       direction:out=>persCam.getWorldDirection(out),yaw:()=>fp.yaw,
       ground:(x,z,maxY)=>activeFPTerrain().groundYAt(x,z,0,maxY),landing:transportLanding,
@@ -32435,22 +32587,27 @@ function neighborStarVector(edge, index) {
       place:root=>activeFPTerrain().group.add(root),
       hover:root=>battleBroFamily(root)==='specter'?SPECTER_HOVER_CLEARANCE:0,
       bind:bindTransportBattleBro,
+      onDeploy:(root,landing)=>{if(explorationActive)endlessTerritories?.requestClaim(landing,landing.cell.islandId);},
       animate:(root,t,dt)=>{if(explorationActive&&root.userData.transportActor)tickExplorationResidentMotion(root.userData.transportActor,t,dt);},
       visual:root=>{const field=root.userData.looseRocks?.orbitField;
         if(field){field.position.copy(root.position);field.scale.copy(root.scale);field.visible=root.visible;}},
       release:root=>{pauseTransportBattleBro(root);root.parent?.remove(root);},
-      status:message=>{if(fpToolsAvailable()&&excavation.equipped==='transport-cube'){excavationStatus.textContent=message;excavationHud.hidden=false;}}
+      status:(message,options)=>{if(fpToolsAvailable()&&excavation.equipped==='transport-cube'){
+        if(options)globalThis.battleBrosMessages?.notify(message,{source:'cube',...options});
+        else globalThis.battleBrosMessages?.context('cube',message,{title:'BRO teleport cube equipped',priority:30});
+      }}
     });
     return transportCubeController;
   }
   function throwTransportCube(){
     if (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched()) return false;
     if(!fpToolsAvailable())return false;
-    if(!baseBattleBroPrototype){excavationStatus.textContent='Choose your BattleBro at home first';excavationHud.hidden=false;return false;}
+    if(selectedBroDefendsTerritory()){globalThis.battleBrosMessages?.notify('Your BRO is defending a territory and cannot be transported.',{source:'cube',category:'warning'});return false;}
+    if(!baseBattleBroPrototype){globalThis.battleBrosMessages?.notify('Choose your BattleBro at home first',{source:'cube',category:'warning'});return false;}
     return ensureTransportCube().throw();
   }
   function tickTransportCube(t,dt){
-    if(!fpToolsAvailable()){if(transportCubeController)transportCubeController.cube.visible=false;return;}
+    if(!fpToolsAvailable()||selectedBroDefendsTerritory()){globalThis.battleBrosMessages?.context('cube','');if(transportCubeController)transportCubeController.cube.visible=false;return;}
     if(excavation.equipped==='transport-cube'&&fp.active){
       ensureTransportCube();
     }
@@ -32517,6 +32674,7 @@ function neighborStarVector(edge, index) {
     fpJourney.home=null;fpJourney.previous=null;
     homeFPTerrain.activate();
     fp.active = true;
+    globalThis.battleBrosMessages?.setMode('home-first-person');
     fp.pos.set(0, fpGroundYAt(0,0), 0);
     if(typeof placeOutsideUnhatchedCube==='function')placeOutsideUnhatchedCube();
     fp.yaw = 0;
@@ -32548,6 +32706,7 @@ function neighborStarVector(edge, index) {
     fpJourney.previous=null;
     resetTransportCube(explorationActive);
     fp.active = false;
+    globalThis.battleBrosMessages?.setMode('home-building');
     if(typeof fpResumeCapture!=='undefined'){fpResumeCapture=false;fpResumeCaptureInFlight=false;}
     activeFPTerrain().deactivate();
     if(typeof restoreHomeTransportBattleBro==='function')restoreHomeTransportBattleBro();
@@ -32562,7 +32721,7 @@ function neighborStarVector(edge, index) {
   }
   document.addEventListener('pointerlockchange', () => {
     if(document.pointerLockElement===renderer.domElement&&typeof fpResumeCapture!=='undefined'){
-      fpResumeCapture=false;fpResumeCaptureInFlight=false;
+      fpResumeCapture=false;fpResumeCaptureInFlight=false;globalThis.battleBrosMessages?.context('pointer-resume','');
     }
     if(practiceBattle.active){
       if(document.pointerLockElement===renderer.domElement)document.exitPointerLock?.();
@@ -32746,7 +32905,6 @@ function neighborStarVector(edge, index) {
   const flightBoundaryQuaternion = new THREE.Quaternion();
   const flightBoundaryTarget = new THREE.Vector3();
   const flightLandCenter = new THREE.Vector3(0, 0, 0);
-  const flightModeHintEl = document.getElementById('flight-mode-hint');
 
   function captureFlightCameraState() {
     if (flight.restore) return;
@@ -32867,15 +33025,11 @@ function neighborStarVector(edge, index) {
     persCam.updateProjectionMatrix();
     document.body.classList.add('flight-active');
     document.body.classList.toggle('mock-neighbor-flyby-active', flight.mockNeighborFlyby);
-    if (flightModeHintEl) {
-      flightModeHintEl.hidden = false;
-      const title = flightModeHintEl.querySelector('strong');
-      const controls = flightModeHintEl.querySelector('span');
-      if (title) title.textContent = flight.mockNeighborFlyby ? 'Mock Neighbor Flyby' : 'Flight Mode';
-      if (controls) controls.textContent = flight.mockNeighborFlyby || opts.inspection
-        ? 'Click: fire · Mouse: pitch / turn · A/D: roll · W/S: throttle · Q/E: yaw · Shift: boost · Space: level · Esc: exit'
-        : 'Mouse: pitch / turn · A/D: roll · W/S: throttle · Q/E: yaw · Shift: boost · Space: level · Esc: exit';
-    }
+    globalThis.battleBrosMessages?.setMode('flight');
+    globalThis.battleBrosMessages?.context('flight',flight.mockNeighborFlyby || opts.inspection
+      ? 'Click: fire · Mouse: pitch / turn · A/D: roll · W/S: throttle · Q/E: yaw · Shift: boost · Space: level · Esc: exit'
+      : 'Mouse: pitch / turn · A/D: roll · W/S: throttle · Q/E: yaw · Shift: boost · Space: level · Esc: exit',
+      {title:flight.mockNeighborFlyby?'Mock Neighbor Flyby':'Flight Mode',priority:30});
     if (flight.mockNeighborFlyby) resetNeighborFlybyDefenseState(true);
     if (renderer.domElement.requestPointerLock && document.pointerLockElement !== renderer.domElement) {
       try { renderer.domElement.requestPointerLock(); } catch (_) {}
@@ -32897,13 +33051,7 @@ function neighborStarVector(edge, index) {
     document.body.classList.remove('mock-neighbor-flyby-active');
     resetNeighborFlybyDefenseState();
     resetFlightPlayerCombatState();
-    if (flightModeHintEl) {
-      flightModeHintEl.hidden = true;
-      const title = flightModeHintEl.querySelector('strong');
-      const controls = flightModeHintEl.querySelector('span');
-      if (title) title.textContent = 'Flight Mode';
-      if (controls) controls.textContent = 'Mouse: pitch / turn · A/D: roll · W/S: throttle · Q/E: yaw · Shift: boost · Space: level · Esc: exit';
-    }
+    globalThis.battleBrosMessages?.clear('flight');
     if (opts.releasePointerLock !== false && document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
       try { document.exitPointerLock(); } catch (_) {}
     }
@@ -33103,7 +33251,6 @@ function neighborStarVector(edge, index) {
   }
 
   function doReset() {
-    if (typeof territoryWorldState !== 'undefined' && (territoryWorldState.active || territoryWorldState.switching)) return;
     hasUserPanned = false;
     clearVehicleRuntime();
     doClear();
@@ -33190,7 +33337,6 @@ function neighborStarVector(edge, index) {
     });
   })();
   function doClear() {
-    if (typeof territoryWorldState !== 'undefined' && (territoryWorldState.active || territoryWorldState.switching)) return;
     if (typeof playSfx === 'function') playSfx('whoosh');
     clearVehicleRuntime();
     if (useWindowedHomeRendering()) {
@@ -37236,6 +37382,14 @@ function neighborStarVector(edge, index) {
     const t = wallTime - endlessMenuPausedTime;
     const dt = prevT ? Math.min(t - prevT, 0.05) : 0;
     prevT = t;
+    if(globalThis.battleBrosMessages){
+      const messages=globalThis.battleBrosMessages;
+      messages.setMode(trainingAppearance.active?'training':flight.active?'flight':fp.active?(explorationActive?'endless':'home-first-person'):'home-building');
+      messages.setVisible(!trainingAppearance.active&&!practiceBattle.active&&broEncounterMenu.hidden&&!battleArenaView.active&&!longneckReview);
+      if(!fpToolsAvailable()||excavation.equipped!=='transport-cube')messages.context('cube','');
+      if(messages.mode==='home-building')messages.context('fence',selectedTool?.kind==='fence'?'Hold Shift + Drag to place · Click to place one segment · Esc or right-click to cancel':'',{title:'Plasma Fence',priority:20});
+      messages.tick(dt);
+    }
     if(longneckReview){longneckReview.render(renderer,dt);return;}
 
     if (battleArenaView.active) {
@@ -37262,6 +37416,7 @@ function neighborStarVector(edge, index) {
     else if (fp.active && !inTrainingAppearance) {if(broEncounterMenu.hidden&&!tickFPJourney(dt))tickFP(dt);}
     tickTransportCube(t,dt);
     if(unhatchedHome)unhatchedHome.tick(t);
+    if(typeof endlessTerritories!=='undefined')endlessTerritories?.tick(t,dt);
     tickExplorationResidents(t,dt);
     tickMinimap(t);
     broEncounter.tick(t,dt);
@@ -37337,7 +37492,10 @@ function neighborStarVector(edge, index) {
     updateSmoke(dt);
     updateXRFrame(xrFrame);
 
+    if(typeof syncHomeBroPresence==='function')syncHomeBroPresence();
     renderScene();
+    window.battleBrosWorldLoading?.frame(!suppressSave && !homeRenderQueue.length
+      && (!ENABLE_GHOST_BOARDS || !pendingGhostBoards.length));
   }
 
   // -------- resize --------
@@ -38240,7 +38398,6 @@ function neighborStarVector(edge, index) {
       diameter: 1.48 * TRAINING_FACILITY_SCALE * 2 / 3 * 1.15 };
   }
   function stargateTerrainLevel(x, z, size = GRID) {
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active) return BattleBrosTerritoryWorld.portalTerrainLevel(x,z);
     const gate = stargateLayout(size);
     const distance = Math.max(Math.abs(x - gate.x), Math.abs(z - gate.z));
     return distance <= 3 ? 7 : distance <= 4 ? 6 : distance <= 5 ? 5 : distance <= 6 ? 4 : distance <= 7 ? 3 : 0;
@@ -38428,7 +38585,7 @@ function neighborStarVector(edge, index) {
     stargateLandmark=null;
     const layout=stargateLayout(GRID),p=tilePos(layout.x,layout.z);
     const root=makeTransporter();
-    root.name=(typeof territoryWorldState !== 'undefined' && territoryWorldState.active) ? 'permanentTerritoryTransporter' : 'permanentHomeTransporter';
+    root.name='permanentHomeTransporter';
     root.position.set(p.x,BUILDABLE_LAND_Y_OFFSET+TOP_H+terrainRiseForLevel(stargateTerrainLevel(layout.x,layout.z)),p.z);
     root.rotation.y=layout.yaw;
     Object.assign(root.userData,{nonInteractive:true,visualHome:true,permanentEnvironment:true});
@@ -40696,7 +40853,6 @@ function neighborStarVector(edge, index) {
   // was overloaded, v3 cells with separate terrainFloors, and v4 fence sides. Walks the FULL
   // grid so every cell gets a tile mesh, then layers in the saved overrides.
   function applyState(data, opts = {}) {
-    if (typeof territoryWorldState !== 'undefined' && territoryWorldState.active && !opts.territorySwitch) return false;
     if (neighborInspectionState.active && !neighborInspectionState.applying) return false;
     if (!data || !Array.isArray(data.cells)) return false;
     normalizeWorldCells(data);
@@ -40781,7 +40937,6 @@ function neighborStarVector(edge, index) {
 
     // Upgrade the former mountain region in saved scenes as well as new worlds.
     // The landmark itself is environmental and never serialized as a buildable cell.
-    if (!(typeof territoryWorldState !== 'undefined' && territoryWorldState.active)) {
     const corner = trainingFacilityLayout(GRID);
     for (let x = 0; x < Math.ceil(corner.mountainRadius * 1.2); x++) {
       for (let z = 0; z < Math.ceil(corner.mountainRadius * 1.2); z++) {
@@ -40806,14 +40961,7 @@ function neighborStarVector(edge, index) {
       }
     }
 
-    } else {
-      // Keep the permanent Territory facility accessible in saved boards too.
-      for(let x=0;x<Math.min(GRID,17);x++)for(let z=0;z<Math.min(GRID,17);z++){
-        const level=BattleBrosTerritoryWorld.trainingTerrainLevel(x,z);if(!level)continue;
-        const key=x+','+z,cell=overrides.get(key)||{__x:x,__z:z};
-        overrides.set(key,{...cell,terrain:'stone',terrainFloors:level,kind:null,buildingType:null,floors:1,extras:[],appearance:null});
-      }
-    } // Permanent landmark foundations.
+
 
     if (useWindowedHomeRendering()) {
       resetHomeWorldIntent();
@@ -40940,12 +41088,10 @@ function neighborStarVector(edge, index) {
         offsetZ: o ? o.offsetZ : 0,
         appearance: o ? o.appearance : null,
         sceneryRubble: !!o?.sceneryRubble,
-        animate: item.phase !== 'full' || !!(o && (o.kind || (o.extras && o.extras.length))),
+        // Restored objects already exist; render them at their saved footing.
+        animate: false,
         forceTile: item.phase !== 'detail' && item.phase !== 'full',
       });
-      if (item.phase === 'full' && o && !o.kind && o.extras && o.extras.length) {
-        renderCellExtras(x, z, { animateFrom: 0 });
-      }
     }
 
     function finishApplyState() {
@@ -41867,7 +42013,7 @@ function neighborStarVector(edge, index) {
   let unhatchedHiddenActor = null;
   function isHomeBroUnhatched() { return !!unhatchedHome?.active; }
   function unhatchedHomeBlocksBody(x,z,low,high) {
-    if(!isHomeBroUnhatched() || explorationActive || territoryWorldState.active)return false;
+    if(!isHomeBroUnhatched() || explorationActive)return false;
     const cell=homeFPTerrain.worldToCell(x,z);
     if(trainingFacilityOccupiesCell(cell.x,cell.z))return true;
     const cube=unhatchedHome.cube;
@@ -41878,7 +42024,7 @@ function neighborStarVector(edge, index) {
   }
   function placeOutsideUnhatchedCube() {
     const cube=unhatchedHome?.cube;
-    if(!isHomeBroUnhatched()||!fp.active||explorationActive||territoryWorldState.active||!cube?.visible)return;
+    if(!isHomeBroUnhatched()||!fp.active||explorationActive||!cube?.visible)return;
     const half=.1*cube.scale.x+.4;
     if(Math.abs(fp.pos.x-cube.position.x)>half||Math.abs(fp.pos.z-cube.position.z)>half)return;
     const candidates=[[half+1,0],[-half-1,0],[0,half+1],[0,-half-1]]
@@ -41899,7 +42045,7 @@ function neighborStarVector(edge, index) {
       controls,storage,group:worldGroup,onRefresh:placeOutsideUnhatchedCube,
       makeCube:()=>createTransportCube.createModel(THREE,getBoxGeometry),
       characterSize:()=>baseBattleBroPrototype?Math.max(...new THREE.Box3().setFromObject(baseBattleBroPrototype).getSize(new THREE.Vector3()).toArray())+1:4.4,
-      isHome:()=>!explorationActive&&!territoryWorldState.active,
+      isHome:()=>!explorationActive,
       center:()=>({...tilePos((GRID-1)/2,(GRID-1)/2),cellX:(GRID-1)/2,cellZ:(GRID-1)/2}),
       ground:(x,z)=>{
         if(x<0||z<0||x>=GRID||z>=GRID)return -Infinity;
@@ -41914,7 +42060,6 @@ function neighborStarVector(edge, index) {
           cancelFPWarp();
           if(explorationActive)switchFPWorld(false);
           if(flight.active)setCameraMode('perspective');
-          if(territoryWorldState.active)window.__toggleTerritoryWorld().then(()=>unhatchedHome.refresh()).catch(()=>{controls.status.textContent='Return to Home to see your unhatched BattleBro.';});
           resetTransportCube(false);transportHomePlacement=null;
           const root=baseBattleBroPrototype;
           if(root){
@@ -41929,8 +42074,6 @@ function neighborStarVector(edge, index) {
             const field=root.userData.looseRocks?.orbitField;if(field)field.visible=saved.fieldVisible??true;
           }
         }
-        const travel=document.getElementById('territory-world-toggle');
-        travel.disabled=active&&!territoryWorldState.active;travel.title=active?'Hatch your BattleBro to travel.':'';
       }
     });
     window.updateUnhatchedHome=(model,scope)=>unhatchedHome.update(model,scope);
@@ -41973,7 +42116,10 @@ function neighborStarVector(edge, index) {
     initCrowdLayer();
     setupUnhatchedHome();
     renderBattleBroPanel();
-    hydrateBattleBrosReadModel();
+    hydrateBattleBrosReadModel().then(publication=>{
+      if(!publication && battleBrosPublicDataConfig().manifestUrl)window.battleBrosWorldLoading?.fail('publication', {message:document.getElementById('battlebro-data-status').textContent}, 'Confirmed game data');
+      else window.battleBrosWorldLoading?.complete('publication');
+    });
     if (!BATTLEBROS_MIGRATION_MODE) {
       schedulePlayerStatsUpdate();
       startRoundPhaseTimer();
@@ -41992,6 +42138,7 @@ function neighborStarVector(edge, index) {
       }), 0);
     }
     if (!BATTLEBROS_MIGRATION_MODE) initWelcomeDialog();
+    window.battleBrosWorldLoading?.complete('boot');
   }
 
   // -------- Endless-world minimap --------
@@ -42230,7 +42377,7 @@ function neighborStarVector(edge, index) {
     }
     ctx.restore();
     // Keep markers and labels upright; project them through the same heading.
-    drawMinimapNPCs(ctx,minimapState);
+    drawMinimapDefenders(ctx,minimapState);
     ctx.save();
     ctx.translate(W/2,H/2);
     ctx.fillStyle='#fff';ctx.strokeStyle='#2a2722';ctx.lineWidth=1.5;
@@ -42238,9 +42385,10 @@ function neighborStarVector(edge, index) {
     ctx.fill();ctx.stroke();ctx.restore();
     drawMinimapBro(ctx, minimapState);
   }
-  function drawMinimapNPCs(ctx,map) {
+  function drawMinimapDefenders(ctx,map) {
     ctx.save();ctx.fillStyle='#ef4444';ctx.strokeStyle='#401315';ctx.lineWidth=1.5;
     for(const actor of explorationResidents.values()) {
+      if(!actor.territoryLocationId||!actor.broTokenId)continue;
       const root=actor.root;
       if(!root?.parent||!root.visible)continue;
       const p=minimapCanvasPoint(root.position.x,root.position.z,map);
@@ -43038,107 +43186,37 @@ function neighborStarVector(edge, index) {
     const id = getActiveWorldId();
     return list.find(w => w.id === id) || null;
   }
-  async function toggleTerritoryWorld() {
-    if (!territoryWorldState.active && (typeof isHomeBroUnhatched==='function' && isHomeBroUnhatched())) return false;
-    const state = territoryWorldState;
-    if (state.switching || neighborInspectionState.active || explorationActive || trainingAppearance.active) return false;
-    state.switching = true;
-    window.syncDefenseWeightVisibility?.();
-    const button = document.getElementById('territory-world-toggle');
-    if (button) button.disabled = true;
-    if (fp.active) exitFP();
-    if (flight.active) exitFlightMode();
-    clearTimeout(saveTimer);
-    const previous = state.active ? 'territory' : 'home';
-    state[previous] = getSerializableWorldState();
-    if (!state.active) {
-      // Flush any pending Home edits before entering the isolated dev board.
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.home)); }
-      catch (error) { console.warn('[territory world] Home snapshot remains in memory:', error); }
-      saveLocalGameState();
-    }
-    state.cameras[previous] = { target:target.clone(), viewSize, azimuth, polar, mode:cameraMode, distance:renderVisibleDistance };
-    const next = state.active ? 'home' : 'territory';
-    if (!state.territory) state.territory = BattleBrosTerritoryWorld.generate();
-    state.active = next === 'territory';
-    MAX_TERRAIN_FLOORS = state.active ? 160 : 64;
-    try {
-      disposeAllCellMeshes();
-      clearGhostWorld();
-      for (const key of Object.keys(world)) delete world[key];
-      await new Promise((resolve, reject) => {
-        if (!applyState(state[next], { territorySwitch:true, keepCamera:true, skipGhostBoards:state.active, onDone:resolve })) reject(new Error('World switch rejected'));
-      });
-      const saved = state.cameras[next];
-      if (saved) {
-        target.copy(saved.target); viewSize=saved.viewSize; azimuth=saved.azimuth; polar=saved.polar;
-        renderVisibleDistance=saved.distance; setCameraMode(saved.mode);
-      } else {
-        resetCameraDefaults(); target.y=7; viewSize=Math.max(viewSize,38);
-      }
-      updateCamera();
-      if (!state.active) ensureGhostBoardsAroundTarget();
-      document.getElementById('world-menu-label').textContent = state.active ? 'Territory World (dev)' : 'Home world';
-      window.__requestMinimapRepaint?.();
-      return true;
-    } catch (error) {
-      state.active = previous === 'territory';
-      MAX_TERRAIN_FLOORS = state.active ? 160 : 64;
-      await new Promise(resolve => {
-        if (!applyState(state[previous], {territorySwitch:true,keepCamera:true,skipGhostBoards:state.active,onDone:resolve})) resolve();
-      });
-      throw error;
-    } finally {
-      state.switching=false;
-      window.syncDefenseWeightVisibility?.();
-      if (button) { button.disabled=false; button.textContent=state.active ? 'Return to Home World' : 'Enter Territory World (dev)'; }
-    }
-  }
-  window.__toggleTerritoryWorld = toggleTerritoryWorld;
   // Small renderer adapter; cloud documents contain visual cell intent only.
   function syncDefenseWeightVisibility() {
-    const section=document.getElementById('battlebro-defense-section');if(!section)return false;
-    const model=window.__battleBrosReadModel,view=window.battleBrosWorldBridge?.currentTarget?.(),address=window.battleBrosWalletAddress?.(model?.identity.tokenId);
-    const visible=!!(territoryWorldState.active&&!territoryWorldState.switching&&!explorationActive&&!trainingAppearance.active&&!neighborInspectionState.active
-      &&model?.identity.active&&model.territory!=null&&String(model.territory)!=='0'
-      &&view?.kind==='territory'&&String(view.id)===String(model.territory)
-      &&address&&model.identity.owner?.toLowerCase()===address.toLowerCase());
-    section.hidden=!visible;return visible;
+    const section=document.getElementById('battlebro-defense-section');
+    if(section)section.hidden=true;
+    return false;
   }
   window.syncDefenseWeightVisibility=syncDefenseWeightVisibility;
   let signedWorldTarget = null;
   window.battleBrosWorldBridge = {
     currentTarget:()=>signedWorldTarget?{...signedWorldTarget}:null,
     capture:()=>getSerializableWorldState(),
-    captureHome:()=>territoryWorldState.active ? territoryWorldState.home : getSerializableWorldState(),
+    captureHome:()=>getSerializableWorldState(),
     matches:target=>!!signedWorldTarget && signedWorldTarget.kind===target.kind && signedWorldTarget.id===target.id
-      && !territoryWorldState.switching && !explorationActive && !trainingAppearance.active && !neighborInspectionState.active
-      && territoryWorldState.active===(target.kind==='territory'),
+      && target.kind==='home' && !explorationActive && !trainingAppearance.active && !neighborInspectionState.active,
     async open(target,data){
-      if(explorationActive||trainingAppearance.active||neighborInspectionState.active||territoryWorldState.switching)throw new Error('Return to Home or Territory World before opening a saved world.');
-      if(territoryWorldState.active!==(target.kind==='territory')){
-        const changed=await toggleTerritoryWorld();if(!changed)throw new Error('This world cannot be opened in the current mode.');
-      }
+      if(target?.kind!=='home')throw new Error('Only Home worlds can be opened. Territories are in the endless world.');
+      if(explorationActive||trainingAppearance.active||neighborInspectionState.active)throw new Error('Return to Home before opening a saved world.');
       signedWorldTarget=null;
       window.syncDefenseWeightVisibility?.();
-      const source=data || (target.kind==='territory' ? BattleBrosTerritoryWorld.generate() : {v:4,gridSize:HOME_GRID_DEFAULT,environment:'EARTH',seed:'battlebros',cells:[]});
+      const source=data || {v:4,gridSize:HOME_GRID_DEFAULT,environment:'EARTH',seed:'battlebros',cells:[]};
       clearTimeout(saveTimer);if(fp.active)exitFP();if(flight.active)exitFlightMode();
       await new Promise((resolve,reject)=>{
-        if(!applyState(source,{territorySwitch:true,keepCamera:true,skipGhostBoards:territoryWorldState.active,onDone:resolve}))reject(new Error('Saved world was rejected.'));
+        if(!applyState(source,{keepCamera:true,onDone:resolve}))reject(new Error('Saved world was rejected.'));
       });
       signedWorldTarget={...target};
       window.syncDefenseWeightVisibility?.();
-      territoryWorldState[target.kind==='home'?'home':'territory']=getSerializableWorldState();
       window.__requestMinimapRepaint?.();
     }
   };
 
   window.syncDefenseWeightVisibility();
-
-  window.__territoryDefenderAreas = () => BattleBrosTerritoryWorld.generate().defenderAreas.map(area => ({...area}));
-  document.getElementById('territory-world-toggle')?.addEventListener('click', () => {
-    toggleTerritoryWorld().catch(error => console.error('[territory world]',error));
-  });
 
   (function wireWorldMenu() {
     const trigger = document.getElementById('world-menu-btn');
@@ -43146,7 +43224,7 @@ function neighborStarVector(edge, index) {
     const labelEl = document.getElementById('world-menu-label');
     if (!trigger || !menu || !labelEl) return;
     function paintLabel() {
-      labelEl.textContent = territoryWorldState.active ? 'Territory World (dev)' : 'Home world';
+      labelEl.textContent = 'Home world';
     }
     window.updateActiveWorldSlotSnapshotFromState = function updateActiveWorldSlotSnapshotFromState(state) {
       if (!canPersistActiveColony()) return false;

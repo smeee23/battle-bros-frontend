@@ -67,13 +67,18 @@ const zoomedOutLocal=facility.worldToLocal(camera.position.clone());
 assert(zoomedOutLocal.z<2.1,'Maximum zoom stays inside the doorway with clearance');
 assert(zoomedOutLocal.z>1.95,'A little zoom-out remains available');
 for(let i=0;i<20;i++)fire('wheel',{deltaY:-1000});assert.equal(run('trainingAppearance.zoom'),.35);
+assert(get('training-appearance-done').disabled,'Unchanged appearance cannot be saved');
+const savesBefore=trainingEvents.filter(event=>event==='battlebros:training-save-appearance').length;
+await get('training-appearance-done').onclick();assert.equal(trainingEvents.filter(event=>event==='battlebros:training-save-appearance').length,savesBefore,'Unchanged direct save does not request a wallet signature');
+run("trainingAppearance.controls.skin.value='ice';changeTrainingAppearance()");assert(!get('training-appearance-done').disabled,'An appearance edit enables save');
+run("trainingAppearance.controls.skin.value='lava';changeTrainingAppearance()");assert(get('training-appearance-done').disabled,'Reverting to the saved appearance disables save');
 run("trainingAppearance.controls.skin.value='ice';changeTrainingAppearance()");
 assert.equal(context.baseBattleBroPrototype.userData.characterFamily,'juggernaut');assert.equal(context.baseBattleBroPrototype.userData.form,4);
 assert.equal(run('trainingAppearance.display.rotation.y'),originalYaw+.5,'Appearance changes preserve preview rotation');
 assert.equal(context.baseBattleBroPrototype,source,'Skin changes preserve the existing world actor');
 assert.equal(context.baseBattleBroPrototype.userData.visualVariant,'ice');assert.deepEqual(context.baseBattleBroPrototype.position,source.position,'Changing skin preserves home location');
 run("trainingAppearance.controls.eye.value='blue';changeTrainingAppearance()");assert.equal(context.baseBattleBroPrototype.userData.colors.eye,'blue');
-await get('training-appearance-done').onclick();assert(run('trainingAppearance.active'),'Save appearance keeps the facility open');
+await get('training-appearance-done').onclick();assert(run('trainingAppearance.active'),'Save appearance keeps the facility open');assert(get('training-appearance-done').disabled,'A successful save disables the button again');
 const savedSkin=source.userData.visualVariant;run("trainingAppearance.controls.skin.value='gem';changeTrainingAppearance()");
 discard=false;get('training-appearance-cancel').onclick();assert(run('trainingAppearance.active'),'Declining the warning keeps edits open');
 discard=true;get('training-appearance-cancel').onclick();assert.equal(source.userData.visualVariant,savedSkin,'Only changes after the last save are discarded');assert.equal(warnings,2);assert.equal(shell.visible,true);assert.equal(get('training-appearance-controls').hidden,true);assert.equal(resumed,2,'Training entry and exit clear any transport deployment');
@@ -110,5 +115,30 @@ assert.equal(context.baseBattleBroPrototype,source);assert(!run('trainingAppeara
 assert.equal(trainingEvents.slice(eventsBefore).filter(e=>e==='battlebros:appearance-edited').length,1,'Rollback does not emit a second edit');
 assert(pointerLocks>0,'Cancel immediately returns mouse capture without a wallet prompt');
 
-context.territoryWorldState={active:true};run('enterTrainingAppearance()');assert(run('trainingAppearance.active'),'The shared doorway and interior work in Territory World');get('training-appearance-cancel').onclick();assert(!run('trainingAppearance.active'));
+// Use the real weights editor with the facility buttons and late confirmed data.
+const createWeightsEditor=require('../assets/training-weights');
+context.window.__battleBrosReadModel=null;context.window.__battleBrosWeightScope=null;
+context.window.battleBrosTrainingWeights=createWeightsEditor({document,
+ getSelection:()=>({model:context.window.__battleBrosReadModel,scope:context.window.__battleBrosWeightScope}),
+ onValidity:valid=>get('training-weights-save').disabled=!valid});
+run('enterTrainingAppearance()');assert(get('training-weights-save').disabled,'Save waits for a confirmed BRO');
+context.window.__battleBrosReadModel={identity:{tokenId:1n,hatched:true},training:{weightsBps:{attack:3334n,defend:3333n,counter:3333n}}};
+context.window.__battleBrosWeightScope={chainId:'31337',deploymentId:'0xabc'};
+context.window.battleBrosTrainingWeights.refreshEligibility(context.window.__battleBrosReadModel);
+assert(!get('training-weights-save').disabled,'Save weights activates when confirmed data arrives');
+assert(!get('battlebro-training-editor').hidden);assert(get('battlebro-defense-section').hidden);
+const trainingInputs=get('battlebro-training-editor').children.filter(el=>el.children.length).map(el=>el.children[0]);
+trainingInputs[0].value='40';trainingInputs[0].oninput();assert(get('training-appearance-done').disabled,'Training weights alone do not enable appearance save');
+const weightSaves=[];context.window.battleBrosSaveWeights=async request=>{weightSaves.push(request);};
+const appearanceSaves=trainingEvents.filter(event=>event==='battlebros:training-save-appearance').length;
+await get('training-weights-save').onclick();
+assert.equal(weightSaves.length,1);assert.deepEqual(weightSaves[0].groups,['training']);assert.deepEqual(Object.keys(weightSaves[0].values),['training']);
+assert.equal(weightSaves[0].values.training.attack,'4000');assert.equal(weightSaves[0].values.training.counter,'2667');
+assert.equal(trainingEvents.filter(event=>event==='battlebros:training-save-appearance').length,appearanceSaves,'Saving weights does not save appearance');
+assert(run('trainingAppearance.active'),'Saving weights keeps the facility open');
+assert(!get('training-weights-save').disabled,'Save is available again after submission');
+context.window.battleBrosTrainingWeights.request=()=>({groups:['defense'],values:{defense:{}}});
+await get('training-weights-save').onclick();assert.equal(weightSaves.length,1,'Facility save handler rejects defense requests');
+get('training-appearance-cancel').onclick();assert(get('battlebro-training-editor').hidden);
+console.log('Training facility weights: late data recovery, enabled save button, training-only payload and defense rejection passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});

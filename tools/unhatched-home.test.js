@@ -52,7 +52,7 @@ assert(!controller.active);assert(controls.section.hidden);assert(!cube.visible)
 // Execute production entry guards, collision and safe walk spawning.
 const html=fs.readFileSync('index.html','utf8');
 const section=(start,end)=>html.slice(html.indexOf(start),html.indexOf(end,html.indexOf(start)));
-const context=vm.createContext({THREE,unhatchedHome:controller,explorationActive:false,territoryWorldState:{active:false},
+const context=vm.createContext({THREE,unhatchedHome:controller,explorationActive:false,
  homeFPTerrain:{worldToCell:(x,z)=>({x:Math.floor(x),z:Math.floor(z)}),groundYAt:()=>3.6},
  trainingFacilityOccupiesCell:(x,z)=>x===-10&&z===-10,
  fp:{active:true,pos:new THREE.Vector3(0,3.6,0),vy:0},fpEyeHeight:()=>.6,
@@ -68,7 +68,6 @@ for(const [start,end,name,args] of [
  ['  function throwTransportCube()', '  function tickTransportCube(', 'throwTransportCube',[]],
  ['  function enterFlightMode(', '  function exitFlightMode(', 'enterFlightMode',[]],
  ['  function enterBattleArena()', '  function exitBattleArena()', 'enterBattleArena',[]],
- ['  async function toggleTerritoryWorld()', '  window.__toggleTerritoryWorld', 'toggleTerritoryWorld',[]],
 ]){
  vm.runInContext(section(start,end),context);
  const result=context[name](...args);

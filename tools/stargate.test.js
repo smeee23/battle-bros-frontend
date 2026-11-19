@@ -38,17 +38,3 @@ assert.equal(context.setCell(48,1,{kind:null}),false,'Corner fixture cannot be d
 assert.equal(context.setCell(48,1,{terrainFloors:1}),false,'Corner foundation cannot be excavated or overwritten');
 assert.equal(context.setCell(25,25,{kind:null}),true,'Protection does not extend to player-built transporters');
 console.log('Corner transporter: shared model, stepped foundation, permanent edit/delete protection, reload deduplication and travel registry passed.');
-// Territory uses the same permanent model and protection in its ice corner.
-context.territoryWorldState={active:true};
-context.BattleBrosTerritoryWorld=require('../assets/territory-world');
-context.syncStargate();
-const territoryGate=context.worldGroup.children[0];
-assert.equal(territoryGate.name,'permanentTerritoryTransporter');
-assert(Math.abs(territoryGate.position.y-1.4)<1e-10);
-assert.equal(portals.size,1,'Switching worlds keeps exactly one default portal registered');
-assert.equal(context.setCell(48,1,{kind:null}),false,'Territory default cannot be erased');
-assert.equal(context.setCell(48,1,{terrainFloors:1}),false,'Territory footing is protected');
-context.syncStargate();assert.equal(context.worldGroup.children.length,1,'Territory reload deduplicates');
-context.territoryWorldState.active=false;context.syncStargate();
-assert.equal(context.worldGroup.children[0].name,'permanentHomeTransporter');
-console.log('Territory ice transporter: shared model, level snow footing, protected removal/terrain and independent Home restoration passed.');

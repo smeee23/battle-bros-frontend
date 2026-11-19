@@ -4,7 +4,8 @@ const html=fs.readFileSync('index.html','utf8');
 const start=html.indexOf('  function animate(now, xrFrame) {');
 const animateSource=html.slice(start,html.indexOf('  // -------- resize --------',start));
 const calls=[],frames=[];
-const context={explorationActive:true,fp:{active:true,pos:{y:10},vy:-2},fpToolMenu:{hidden:true},
+const messages=require('../assets/game-messages')();
+const context={battleBrosMessages:messages,trainingAppearance:{active:false},selectedTool:null,excavation:{equipped:'hands'},fpToolsAvailable:()=>false,explorationActive:true,fp:{active:true,pos:{y:10},vy:-2},fpToolMenu:{hidden:true},
   docHidden:false,xrSession:null,longneckReview:null,battleArenaView:{active:false},practiceBattle:{active:false,restore:()=>calls.push('practice restore')},
   dropAnims:[],neighborPivotTween:null,homeTween:null,rippleAnims:[],unhatchedHome:null,
   broEncounterMenu:{hidden:true},flight:{active:false},crowdLayer:null,
@@ -69,3 +70,12 @@ const beforeInput=snapshot();
 for(const name of ['pointerdown','pointermove','wheel','mousemove'])inputs[name]({button:0,movementX:100,movementY:100,deltaY:100,preventDefault(){}});
 assert.equal(snapshot(),beforeInput,'Paused mouse, wheel and touch handlers leave the camera unchanged');
 console.log('Endless Q pause: all render-loop subsystems, airborne position/velocity, camera, repeated pauses, time continuity and Home isolation passed.');
+
+// Run the shared-message lifecycle through the production render loop.
+context.fpToolMenu.hidden=true;context.fp.active=true;context.explorationActive=true;frame(121200);
+messages.context('territory','Territory #3');messages.notify('Open Need',{category:'error'});
+context.explorationActive=false;frame(121216);assert.equal(messages.mode,'home-first-person');assert.equal(messages.current,null,'Leaving Endless clears its contextual messages and errors');
+messages.context('home','Home instruction');context.fp.active=false;frame(121232);assert.equal(messages.mode,'home-building');assert.equal(messages.current,null,'Building mode cannot inherit first-person instructions');
+context.selectedTool={kind:'fence'};frame(121248);assert.equal(messages.current.title,'Plasma Fence');
+context.selectedTool=null;frame(121264);assert.equal(messages.current,null,'Building instructions disappear when the tool is no longer selected');
+console.log('Message lifecycle: production world-loop cleanup across Endless, Home first person and Building modes passed.');

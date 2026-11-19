@@ -1,6 +1,6 @@
 (function(root,factory){const create=factory(typeof module==='object'&&module.exports?require('./weight-eligibility'):root.BattleBrosWeightEligibility);if(typeof module==='object'&&module.exports)module.exports=create;else root.createTrainingWeightsEditor=create;})(typeof globalThis!=='undefined'?globalThis:this,function(eligibility){
   'use strict';
-  const lanes=['attack','defend','counter'],groups=['training','defense'];
+  const lanes=['attack','defend','counter'],groups=['training'];
   const copy=value=>JSON.parse(JSON.stringify(value));
   const same=(a,b)=>lanes.every(lane=>String(a[lane])===String(b[lane]));
   const pending=new Set(['preparing','awaiting-wallet','pending','unknown','included']);
@@ -11,12 +11,11 @@
     return bps<=10000n?bps:null;
   }
   function valid(weights){try{return lanes.every(lane=>/^\d+$/.test(String(weights[lane])))&&lanes.reduce((sum,lane)=>sum+BigInt(weights[lane]),0n)===10000n;}catch(_){return false;}}
-  return function create({document,getRecords=()=>[],getEligibility=()=>null,onValidity=()=>{}}){
-    let session=null;const controls={};
+  return function create({document,getRecords=()=>[],getEligibility=()=>null,getSelection=()=>({}),onValidity=()=>{}}){
+    let session=null,opened=false;const controls={};
     function evaluate(){
       let allValid=true,editable=false;
       session.restrictions=getEligibility(session.model,session.scope)||eligibility(session.model);
-      if(!session.restrictions.defense)session.restrictions.defense='Defense weights cannot be changed in training facilities. Choose them when claiming or challenging a territory.';
       for(const group of groups){
         const ui=controls[group],attack=parse(ui.attack.value),defend=parse(ui.defend.value);
         const ok=attack!==null&&defend!==null&&attack+defend<=10000n;
@@ -24,7 +23,7 @@
         ui.attack.setAttribute('aria-invalid',String(!ok));ui.defend.setAttribute('aria-invalid',String(!ok));
         const record=session.records[group],waiting=record&&pending.has(record.phase);
         const reason=session.restrictions[group]||(waiting?'Wait for the pending '+group+' weight transaction to finish.':'');
-        ui.host.hidden=!!reason;document.getElementById('battlebro-'+group).hidden=!reason;
+        ui.host.hidden=false;document.getElementById('battlebro-'+group).hidden=true;
         const restriction=document.getElementById('battlebro-'+group+'-restriction');
         restriction.hidden=!reason;restriction.textContent=reason?'Weight changes are not allowed. '+reason:'';
         for(const lane of lanes)ui[lane].disabled=!!reason||session.busy;ui.reset.disabled=!!reason||session.busy;
@@ -45,7 +44,7 @@
       if(controls.training)return;
       for(const group of groups){
         const host=document.getElementById('battlebro-'+group+'-editor'),ui={host};
-        const note=document.createElement('p');note.className='battlebro-panel-note';note.textContent='Save weights applies changes onchain. Training and defense each require a transaction.';host.append(note);
+        const note=document.createElement('p');note.className='battlebro-panel-note';note.textContent='Choose how training is split between Attack, Defend, and Counter. Saving updates training weights only.';host.append(note);
         for(const lane of lanes){
           const label=document.createElement('label');label.textContent=lane[0].toUpperCase()+lane.slice(1)+' %';
           const input=document.createElement('input');input.type='number';input.min='0';input.max='100';input.step='0.01';input.required=true;
@@ -53,28 +52,32 @@
           input.readOnly=lane==='counter';input.oninput=()=>evaluate();label.append(input);host.append(label);ui[lane]=input;
         }
         ui.status=document.createElement('p');ui.status.className='battlebro-panel-note';ui.status.setAttribute('role','status');ui.status.setAttribute('aria-live','polite');host.append(ui.status);
-        const reset=document.createElement('button');reset.type='button';reset.className='btn';reset.textContent='Use confirmed weights';
+        const reset=document.createElement('button');reset.type='button';reset.className='btn';reset.textContent='Reset';
         reset.onclick=()=>{session.values[group]=copy(session.confirmed[group]);for(const lane of lanes)ui[lane].value=percentage(session.values[group][lane]);evaluate();};host.append(reset);
         ui.reset=reset;controls[group]=ui;
       }
     }
     return {
       begin(model,scope){
+        opened=true;session=null;setup();
         document.getElementById('battlebro-defense-section').hidden=true;
+        document.getElementById('battlebro-defense-editor').hidden=true;
+        document.getElementById('battlebro-defense-restriction').hidden=true;
         if(!model?.identity?.hatched||!scope?.chainId||!scope?.deploymentId){
-          for(const group of groups){document.getElementById('battlebro-'+group+'-editor').hidden=true;document.getElementById('battlebro-'+group).hidden=false;
+          for(const group of groups){document.getElementById('battlebro-'+group+'-editor').hidden=false;document.getElementById('battlebro-'+group).hidden=true;
+            for(const lane of lanes){controls[group][lane].value='';controls[group][lane].disabled=true;}controls[group].reset.disabled=true;
             const note=document.getElementById('battlebro-'+group+'-restriction');note.hidden=false;note.textContent='Weight changes are not allowed. Select a confirmed, hatched BRO first.';}
           onValidity(false);return false;
         }
-        const confirmed={training:model.training.weightsBps,defense:model.defense.weightsBps};
-        if(!groups.every(group=>valid(confirmed[group])))return false;
+        const confirmed={training:model.training.weightsBps};
+        if(!groups.every(group=>valid(confirmed[group]))){onValidity(false);return false;}
         setup();const normalized=Object.fromEntries(groups.map(group=>[group,Object.fromEntries(lanes.map(lane=>[lane,String(confirmed[group][lane])]))]));
         session={model,restrictions:{},tokenId:String(model.identity.tokenId),scope:copy(scope),confirmed:copy(normalized),values:copy(normalized),records:{},rollback:{},valid:true,busy:false,snapshotBlock:String(model.snapshot?.blockNumber??0)};
         for(const group of groups){controls[group].host.hidden=false;document.getElementById('battlebro-'+group).hidden=true;}
         show();this.update(getRecords());return true;
       },
       refreshEligibility(model){
-        if(!session)return;
+        if(!session){if(opened){const selection=getSelection();this.begin(model||selection.model,selection.scope);}return;}
         if(model&&String(model.identity.tokenId)===session.tokenId)session.model=model;
         evaluate();
       },
@@ -111,7 +114,7 @@
       finish(){
         for(const group of groups){document.getElementById('battlebro-'+group+'-restriction').hidden=true;document.getElementById('battlebro-'+group+'-editor').hidden=true;document.getElementById('battlebro-'+group).hidden=false;}
         document.getElementById('battlebro-defense-section').hidden=true;
-        session=null;onValidity(true);return true;
+        session=null;opened=false;onValidity(false);return true;
       }
     };
   };

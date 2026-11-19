@@ -2,167 +2,30 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const THREE=require('../vendor/three/three.r128.min.js');
 const html=fs.readFileSync('index.html','utf8');
-const longneckFixture=require('./longneck-fixture')();
+const terrainFixture=fs.readFileSync('tools/exploration-world.test.js','utf8').split('const {terrain,scene,xrWorldRoot,context}=setup();')[0];
+const {terrain,context}=new Function('require',terrainFixture+'return setup();')(require);
+terrain.activate();
+let created=0,disposed=0,motions=0;
+Object.assign(context,{fp:{active:true,pos:new THREE.Vector3(),yaw:0},transportCube:{root:null},SPECTER_HOVER_CLEARANCE:1,
+ createBattleBroCharacter(){created++;throw Error('Ambient residents must not create rigs');},disposeGroup(){disposed++;},
+ broEncounter:{cancel(){}},tickBattleBroArenaActor(){}});
 const source=html.slice(html.indexOf('  // Sparse local scenery inhabitants'),html.indexOf('  // ---------- transport cube'));
-const group=new THREE.Group(),island=new THREE.Group();island.name='floating-fragment-flat';group.add(island);
-let drift=0,mountain=false,disposed=0;const appearances=[];
-const placements=[{key:'flat|0,-12',id:'0,-1',x:0,z:-12,offsetX:.5,offsetZ:-11.5,islandId:'flat',root:island},{key:'flat|0,-34',id:'0,-2',x:0,z:-34,offsetX:.5,offsetZ:-33.5,islandId:'flat',root:island}];
-const context=vm.createContext({SPECTER_MOVE_STATE:longneckFixture.api.SPECTER_MOVE_STATE,battleBroTerrain:require('../assets/battlebro-terrain'),ensureLongneckAnimation:longneckFixture.api.ensureLongneckAnimation,tickBattleBroExpression(){},tickLooseRockAttachments(){},THREE,fp:{active:true,pos:new THREE.Vector3()},explorationActive:true,
- transportCube:{root:{userData:{form:4}}},SPECTER_HOVER_CLEARANCE:1,
- explorationTerrain:{group,residentSpawns:()=>placements.values(),worldToCell:(x,z)=>({x:Math.floor(x-drift),z:Math.floor(z),islandId:'flat'}),getCell:(x,z)=>({islandId:'flat',terrainFloors:mountain?20:3,kind:null}),
- cellToWorld:(x,z)=>({x:x+.5+drift,z:z+.5}),groundYAt:()=>mountain?3.8:.4},
- createBattleBroCharacter:appearance=>{appearances.push(appearance);if(['juggernaut','monsters','specter'].includes(appearance.character))return longneckFixture.api.createBattleBroCharacter(appearance);if(appearance.character==='longneck')return longneckFixture.api.createLongNeckBattleBro(appearance);const root=new THREE.Group();
- root.userData.rig={rig:new THREE.Group(),head:new THREE.Group(),torso:new THREE.Group()};return root;},
- battleBroYawDelta:v=>Math.atan2(Math.sin(v),Math.cos(v)),tickBattleBroWorldExpression(){},
- disposeGroup:()=>disposed++,tickBattleBroArenaActor:()=>{}});
-for(const key of ['registerSpecterMover','ensureSpecterAnimation','chooseSpecterDestination','ensureSupportAnimation','ensureJuggernautAnimation','registerLavaMonsterMover','lavaContactExtent','planLavaTerrainMove','restoreTelekineticBody','lavaMovementForm'])context[key]=longneckFixture.api[key];
 vm.runInContext(source+'\nthis.residents=explorationResidents;',context);
-vm.runInContext('tickExplorationResidents(1,1/60)',context);
-assert.equal(context.residents.size,1,'First streamed resident exists in the first frame');
-vm.runInContext('tickExplorationResidents(1+1/60,1/60)',context);
-assert.equal(context.residents.size,2,'Second resident appears next frame without the old scan/wait');
-vm.runInContext('tickExplorationResidents(1+2/60,1/60)',context);
-assert.equal(context.residents.size,2,'Resident population stops at the reduced two-NPC cap');
-for(const actor of context.residents.values()){
- assert(Math.hypot(actor.x+.5,actor.z+.5)>=10,'Avoid spawning beside the player');
- assert([3,4,5].includes(appearances[0].form),'Forms stay close to the companion');
-}
-assert(new Set(appearances.map(a=>a.variant)).size>1,'Varied skins');
-assert(new Set(appearances.map(a=>a.colors.core)).size>1,'Varied cores');
-// Keep discovering placements at the cap. When a slot opens, old visible
-// islands must not suddenly gain residents; replacements start beyond fog.
-const nativeMotion=context.tickExplorationResidentMotion;context.tickExplorationResidentMotion=()=>{};
-placements.push({key:'flat|25,0',id:'1,0',x:25,z:0,offsetX:25.5,offsetZ:.5,islandId:'flat',root:island},
- {key:'flat|62,0',id:'3,0',x:62,z:0,offsetX:62.5,offsetZ:.5,islandId:'flat',root:island});
-for(let frame=0;frame<3;frame++)vm.runInContext(`tickExplorationResidents(${1.1+frame/60},1/60)`,context);
-assert.equal(appearances.length,2,'Planning while full does not allocate more rigs');
-const removed=context.residents.entries().next().value;context.removeExplorationResident(...removed);
-vm.runInContext('tickExplorationResidents(2,1/60)',context);
-assert.equal(context.residents.size,2);assert(context.residents.has('3,0'),'Vacancy is replenished beyond the fog range');
-assert(!context.residents.has('1,0'),'No late spawn on an already visible island');
-assert.equal(appearances.length,3,'Only one replacement rig is built per frame');
-const retained=[...context.residents.values()];context.fp.yaw=Math.PI;
-vm.runInContext('tickExplorationResidents(2.01,1/60)',context);
-assert(retained.every(a=>[...context.residents.values()].includes(a)),'Turning reuses the same resident instances');
-// Radial distance alone is insufficient for an oblique, wide-field view:
-// the fog shader uses camera depth. Do not materialize a visible side island.
-context.camera=new THREE.PerspectiveCamera(75,2,.02,2000);context.camera.updateMatrixWorld(true);
-placements.push({key:'flat|45,-45',id:'2,-3',x:45,z:-45,offsetX:45.5,offsetZ:-44.5,islandId:'flat',root:island});
-for(let frame=0;frame<3;frame++)vm.runInContext(`tickExplorationResidents(${2.1+frame/60},1/60)`,context);
-const visibleResident=[...context.residents].find(([id])=>id!=='3,0');context.removeExplorationResident(...visibleResident);
-vm.runInContext('tickExplorationResidents(2.2,1/60)',context);
-assert.equal(context.residents.size,1,'A visible oblique island does not gain a late BRO');
-context.camera.rotation.y=Math.PI;
-vm.runInContext('tickExplorationResidents(2.3,1/60)',context);
-assert(context.residents.has('2,-3'),'An unseen placement can be prepared before looking back');
-delete context.camera;
-context.tickExplorationResidentMotion=nativeMotion;
-vm.runInContext('tickExplorationResidents(2.4,1/60)',context);
-
-const actor=context.residents.values().next().value,before=actor.root.position.x;
-drift=.25;vm.runInContext('tickExplorationResidents(2,.01)',context);
-assert.equal(actor.root.position.x,before+.25,'Residents ride island drift');
-mountain=true;vm.runInContext('tickExplorationResidents(3,1)',context);
-assert.equal(context.residents.size,0,'Reject mountains and remove invalid footing');
-assert(disposed>0,'Release resident rigs');
-mountain=false;
-const flatGet=context.explorationTerrain.getCell;
-context.explorationTerrain.getCell=(x,z)=>x===1?null:flatGet(x,z);
-assert.equal(vm.runInContext('residentFlatCell(0,0)',context),false,'Reject cliff edges');
-context.explorationTerrain.getCell=(x,z)=>({...flatGet(x,z),terrainFloors:x===1?4:3});
-assert.equal(vm.runInContext('residentFlatCell(0,0)',context),false,'Reject slopes');
-context.explorationTerrain.getCell=flatGet;
-vm.runInContext('tickExplorationResidents(4,1)',context);
-context.explorationActive=false;vm.runInContext('tickExplorationResidents(5,1)',context);
-assert.equal(context.residents.size,0,'Clean up when leaving endless terrain');
-console.log('exploration residents: sparse varied population, flat footing, drift and cleanup OK');
-
-// Exercise real character animation: upper-arm motion requires a stationary mover.
-const Module=require('node:module'),path=require('node:path');
-const filename=path.resolve('tools/rock-battlebro.test.js');
-let fixture=fs.readFileSync(filename,'utf8').split('const api = context.api;')[0];
-fixture=fixture.replace('const M = {','const M_ANIMAL={hoof:new THREE.MeshLambertMaterial()};const M = {')
- .replace('globalThis.api = {','globalThis.api = {SPECTER_MOVE_STATE,chooseSpecterDestination,ensureSpecterAnimation,registerSpecterMover,initLavaTerrainContacts,ensureSupportAnimation,ensureMonsterAnimation,ensureJuggernautAnimation,lavaMovementForm,ensureLongneckAnimation,tickBattleBroExpression,tickLooseRockAttachments,tickBattleBroArenaActor, battleBroYawDelta, lavaSupportScale, setLavaHandAnchor, beginJuggernautStride, tickJuggernautStride, solveLavaArmToAnchor, beginLongneckFootMotion, poseLongneckFeet, resetLongneckFeet, tickLongneckHead, tickFloatingRockArmGestures, tickBattleBroWorldExpression,');
-const moduleFixture=new Module(filename,module);
-moduleFixture.filename=filename;moduleFixture.paths=Module._nodeModulePaths(path.dirname(filename));
-moduleFixture._compile(fixture+'module.exports=context.api;',filename);
-const api=moduleFixture.exports;
-Object.assign(context,api);
-context.createBattleBroCharacter=api.createBattleBroCharacter;
-context.tickBattleBroArenaActor=api.tickBattleBroArenaActor;
-context.explorationActive=true;
-for(let i=0;i<20;i++)vm.runInContext('tickExplorationResidents(1,1)',context);
-assert(context.residents.size>1,'Real residents spawn and animate without stopping the loop');
-const example=context.residents.values().next().value;
-for(const character of ['monsters','juggernaut','longneck','specter'])for(let form=1;form<=7;form++){
- const root=api.createBattleBroCharacter({character,form,variant:'ice',colors:{core:'cyan'}});
- const mover={...example.mover,root,parts:root.userData.locomotionRig||root.userData.rig};
- for(let frame=0;frame<3;frame++)api.tickBattleBroArenaActor({root,mover},frame/60,1/60);
-}
-console.log('exploration residents: real stationary animation works for every character and form');
-
-// Actual generated terrain must have visible, animated residents near its entry.
-const terrainFixture=fs.readFileSync('tools/exploration-world.test.js','utf8')
- .split('const {terrain,scene,xrWorldRoot,context}=setup();')[0];
-const setupTerrain=new Function('require',terrainFixture+'return setup;')(require);
-const actual=setupTerrain();actual.terrain.activate();
-Object.assign(actual.context,api,{battleBroTerrain:require('../assets/battlebro-terrain'),fp:{active:true,pos:new THREE.Vector3(),yaw:0},
- transportCube:{root:{userData:{form:4}}},SPECTER_HOVER_CLEARANCE:1,
- disposeGroup(){},createBattleBroCharacter:api.createBattleBroCharacter,
- tickBattleBroArenaActor:api.tickBattleBroArenaActor});
-vm.runInContext(source+'\nthis.residents=explorationResidents;',actual.context);
-for(let frame=0;frame<2;frame++)vm.runInContext(`tickExplorationResidents(${frame/60},1/60)`,actual.context);
-assert.equal(actual.context.residents.size,2,'Real streamed terrain supplies both resident rigs in the first two frames');
-for(let frame=2;frame<360;frame++)vm.runInContext(`tickExplorationResidents(${frame/60},1/60)`,actual.context);
-assert.equal(actual.context.residents.size,2,'Populate actual endless terrain up to the reduced two-NPC cap');
-assert([...actual.context.residents.values()].every(a=>Math.hypot(a.root.position.x,a.root.position.z)<=70),
- 'Reduced population stays within the resident discovery range');
-const resident=actual.context.residents.values().next().value;
-const head=resident.root.userData.rig.head,beforePose=head.quaternion.clone();
-for(let frame=360;frame<420;frame++)vm.runInContext(`tickExplorationResidents(${frame/60},1/60)`,actual.context);
-assert(head.quaternion.angleTo(beforePose)>1e-5,'Resident head visibly animates over time');
-console.log('exploration residents: actual terrain entry populated with continuously animated bros');
-
-const roaming=[...actual.context.residents.values()].map(actor=>({actor,x:actor.x,z:actor.z}));
-for(let frame=420;frame<1800;frame++)vm.runInContext(`tickExplorationResidents(${frame/60},1/60)`,actual.context);
-assert(roaming.some(({actor,x,z})=>actor.x!==x||actor.z!==z),'Residents roam on the actual terrain');
-for(const actor of actual.context.residents.values()) {
- assert(actual.context.residentSupport(actor),'Roaming stays on footprint-supported terrain');
- assert(Math.hypot(actor.x-actor.motion.homeX,actor.z-actor.motion.homeZ)<=5,'Roaming remains local');
-}
-assert.equal(api.lavaMonsterMovers.size,0,'Residents do not join home terrain controllers');
-console.log('exploration residents: shared home gaits, local roaming and flat-ground boundaries OK');
-context.residents.clear();
-for(const character of ['monsters','juggernaut','longneck','specter'])for(let form=1;form<=7;form++) {
- const root=api.createBattleBroCharacter({character,form,variant:'ice'});group.add(root);
- root.position.set(200.5+drift,.4,200.5);
- const actor={root,mover:{root,parts:root.userData.locomotionRig||root.userData.rig,
-  state:'IDLE',progress:0,ikTarget:new THREE.Vector3()},x:200,z:200,character,phase:0};
- context.actor=actor;
- // Standing inside an NPC's awareness/contact range must not affect the player.
- const player=context.fp;
- player.pos.set(root.position.x+.05,root.position.y+.6,root.position.z+.05);
- Object.assign(player,{yaw:.37,pitch:.2,vy:.6});
- const playerPose=[...player.pos.toArray(),player.yaw,player.pitch,player.vy];
- let completedStep=false;
- for(let frame=0;frame<(['juggernaut','monsters'].includes(character)?1800:600);frame++) {
-  vm.runInContext(`tickExplorationResidentMotion(actor,${frame/60},1/60)`,context);
-  completedStep ||= actor.x!==200||actor.z!==200;
-  if(character==='longneck'){
-   assert.equal(actor.mover.longneckAnimation.mover,actor.mover,'Resident executes the shared controller on its own rig');
-   assert.equal(actor.mover.grounded,true,'Resident supplies resolved ground contact');
-   assert(Number.isFinite(actor.mover.actualSpeed+actor.mover.yawRate),'Resident supplies resolved movement');
-   if(Math.abs(actor.mover.yawRate)>.01)assert.notEqual(actor.mover.state,'IDLE','Turning is not reported as idle');
-  }
- }
- assert(Number.isFinite(root.position.x)&&Number.isFinite(root.position.y),`${character} ${form}: finite roaming pose`);
- assert(completedStep,`${character} ${form}: completes an animated step`);
- assert.deepEqual([...player.pos.toArray(),player.yaw,player.pitch,player.vy],playerPose,
-  character+' '+form+': nearby NPC leaves player position, camera and velocity alone');
- assert(!actor.pursuit&&!actor.pursuitCaught,character+' '+form+': nearby player triggers no chase or catch');
- assert(Math.hypot(actor.x-actor.motion.homeX,actor.z-actor.motion.homeZ)<=5,
-  character+' '+form+': proximity preserves local roaming');
-
- group.remove(root);
-}
-console.log('exploration residents: all four families and seven forms complete animated roaming steps');
+assert.equal(terrain.residentSpawns,undefined,'Terrain does not create ordinary NPC plans');
+// Even a leftover provider cannot cause the removed ambient spawner to run.
+terrain.residentSpawns=()=>[{id:'old-npc',x:15,z:0,islandId:'0,0:0'}];
+for(let frame=0;frame<600;frame++)context.tickExplorationResidents(frame/60,1/60);
+assert.equal(created,0);assert.equal(context.residents.size,0,'No ordinary NPC appears over time');
+const ordinary=new THREE.Group();terrain.group.add(ordinary);
+context.residents.set('old-npc',{root:ordinary,x:0,z:0});
+context.tickExplorationResidents(11,1/60);assert.equal(ordinary.parent,null);assert.equal(context.residents.size,0,'Untagged legacy actors are removed');
+assert.equal(disposed,1);
+// Only the territory adapter supplies NFT actors. Movement stays in the same loop.
+const root=new THREE.Group();terrain.group.add(root);
+const actor={root,x:0,z:0,islandId:'0,0:0',broTokenId:'3',territoryLocationId:'2'};
+context.residents.set('territory:2',actor);
+context.residentSupport=()=>true;context.tickExplorationResidentMotion=()=>motions++;
+context.tickExplorationResidents(12,1/60);assert.equal(context.residents.get('territory:2'),actor);assert.equal(motions,1);
+context.fp.active=false;context.tickExplorationResidents(13,1/60);assert.equal(context.residents.size,0);assert.equal(root.parent,null,'Leaving exploration cleans up NFT actors');
+assert.equal(created,0);
+console.log('Endless residents: no ambient plans or rig creation, legacy NPC removal, NFT-only movement and exit cleanup passed');

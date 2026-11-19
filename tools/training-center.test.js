@@ -47,6 +47,28 @@ for (const make of [api.makeSkyscraper, api.makeVoxelSkyscraper]) {
     assert(glass.min.x < walls.min.x || glass.max.x > walls.max.x || glass.min.z < walls.min.z || glass.max.z > walls.max.z,
       'Plasma remains outside the beveled wall surface');
   }
+  first.updateMatrixWorld(true);
+  const interiorWalls = first.children.filter(mesh => mesh.name.startsWith('trainingInteriorWall-'));
+  assert.equal(interiorWalls.length, 4, 'All four sides have interior walls');
+  for (const [origin, direction] of [
+    [new THREE.Vector3(0,.30,0), new THREE.Vector3(-1,0,0)],
+    [new THREE.Vector3(0,.30,0), new THREE.Vector3(1,0,0)],
+    [new THREE.Vector3(0,.30,0), new THREE.Vector3(0,0,-1)],
+    [new THREE.Vector3(1.5,.30,0), new THREE.Vector3(0,0,1)]
+  ]) {
+    const ray = new THREE.Raycaster(origin, direction);
+    assert.equal(ray.intersectObjects(interiorWalls).length, 1, 'Gray wall is visible looking out from inside');
+    ray.ray.origin.y = .15;
+    assert.equal(ray.intersectObjects(interiorWalls).length, 0, 'Plasma opening remains see-through from inside');
+    ray.ray.origin.y = 1.65;
+    assert.equal(ray.intersectObjects(interiorWalls).length, 0, 'Highest plasma band remains open');
+  }
+  const doorway = new THREE.Raycaster(new THREE.Vector3(0,.52,0), new THREE.Vector3(0,0,1));
+  assert.equal(doorway.intersectObjects(interiorWalls).length, 0, 'Interior lining leaves the entrance open');
+  for (const wall of interiorWalls) {
+    assert.equal(wall.geometry.userData.cached, true, 'Interior geometry is cached');
+    assert.equal(wall.geometry, last.getObjectByName(wall.name).geometry, 'Facility instances share interior geometry');
+  }
   assert(first.children.some(m => m.geometry?.parameters.width === 2 && m.geometry?.parameters.height === 1.48), 'Large hangar entrance');
 }
 const root = context.worldGroup;
@@ -79,10 +101,3 @@ console.log('training facility: real walls/plasma, unchanged design, enlarged do
 assert.equal(api.setCell(0,0,{terrain:'stone',kind:null}),false,'Player cannot erase or reshape the permanent foundation');
 assert.equal(api.setCell(19,19,{terrain:'stone',kind:'house',buildingType:'skyscraper'}),false,'Cannot place another facility');
 
-context.territoryWorldState={active:true};
-const homeFacility=root.children[0],homeBox=new THREE.Box3().setFromObject(homeFacility);
-api.syncTrainingFacility();const territoryFacility=root.children[0];
-assert.equal(root.children.length,1,'Territory keeps one permanent training facility');
-assert.equal(homeFacility.parent,null);assert.deepEqual(new THREE.Box3().setFromObject(territoryFacility),homeBox,'Territory facility has the same position, dimensions, door, foundation and model as Home');
-assert(api.trainingFacilityOccupiesCell(0,0),'Territory foundation is protected');
-assert.equal(api.setCell(0,0,{terrain:'stone',kind:null}),false,'Territory facility cannot be erased');

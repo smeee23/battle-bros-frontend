@@ -251,3 +251,14 @@ assert(html.includes('if(practiceBattle.active){'),'Practice owns pointer-lock c
 assert(html.includes("document.getElementById('practice-shield').onclick=()=>{}"),'Shield is explicitly inert');
 assert(html.includes('event.stopImmediatePropagation();'),'Practice captures exploration controls');
 console.log('Practice battle: all 28 forms, shoulder and result cameras, happy/sad outcomes, portrait/landscape face framing, shared attacks/hits, automatic return timing, cancellation and restored cameras/expressions passed.');
+// A settled player victory completes without player input; details wait for face view.
+{
+ const actors=[actor('juggernaut',1,0),actor('specter',1,8)],combat=makeActions(THREE,{restoreBody:api.restoreTelekineticBody,setExpression:api.setBattleBroExpression});
+ let cam=new THREE.PerspectiveCamera(),reveals=0,clock=0,completed=false;
+ const practice=makePractice(THREE,{actions:combat,restoreBody:api.restoreTelekineticBody,attachments:(a,t,dt)=>context.advanceLooseRockAttachments(a.root,t,dt,a.mover),camera:value=>{if(value)cam=value;return cam;},aspect:()=>1,floor:()=>0,show(){},status(){},outcome:r=>{if(r)reveals++;},complete:()=>{completed=true;}});
+ const session={pendingOnchain:true,onchainBattle:{challengeId:'1',locationId:'2'},sides:actors.map(a=>({actor:a,session:{run:fn=>fn()}}))};
+ assert(practice.begin(session));for(let i=0;i<100;i++){practice.restore();practice.tick(clock+=.05,.05);}assert(combat.combat().running);assert.equal(reveals,0);
+ assert(practice.settle({challengeId:'1',locationId:'2',playerWon:true,transactionHash:'0xtest'}));
+ for(let i=0;i<260&&!completed;i++){practice.restore();practice.tick(clock+=.05,.05);if(combat.combat().running)assert.equal(reveals,0);}
+ assert(completed,'Automatic winner throw completes even with zero player clicks');assert.equal(combat.combat().winner,0);assert.equal(reveals,1);practice.finish();combat.dispose();for(const a of actors)a.root.parent?.remove(a.root);
+}

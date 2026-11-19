@@ -6,14 +6,15 @@
   const config=Object.freeze({maxHealth:100,normalDamage:2,berserkerDamage:16,energyMax:100,energyPerHit:5,
     cooldown:.32,windup:.08,gestureDuration:.26,berserkerCooldown:.6,berserkerWindup:.14,berserkerGestureDuration:.42,
     releaseDuration:.08,hitDuration:.32,hitDistance:.14,opponentCadence:.95,opponentDelay:.7,
-    projectileSpeed:32,projectileSpeedMultiplier:.85,projectileScale:1.2,projectileSize:.42,minFlight:.16,maxFlight:.7,projectileLifetime:1.5,maxRange:40,maxProjectiles:12,...hooks.config});
+    projectileSpeed:32,projectileSpeedMultiplier:.85,projectileScale:1.2,projectileSize:.42,minFlight:.16,maxFlight:.7,projectileLifetime:1.5,maxRange:40,maxProjectiles:12,pendingRegenPerSecond:18,pendingHealthFloor:.35,settledDamageMultiplier:6,finishingDeadline:8,...hooks.config});
   for(const [key,value] of Object.entries(config))if(!Number.isFinite(value)||value<=0)throw Error('Invalid combat configuration: '+key);
-  if(!Number.isInteger(config.maxProjectiles)||config.maxProjectiles>64||config.gestureDuration>config.cooldown||config.berserkerGestureDuration>config.berserkerCooldown||config.windup>=config.gestureDuration||config.berserkerWindup>=config.berserkerGestureDuration||config.minFlight>config.maxFlight||config.maxFlight/config.projectileSpeedMultiplier>config.projectileLifetime)throw Error('Inconsistent combat timing/pool configuration');
+  if(config.pendingHealthFloor>1||!Number.isInteger(config.maxProjectiles)||config.maxProjectiles>64||config.gestureDuration>config.cooldown||config.berserkerGestureDuration>config.berserkerCooldown||config.windup>=config.gestureDuration||config.berserkerWindup>=config.berserkerGestureDuration||config.minFlight>config.maxFlight||config.maxFlight/config.projectileSpeedMultiplier>config.projectileLifetime)throw Error('Inconsistent combat timing/pool configuration');
   const smooth=x=>{x=Math.max(0,Math.min(1,x));return x*x*(3-2*x);};
   const expression=root=>root.userData.slots?.face?.userData.expression?.name||'neutral';
   const setExpression=(root,name)=>hooks.setExpression?.(root,name,{automatic:true});
   const point=new THREE.Vector3(),local=new THREE.Vector3(),inverse=new THREE.Quaternion(),segment=new THREE.Vector3(),nearest=new THREE.Vector3();
   const battle={running:false,winner:null,clock:0,revision:0,fighters:[],opponentEnabled:false,nextOpponent:0,activeProjectiles:0,shots:0,spawned:0,hits:0,misses:0};
+  let authoritativeWinner=null,awaitingSettlement=false,territoryPresentation=false;
   const pool=[];let actors=null,sequence=0,glowMaterial=null;
   function center(actor,out){actor.root.updateMatrixWorld(true);actor.root.userData.rig.head.getWorldPosition(out);actor.root.getWorldPosition(local);return out.lerp(local,.25);}
   function remember(actor,node){const poses=actor.battlePoses||(actor.battlePoses=new Map());let pose=poses.get(node);if(!pose){pose={p:new THREE.Vector3(),q:new THREE.Quaternion(),active:false};poses.set(node,pose);}if(!pose.active){pose.p.copy(node.position);pose.q.copy(node.quaternion);pose.active=true;}}
@@ -35,6 +36,8 @@
   function cancel(){battle.running=false;clearVisuals();battle.revision++;}
   function start(list,options={}){
     cancel();if(list.length!==2||list.some(a=>!a?.root?.parent))throw Error('Two attached BROs required');
+    awaitingSettlement=!!options.awaitSettlement;territoryPresentation=awaitingSettlement;
+    authoritativeWinner=options.authoritativeWinner===0||options.authoritativeWinner===1?options.authoritativeWinner:null;
     actors=[list[0],list[1]];battle.running=true;battle.winner=null;battle.clock=0;battle.shots=0;battle.spawned=0;battle.hits=0;battle.misses=0;
     battle.opponentEnabled=options.opponentEnabled??true;battle.nextOpponent=config.opponentDelay;
     battle.fighters=actors.map(actor=>{actor.hitsReceived=0;return {actor,baseExpression:expression(actor.root),health:config.maxHealth,maxHealth:config.maxHealth,energy:0,energyMax:config.energyMax,cooldown:0,source:sourceFor(actor.root),gesture:gesture()};});battle.revision++;return battle;
@@ -54,7 +57,7 @@
     const f=battle.fighters[index],other=battle.fighters[1-index];
     if(!f.source||!f.actor.root.parent||!other.actor.root.parent||f.actor.root.position.distanceTo(other.actor.root.position)>config.maxRange)return {ok:false,reason:'unavailable-or-out-of-range'};
     const p=reserve(f.source);if(!p)return {ok:false,reason:'pool-full'};
-    Object.assign(p,{active:true,launched:false,damageApplied:false,id:++sequence,owner:index,age:0,special,damage:special?config.berserkerDamage:config.normalDamage});
+    Object.assign(p,{active:true,launched:false,damageApplied:false,id:++sequence,owner:index,age:0,special,damage:options.finisher?config.maxHealth:(special?config.berserkerDamage:config.normalDamage)});
     p.mesh.geometry=f.source.geometry;p.mesh.material=f.source.material;p.glow.geometry=f.source.geometry;p.glow.visible=special;p.mesh.visible=false;f.actor.root.parent.add(p.mesh);battle.activeProjectiles++;
     const g=f.gesture;Object.assign(g,{active:true,age:0,launched:false,projectile:p,state:'WINDUP',elapsed:0,weight:0,expression:f.baseExpression,windup:special?config.berserkerWindup:config.windup,duration:special?config.berserkerGestureDuration:config.gestureDuration});
     center(other.actor,g.point);f.source.getWorldPosition(g.position);g.rock.orbitPhase=0;
@@ -84,7 +87,10 @@
   function impact(p){
     if(!p.active||p.damageApplied||!battle.running)return;
     p.damageApplied=true;const f=battle.fighters[p.owner],target=battle.fighters[1-p.owner];
-    target.health=Math.max(0,target.health-p.damage);battle.hits++;if(!p.special)f.energy=Math.min(config.energyMax,f.energy+config.energyPerHit);
+    const protectedTarget=awaitingSettlement||authoritativeWinner!==null&&p.owner!==authoritativeWinner;
+    const floor=protectedTarget?(territoryPresentation?Math.ceil(target.maxHealth*config.pendingHealthFloor):1):0;
+    const damage=p.damage*(territoryPresentation&&!awaitingSettlement&&p.owner===authoritativeWinner?config.settledDamageMultiplier:1);
+    target.health=Math.max(floor,target.health-damage);battle.hits++;if(!p.special)f.energy=Math.min(config.energyMax,f.energy+config.energyPerHit);
     f.actor.root.getWorldPosition(point);hit(target.actor,point);release(p);battle.revision++;
     if(target.health===0){battle.running=false;battle.winner=p.owner;clearVisuals();battle.revision++;}
   }
@@ -92,7 +98,8 @@
     if(!battle.running)return;
     if(actors.some(a=>!a.root.parent)){cancel();return;}
     battle.clock+=dt;
-    for(const f of battle.fighters){
+    for(const [index,f] of battle.fighters.entries()){
+      if(territoryPresentation&&(awaitingSettlement||index===authoritativeWinner)&&f.health<f.maxHealth){f.health=Math.min(f.maxHealth,f.health+config.pendingRegenPerSecond*dt);battle.revision++;}
       const cooldown=f.cooldown;f.cooldown=Math.max(0,cooldown-dt);if(cooldown>1e-8&&f.cooldown<=1e-8)battle.revision++;
       const g=f.gesture;if(!g.active)continue;g.age+=dt;g.rock.orbitPhase+=dt*4;center(battle.fighters[f===battle.fighters[0]?1:0].actor,g.point);
       g.state=g.age<g.windup?'WINDUP':'RELEASE';g.elapsed=g.age<g.windup?g.age:g.age-g.windup;
@@ -128,6 +135,7 @@
   }
   function busy(actor){if(actor.root.userData.battleAttack||actor.root.userData.battleHit)return true;if(!actors)return false;const index=actors.indexOf(actor);for(const p of pool)if(p.active&&p.owner===index)return true;return false;}
   function state(actor){const i=actors?.indexOf(actor)??-1;if(i<0)return 'Inactive';if(!battle.running)return battle.winner===null?'Inactive':battle.winner===i?'Victory':'Defeat';if(actor.root.userData.battleHit)return 'Recovering';if(actor.root.userData.battleThrow)return actor.root.userData.battleThrow.state==='WINDUP'?'Wind-up':'Throwing';return battle.fighters[i].cooldown>1e-8?'Cooling down':'Ready';}
+  function settle(winner){if(!battle.running||!awaitingSettlement||![0,1].includes(winner))return false;awaitingSettlement=false;authoritativeWinner=winner;battle.revision++;return true;}
   function dispose(){cancel();for(const p of pool)p.mesh.remove(p.glow);pool.length=0;glowMaterial?.dispose();glowMaterial=null;actors=null;battle.fighters=[];}
-  return {config,start,cancel,stop:cancel,attack,hit,tick,restore,busy,state,canAttack,combat:()=>battle,stats:()=>({allocated:pool.length,active:battle.activeProjectiles,spawned:battle.spawned,hits:battle.hits}),dispose};
+  return {config,start,settle,cancel,stop:cancel,attack,hit,tick,restore,busy,state,canAttack,combat:()=>battle,stats:()=>({allocated:pool.length,active:battle.activeProjectiles,spawned:battle.spawned,hits:battle.hits}),dispose};
 });

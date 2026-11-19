@@ -13,6 +13,8 @@ new vm.Script(inlineApp, { filename: 'index.inline.js' });
 
 for (const relativePath of [
   'vendor/three/three.r128.min.js',
+  'assets/world-loading.js',
+  'assets/game-messages.js',
   'assets/battlebro-encounter.js',
   'assets/practice-battle.js',
   'assets/character-battle-actions.js',

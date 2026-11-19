@@ -243,6 +243,11 @@ for(const family of ['longneck','juggernaut','monsters','specter']){
  vm.runInContext('resumeFPAfterBattle()',context);assert.equal(pointerLockRequests,attempts,'Background page does not request capture');
  const unfocusedYaw=context.fp.yaw;docEvents.mousemove({target:context.renderer.domElement,movementX:20,movementY:0});assert.equal(context.fp.yaw,unfocusedYaw);
  pageFocused=true;normalInputs.keydown({key:'w',code:'KeyW',repeat:false});normalInputs.keyup({key:'w',code:'KeyW'});
+ context.document.pointerLockElement=null;captureMode='reject';vm.runInContext('resumeFPAfterBattle()',context);
+ captureMode='grant';let resumeEventsConsumed=0;
+ const resumeEvent={target:context.renderer.domElement,button:0,preventDefault(){},stopImmediatePropagation(){resumeEventsConsumed++;}};
+ captures.pointerdown(resumeEvent);assert.equal(context.document.pointerLockElement,context.renderer.domElement,'A fresh pointer gesture retries rejected capture');
+ captures.click(resumeEvent);assert.equal(resumeEventsConsumed,2,'The resume gesture cannot also throw or recall a BRO');
  context.document.pointerLockElement=null;docEvents.pointerlockchange();assert(!context.fp.active,'Normal unlock still leaves first person after capture succeeds');
  context.fp.active=true;
 

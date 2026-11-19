@@ -103,3 +103,20 @@ for(const distance of [2,20,36])for(const special of [false,true]){
   for(const f of [old,updated])f.cleanup();
 }
 console.log('Shared combat: rapid/overlapping shots, launch timing, swept hits, exactly-once damage, Berserker, opponent cadence, concurrent reactions, victory/defeat, shared projectile speed/scale and bounded cleanup passed.');
+
+for(const winner of [0,1]){
+ const f=fixture({maxHealth:8,normalDamage:8}),c=f.combat,b=c.combat();
+ c.start(f.actors,{opponentEnabled:false,authoritativeWinner:winner});
+ assert(c.attack(f.actors,1-winner).ok);f.until(()=>b.hits===1,'Replay hit');
+ assert(b.running);assert.equal(b.fighters[winner].health,1,'Presentation cannot contradict confirmed winner');
+ f.until(()=>c.canAttack(winner),'Confirmed winner ready');assert(c.attack(f.actors,winner).ok);f.until(()=>!b.running,'Confirmed outcome');
+ assert.equal(b.winner,winner);f.cleanup();
+}
+console.log('Territory presentation preserves either confirmed onchain winner; Arena defaults unchanged.');
+for(const winner of [0,1]){
+ const f=fixture({maxHealth:8,normalDamage:8}),c=f.combat,b=c.combat();c.start(f.actors,{opponentEnabled:false,awaitSettlement:true});
+ assert(c.attack(f.actors,1-winner).ok);f.until(()=>b.hits===1,'Pending impact');assert(b.running&&b.winner===null);const damaged=b.fighters[winner].health;
+ assert(damaged>0&&damaged<8);for(let n=0;n<10;n++)f.frame();assert(b.fighters[winner].health>damaged,'Pending health regrows');
+ assert(c.settle(winner));assert(!c.settle(1-winner),'Result is applied once');assert(c.attack(f.actors,winner,{finisher:true}).ok);f.until(()=>!b.running,'Settled finishing impact');assert.equal(b.winner,winner);f.cleanup();
+}
+console.log('Pending territory health regeneration, no early knockout, idempotent settlement and decisive finishing impacts passed.');

@@ -11,11 +11,11 @@ const pos={x:0,y:0,z:0,set(x,y,z){Object.assign(this,{x,y,z});}};
 const context=vm.createContext({window:{},document:{getElementById:id=>({'minimap-wrap':wrap,'minimap-canvas':canvas,'minimap-size':label}[id])},
  requestAnimationFrame:callback=>frames.push(callback),GRID:50,HOME_GRID_MAX:256,renderVisibleSize:50,MAX_TERRAIN_FLOORS:64,
  explorationActive:false,fp:{active:true,pos,yaw:0,pitch:0},target:pos,fpJourney:{previous:null},fpKeys:new Set(),transportCube:{root:null},explorationResidents:new Map(),
- explorationTerrain:{activate(){context.explorationActive=true;},deactivate(){context.explorationActive=false;},
+ explorationTerrain:{activate(){context.explorationActive=true;return {x:0,y:.6,z:0,yaw:0};},deactivate(){context.explorationActive=false;},
  minimapCells(){snapshots++;return new Map([['0,0',{terrain:'snow',terrainFloors:1}]]);}},
  ghostCellAt(){throw Error('Minimap must never read Home/Territory terrain');},
  minimapTerrainHex:()=>0xffffff,minimapMixHex:x=>x,minimapHexToCss:()=> '#fff',minimapThemeHex:x=>x,
- leaveExcavation(){},resetTransportCube(){},fpGroundYAt:()=>.6});
+ leaveExcavation(){},resetTransportCube(){},fpEyeHeight:()=>.6,fpGroundYAt:()=>.6});
 vm.runInContext(section('  let minimapRepaintQueued =','  function hoveredStatusWorldCell(')
  +section('  function redrawMinimap()','  function drawMinimapProp(')
  +section('  function switchFPWorld(other)','  function cancelFPWarp()'),context);
@@ -57,18 +57,19 @@ for(const yaw of [0,Math.PI/2,Math.PI,3*Math.PI/2,.71]) {
  }
 }
 context.fp.yaw=0;
-context.explorationResidents.set('npc',{root:{parent:{},visible:true,position:{x:pos.x+10,z:pos.z}}});
-context.explorationResidents.set('hidden',{root:{parent:{},visible:false,position:{x:pos.x,z:pos.z}}});
-context.explorationResidents.set('removed',{root:{parent:null,visible:true,position:{x:pos.x,z:pos.z}}});
-context.explorationResidents.set('outside',{root:{parent:{},visible:true,position:{x:pos.x+100,z:pos.z}}});
+context.explorationResidents.set('territory:1',{broTokenId:'3',territoryLocationId:'1',root:{parent:{},visible:true,position:{x:pos.x+10,z:pos.z}}});
+context.explorationResidents.set('hidden',{broTokenId:'4',territoryLocationId:'2',root:{parent:{},visible:false,position:{x:pos.x,z:pos.z}}});
+context.explorationResidents.set('removed',{broTokenId:'4',territoryLocationId:'2',root:{parent:null,visible:true,position:{x:pos.x,z:pos.z}}});
+context.explorationResidents.set('outside',{broTokenId:'4',territoryLocationId:'2',root:{parent:{},visible:true,position:{x:pos.x+100,z:pos.z}}});
+context.explorationResidents.set('ordinary',{root:{parent:{},visible:true,position:{x:pos.x,z:pos.z}}});
 dots.length=0;context.redrawMinimap();
-let red=dots.filter(p=>p.ink==='#ef4444');assert.equal(red.length,1,'Only live, visible NPCs inside the map get red dots');
+let red=dots.filter(p=>p.ink==='#ef4444');assert.equal(red.length,1,'Only live, visible NFT defenders inside the map get red dots');
 near(red[0].x,168);near(red[0].y,120);
 context.fp.yaw=Math.PI/2;dots.length=0;context.redrawMinimap();
 red=dots.filter(p=>p.ink==='#ef4444');near(red[0].x,120);near(red[0].y,168);
-context.explorationResidents.get('npc').root.position.z-=5;dots.length=0;context.redrawMinimap();
+context.explorationResidents.get('territory:1').root.position.z-=5;dots.length=0;context.redrawMinimap();
 red=dots.filter(p=>p.ink==='#ef4444');near(red[0].x,144);near(red[0].y,168);
 context.switchFPWorld(false);const hiddenSnapshots=snapshots;context.tickMinimap(2);flush();assert.equal(snapshots,hiddenSnapshots);
 assert(html.includes('    tickMinimap(t);'),'The existing main render loop owns refreshes');
 assert(!html.includes('transportMinimapHadBro'),'Refreshes are independent of BRO release');
-console.log('Minimap: Endless-only visibility, independent throttled refresh, heading rotation, click round trips and live NPC red markers passed');
+console.log('Minimap: Endless-only visibility, independent throttled refresh, heading rotation, click round trips and NFT defender red markers passed');

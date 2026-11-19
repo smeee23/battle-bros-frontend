@@ -15,8 +15,9 @@ test('player UI discovers Needs, launches care, opens worlds, signs saves and pr
   const previous=Object.fromEntries(['window','document','location','fetch'].map(k=>[k,globalThis[k]]));
   const address='0x'+'1'.repeat(40),deployment='0x'+'a'.repeat(40),body=new Element(),events={};
   const stats=new Element(),needs=new Element(),worldMenu=new Element(),hosts=new Map([['bro-player-controls',stats],['bro-needs-controls',needs],['world-save-controls',worldMenu]]);
-  const world={v:4,gridSize:50,environment:'EARTH',seed:'ui',cells:[]};let opened=null,signed=0,conflict=false,selectedProfile=null,cosmetics=defaultAppearance(),savedWorld=null,s3Loads=0;
-  const worldLoads=[],walletListeners=[];let walletAddress=address,loadGate=null,loadError=false;
+  const world={v:4,gridSize:50,environment:'EARTH',seed:'ui',cells:[]};
+  const worldExport={...world,catalogVersion:1,cameraMode:'ortho',toolId:'select'};let opened=null,signed=0,conflict=false,selectedProfile=null,cosmetics=defaultAppearance(),savedWorld=null,s3Loads=0;
+  const startupTasks=[],worldLoads=[],walletListeners=[];let walletAddress=address,loadGate=null,loadError=false;
   const doc={schemaVersion:5,projectionVersion:6,chainId:'31337',deploymentId:deployment,contracts:{combat:deployment},snapshot:{blockNumber:'10',blockHash:'0x'+'b'.repeat(64),timestamp:'100'},history:[],worlds:[],needs:{seeds:[]},battleBros:[{tokenId:'1',name:'Nova',active:true,owner:address,locationId:null,need:{active:true,sourceEpoch:'2',activeSinceTimestamp:'90',activity:{id:'need-1',type:'care',version:'1'}}}]};
   doc.battleBros.push({...doc.battleBros[0],tokenId:'2',name:'Second',need:{active:false}});
   doc.battleBros.push({...doc.battleBros[0],tokenId:'3',name:'Third',locationId:'9',need:{...doc.battleBros[0].need,activity:{id:'need-3',type:'care',version:'1'}}});
@@ -25,7 +26,7 @@ test('player UI discovers Needs, launches care, opens worlds, signs saves and pr
   const transactions={list:()=>[],subscribe:()=>()=>{},submit:async()=>{}};
   globalThis.location={href:'https://game.example/',origin:'https://game.example'};
   globalThis.document={body,getElementById:id=>hosts.get(id),createElement:()=>new Element(),addEventListener:(name,fn)=>events[name]=fn,dispatchEvent:()=>{},pointerLockElement:null};
-  globalThis.window={__battleBrosPublicData:runtime,addEventListener:()=>{},confirm:()=>true,battleBrosAppearanceBridge:{capture:()=>cosmetics,apply:value=>{cosmetics=structuredClone(value);}},normalizeBattleBrosPublicDocuments:(_m,_g,b)=>({identity:{tokenId:BigInt(b.tokenId)}}),selectBattleBrosReadModel:model=>{selectedProfile=String(model.identity.tokenId);},battleBrosWorldBridge:{capture:()=>world,captureHome:()=>world,matches:t=>opened?.id===t.id&&opened?.kind===t.kind,open:async(t,w)=>{opened=t;if(w)assert.deepEqual(w,world);}}};
+  globalThis.window={battleBrosWorldLoading:{track:task=>startupTasks.push(task)},__battleBrosPublicData:runtime,addEventListener:()=>{},confirm:()=>true,battleBrosAppearanceBridge:{capture:()=>cosmetics,apply:value=>{cosmetics=structuredClone(value);}},normalizeBattleBrosPublicDocuments:(_m,_g,b)=>({identity:{tokenId:BigInt(b.tokenId)}}),selectBattleBrosReadModel:model=>{selectedProfile=String(model.identity.tokenId);},battleBrosWorldBridge:{capture:()=>worldExport,captureHome:()=>worldExport,matches:t=>opened?.id===t.id&&opened?.kind===t.kind,open:async(t,w)=>{opened=t;if(w)assert.deepEqual(w,world);}}};
   globalThis.fetch=async(url,options={})=>{
     const path=new URL(url).pathname,input=options.body?JSON.parse(options.body):null,serialized=JSON.stringify(doc);
     let data,status=200;
@@ -41,9 +42,13 @@ test('player UI discovers Needs, launches care, opens worlds, signs saves and pr
   try{
     const saved=new Map(),service=mountNeedsInfrastructure({wallet,transactions,storage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)}});
     for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r));
+    assert(startupTasks.length>=3,'Startup tracks the publication, saved world and selected BRO appearance');
+    await Promise.all(startupTasks);
     const find=s=>stats.querySelector(s)||needs.querySelector(s)||worldMenu.querySelector(s);
     assert.equal(body.children.length,0,'No separate Needs / World menu is added');
     assert(stats.querySelector('[data-bro]'));assert(needs.querySelector('[data-needs]'));
+    assert.equal(find('[data-appearance-status]'),undefined,'Default appearance notes are removed from Stats');
+    assert.equal(find('[data-bro-presence]').textContent,'');assert(find('[data-bro-presence]').hidden,'Home BROs need no presence notice');
     assert.equal(needs.className,'battlebro-panel-section battlebro-panel-disclosure bb-player-needs');
     assert.equal(find('[data-status]'),undefined,'The existing stats header owns the confirmed-block label');
     assert(worldMenu.querySelector('[data-save]'));assert(worldMenu.querySelector('[data-cloud]'));
@@ -54,16 +59,20 @@ test('player UI discovers Needs, launches care, opens worlds, signs saves and pr
     await find('[data-needs]').children[0].children[2].onclick();assert.equal(service.list()[0].status,'ready');
     assert.equal(service.list()[1].status,'awaiting-activity','Care actions stay bound to the selected BRO');
     assert.equal(find('[data-open]'),undefined,'Selecting a BRO opens its world without an extra button');
-    assert.deepEqual(opened,{kind:'home',id:'1'},'Initial owned BRO opens automatically');assert.equal(find('[data-save]').disabled,false);
-    await find('[data-save]').onclick();assert.equal(signed,1);assert.match(find('[data-world-status]').textContent,/Saved to backend/);assert.equal(saved.size,1);
+    assert.deepEqual(opened,{kind:'home',id:'1'},'Initial owned BRO opens automatically from a renderer export with local metadata');assert.equal(worldExport.cameraMode,'ortho','Opening preserves the local renderer settings');assert.equal(find('[data-save]').disabled,false);
+    const messageModule=await import('../assets/game-messages.js');window.battleBrosMessages=messageModule.default();
+    await find('[data-save]').onclick();assert.equal(signed,1);assert.match(window.battleBrosMessages.current.text,/Saved to backend/);assert(find('[data-world-status]').hidden,'World-save notices use the shared box without a duplicate panel message');assert.equal(saved.size,1);
+    delete window.battleBrosMessages;
     savedWorld={document:world,revision:'1'};doc.worlds.push({kind:'home',id:'1',revision:'1',path:'saved/home-1.json',contentHash:contentHash(world)});
     await find('[data-refresh]').onclick();await find('[data-cloud]').onclick();
     assert.equal(s3Loads,1,'Load saved world in the toolbar uses the verified S3 publication');assert.deepEqual(opened,{kind:'home',id:'1'});
-    conflict=true;await find('[data-save]').onclick();assert.match(find('[data-world-error]').textContent,/another device/);assert.equal(saved.size,1,'Conflict keeps the local draft');
+    window.battleBrosMessages=messageModule.default();
+    conflict=true;await find('[data-save]').onclick();assert.match(window.battleBrosMessages.current.text,/another device/);assert.equal(window.battleBrosMessages.current.category,'error');assert(find('[data-world-error]').hidden,'Save conflicts replace the shared message instead of creating a second error');assert.equal(saved.size,1,'Conflict keeps the local draft');
+    delete window.battleBrosMessages;
     const beforeAppearanceSave=signed;conflict=false;events['battlebros:training-entered']();
     cosmetics={...cosmetics,skin:'ice'};events['battlebros:appearance-edited']();assert.equal(signed,beforeAppearanceSave,'Editing only creates a local draft');
     const save={detail:{promise:null}};events['battlebros:training-save-appearance'](save);await save.detail.promise;
-    assert.match(find('[data-appearance-status]').textContent,/Appearance saved for BRO #1/);assert.equal(signed,beforeAppearanceSave+1);
+    assert.equal(find('[data-bro-presence]').textContent,'','Appearance saves do not replace the presence status');assert.equal(signed,beforeAppearanceSave+1);
     cosmetics={...cosmetics,skin:'gem'};events['battlebros:appearance-edited']();await events['battlebros:training-exited']();
     assert.equal(cosmetics.skin,'ice','Leaving retains saved appearance and discards subsequent edits');
     events['battlebros:training-entered']();await events['battlebros:training-exited']();
@@ -81,8 +90,17 @@ test('player UI discovers Needs, launches care, opens worlds, signs saves and pr
     assert.equal(worldLoads.length,loadsBeforeRefresh,'Background refresh does not reload the editor or discard edits');
     find('[data-bro]').value='3';await find('[data-bro]').onchange();assert.equal(find('[data-needs]').children.length,1);
     assert.equal(find('[data-needs]').children[0].children[0].children[3].textContent,'Awaiting activity','Switching BROs immediately shows that BRO’s Need');
-    find('[data-world]').value='territory';await find('[data-world]').onchange();assert.deepEqual(opened,{kind:'territory',id:'9'},'Changing world kind automatically opens the occupied territory');
-    find('[data-bro]').value='1';await find('[data-bro]').onchange();assert.equal(selectedProfile,'1');assert.deepEqual(opened,{kind:'home',id:'1'});assert.equal(find('[data-world]').value,'home');
+    assert.deepEqual(opened,{kind:'home',id:'3'},'A defending BRO still opens its Home, never a separate territory world');
+    assert.equal(find('[data-bro-presence]').textContent,'BRO #3 Defending Territory 9');assert.equal(find('[data-bro-presence]').hidden,false);
+    doc.battleBros[2].locationId='9007199254740993';await find('[data-refresh]').onclick();
+    assert.equal(find('[data-bro-presence]').textContent,'BRO #3 Defending Territory 9007199254740993','Territory IDs keep their full decimal precision');
+    doc.battleBros[2].locationId=null;await find('[data-refresh]').onclick();
+    assert.equal(find('[data-bro-presence]').textContent,'');assert(find('[data-bro-presence]').hidden,'Confirmed departure clears the notice');
+    doc.battleBros[2].locationId='9';await find('[data-refresh]').onclick();
+    assert.equal(find('[data-bro-presence]').textContent,'BRO #3 Defending Territory 9');
+    assert.equal(find('[data-world]'),undefined,'The separate territory-world selector is removed');
+    find('[data-bro]').value='1';await find('[data-bro]').onchange();assert.equal(selectedProfile,'1');assert.deepEqual(opened,{kind:'home',id:'1'});assert.equal(opened.kind,'home');
+    assert(find('[data-bro-presence]').hidden,'Selecting a Home BRO clears the previous defender notice');
     assert(saved.has([...saved.keys()].find(k=>k.includes(':home:2:'))),'Switching BROs preserves the outgoing world draft');
     loadError=true;find('[data-bro]').value='2';await find('[data-bro]').onchange();
     assert.equal(opened.id,'1');assert.equal(find('[data-save]').disabled,true,'A failed load cannot save the previous BRO’s world under the selected BRO');
@@ -96,6 +114,7 @@ test('player UI discovers Needs, launches care, opens worlds, signs saves and pr
     releaseLoad();await pendingSwitch;for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r));
     assert.deepEqual(opened,{kind:'home',id:'1'},'A load completed after disconnect cannot replace the displayed world');
     assert.equal(find('[data-save]').disabled,true);
+    assert(find('[data-bro-presence]').hidden,'Disconnect clears the defender notice');
     service.destroy();
   }finally{for(const [k,v] of Object.entries(previous)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}}
 });

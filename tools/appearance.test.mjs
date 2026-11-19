@@ -103,3 +103,11 @@ test('saving inside training updates the rollback baseline and later unsaved edi
  live.skin='gem';service.draft();service.cancelTraining();assert.equal(live.skin,'ice');assert.equal(saves,1);
  service.beginTraining();live.skin='sand';service.draft();reject=true;await assert.rejects(service.saveTraining(),/declined/);service.cancelTraining();assert.equal(live.skin,'ice','Rejected save never advances the rollback baseline');
 });
+
+test('defers same-BRO level refresh during territory presentation and flushes after exit',()=>{
+ let held=false,root=null;
+ const bridge=create({actor:()=>root,character:r=>r.family,deferSelect:()=>held,replace:(skin,form,family)=>{root={family,userData:{form,visualVariant:skin}};return {ok:true,root};},applyColors(){}});
+ const scope={chainId:'31337',deploymentId:'0xabc'},model=level=>({identity:{active:true,hatched:true,tokenId:1n,type:'0'},progression:{level:BigInt(level)}});
+ bridge.select(model(1),scope);held=true;bridge.select(model(5),scope);assert.equal(root.userData.form,1);bridge.flush();assert.equal(root.userData.form,1);
+ held=false;bridge.flush();assert.equal(root.userData.form,5);
+});

@@ -13,3 +13,6 @@
 .bb-world-controls{padding:4px 8px 8px}
 .bb-player-controls :focus-visible,.bb-player-needs :focus-visible,.bb-world-controls :focus-visible{outline:2px solid var(--accent,#3a72c8);outline-offset:2px}
 body.training-appearance-active #bro-player-controls,body.training-appearance-active #bro-needs-controls{display:none}
+
+.bb-player-controls [data-bro-presence]{color:#b42828;font-weight:700}
+.bb-player-controls [data-bro-presence][hidden]{display:none}
