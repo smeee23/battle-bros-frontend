@@ -40,17 +40,18 @@ messages.tick(1);assert.equal(body.textContent,'Burst 1');for(let i=0;i<5;i++)me
 // The territory adapter emits a separate notice while its real context keeps changing.
 const THREE=require('../vendor/three/three.r128.min.js'),territories=require('../assets/endless-territories');
 (async()=>{
- const location={locationId:'3',enabled:true,occupant:'0',pendingChallengeId:'0',cooldownUntil:'0'},island={site:{id:'native',territoryId:'3'},root:new THREE.Group()};
+ const location={locationId:'3',enabled:true,occupant:'0',pendingChallengeId:'0',cooldownUntil:'0',minLevel:'1',maxLevel:'0'},island={site:{id:'native',territoryId:'3'},root:new THREE.Group()};
  const player={x:0,z:0};let active=true,eligible=false,prompts=0;
+ const bro={tokenId:'1',active:true,hatchedAt:'1',level:'1',locationId:null,pendingChallengeId:null,need:{active:true}};
  const controller=territories.create(THREE,{createEthereumLogo:require('../assets/battle-arena').createEthereumLogo,
- active:()=>active,player:()=>player,bodies:()=>[island],surface:()=>0,read:async()=>({snapshot:{timestamp:'100'},locations:[location],battleBros:[]}),
+ active:()=>active,player:()=>player,bodies:()=>[island],surface:()=>0,read:async()=>({snapshot:{timestamp:'100'},locations:[location],battleBros:[bro]}),
  status:text=>messages.context('territory',text),notify:text=>messages.notify(text,{source:'claim',category:'error'}),
- canPrompt:()=>true,canClaim:()=>eligible,promptClaim:()=>prompts++,claimBlockedMessage:()=> 'BRO #1 has an open Need.'});
+ canPrompt:()=>true,selectedToken:()=>bro.tokenId,ownsSelected:()=>eligible,promptClaim:()=>prompts++});
  controller.refresh();await new Promise(setImmediate);controller.tick(0,.01);
  messages.context('cube','Deploying BattleBro',{priority:30});
- assert(!controller.requestClaim({x:4,z:0},'native'));assert.equal(body.textContent,'BRO #1 has an open Need.');
+ assert(!controller.requestClaim({x:4,z:0},'native'));assert(body.textContent.includes('needs care'));
  messages.context('cube','');player.x=50;controller.tick(1,.1);messages.tick(8);assert(box.hidden,'Walking away during an error does not restore the old territory label');
- eligible=true;player.x=0;controller.tick(2,.1);assert(controller.requestClaim({x:4,z:0},'native'));assert.equal(prompts,1);
+ eligible=true;bro.need.active=false;player.x=0;controller.tick(2,.1);assert(controller.requestClaim({x:4,z:0},'native'));assert.equal(prompts,1);
  active=false;controller.tick(3,.1);assert(box.hidden,'World exit removes territory context');
  // Production adapters share one box; passive banners and browser alerts are gone.
  const html=fs.readFileSync('index.html','utf8');

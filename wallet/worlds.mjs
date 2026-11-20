@@ -5,14 +5,22 @@ export function createWorldClient({wallet,apiUrl,storage,fetcher=fetch,origin=lo
   const base=new URL(apiUrl,origin);if(!['https:','http:'].includes(base.protocol)||base.username||base.password)throw Error('Invalid world API URL');
   const scope=wallet.settings.chainId+':'+wallet.settings.deployment.deploymentId.toLowerCase()+':'+(wallet.settings.instanceId??'chain');
   const draftKey=target=>'battlebros.world-draft.v1:'+scope+':'+targetKey(target)+':'+(wallet.getState().address?.toLowerCase()??'visitor');
-  async function request(path,body){
-    const response=await fetcher(new URL(path,base.href.endsWith('/')?base:base.href+'/'),{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,credentials:'omit',cache:'no-store'});
+  async function request(path,body,keepalive=false){
+    const response=await fetcher(new URL(path,base.href.endsWith('/')?base:base.href+'/'),{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,credentials:'omit',cache:'no-store',keepalive});
     const data=await response.json();if(!response.ok)throw Error(data.error??'World request failed');return data;
+  }
+  const chainId=String(wallet.settings.chainId),deploymentId=wallet.settings.deployment.deploymentId.toLowerCase();
+  function readCoreBalance(data,tokenId){
+    if(data.schemaVersion!==1||data.chainId!==chainId||data.deploymentId!==deploymentId||data.tokenId!==tokenId||
+      typeof data.balance!=='string'||!/^(0|[1-9][0-9]{0,77})$/.test(data.balance))throw Error('Core balance does not match this BRO');
+    return BigInt(data.balance);
   }
   return {
     draft(target,world,revision){const value={world:visualDocument(target,world),revision};validateVisualDocument(target,value.world);try{if(!storage)throw Error('Storage unavailable');storage.setItem(draftKey(target),JSON.stringify(value));}catch{throw Error('Local draft could not be saved. Keep this page open.');}return value;},
     local(target){try{const raw=storage?.getItem(draftKey(target));if(!raw||raw.length>5*1024*1024)return null;const value=JSON.parse(raw);validateVisualDocument(target,value.world);return value;}catch{return null;}},
     load:target=>request('worlds?'+new URLSearchParams(target)),
+    loadCores:async tokenId=>readCoreBalance(await request('cores?'+new URLSearchParams({tokenId})),tokenId),
+    creditCores:async(tokenId,credits)=>readCoreBalance(await request('cores/credits',{chainId,deploymentId,tokenId,credits},true),tokenId),
     async save(target,world,revision){
       const visual=visualDocument(target,world);validateVisualDocument(target,visual);const session=await wallet.session();
       const challenge=await request('worlds/challenge',{target,revision,contentHash:contentHash(visual),editor:session.address});

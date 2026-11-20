@@ -14,7 +14,7 @@ const context=vm.createContext({window:{},document:{getElementById:id=>({'minima
  explorationTerrain:{activate(){context.explorationActive=true;return {x:0,y:.6,z:0,yaw:0};},deactivate(){context.explorationActive=false;},
  minimapCells(){snapshots++;return new Map([['0,0',{terrain:'snow',terrainFloors:1}]]);}},
  ghostCellAt(){throw Error('Minimap must never read Home/Territory terrain');},
- minimapTerrainHex:()=>0xffffff,minimapMixHex:x=>x,minimapHexToCss:()=> '#fff',minimapThemeHex:x=>x,
+ minimapTerrainHex:()=>0xffffff,minimapMixHex:x=>x,minimapHexToCss:hex=>'#'+hex.toString(16).padStart(6,'0'),minimapThemeHex:x=>x,
  leaveExcavation(){},resetTransportCube(){},fpEyeHeight:()=>.6,fpGroundYAt:()=>.6});
 vm.runInContext(section('  let minimapRepaintQueued =','  function hoveredStatusWorldCell(')
  +section('  function redrawMinimap()','  function drawMinimapProp(')
@@ -69,7 +69,23 @@ context.fp.yaw=Math.PI/2;dots.length=0;context.redrawMinimap();
 red=dots.filter(p=>p.ink==='#ef4444');near(red[0].x,120);near(red[0].y,168);
 context.explorationResidents.get('territory:1').root.position.z-=5;dots.length=0;context.redrawMinimap();
 red=dots.filter(p=>p.ink==='#ef4444');near(red[0].x,144);near(red[0].y,168);
+const territoryColors=new Map([['1',0x86edff],['2',0x55ee88],['3',0x252733]]);
+context.endlessTerritories={publication:{},minimapMarker:id=>territoryColors.has(id)?{fill:territoryColors.get(id),outline:0x101522}:null};
+context.explorationTerrain.minimapTerritories=(x,z,radius)=>{
+ assert.deepEqual([x,z,radius],[pos.x,pos.z,96]);
+ return [{id:'1',x:x+10,z},{id:'2',x:x+40,z},{id:'3',x:x+80,z},{id:'removed',x:x-40,z}];
+};
+context.fp.yaw=0;dots.length=0;context.redrawMinimap();
+const onMap=dots.find(p=>p.ink==='#86edff'),edge=dots.find(p=>p.ink==='#55ee88'),sameBearing=dots.find(p=>p.ink==='#252733');
+near(onMap.x,168);near(onMap.y,120);
+near(edge.x,231);near(edge.y,120);
+near(sameBearing.x,220);near(sameBearing.y,120);
+assert.equal(dots.filter(dot=>dot.r===5).length,3,'Only confirmed territory badges are painted');
+context.fp.yaw=Math.PI/2;dots.length=0;context.redrawMinimap();
+const rotatedEdge=dots.find(p=>p.ink==='#55ee88');near(rotatedEdge.x,120);near(rotatedEdge.y,231);
+context.endlessTerritories.publication=null;dots.length=0;context.redrawMinimap();
+assert(!dots.some(dot=>dot.r===5),'Unavailable publication hides territory badges');
 context.switchFPWorld(false);const hiddenSnapshots=snapshots;context.tickMinimap(2);flush();assert.equal(snapshots,hiddenSnapshots);
 assert(html.includes('    tickMinimap(t);'),'The existing main render loop owns refreshes');
 assert(!html.includes('transportMinimapHadBro'),'Refreshes are independent of BRO release');
-console.log('Minimap: Endless-only visibility, independent throttled refresh, heading rotation, click round trips and NFT defender red markers passed');
+console.log('Minimap: Endless-only visibility, throttled refresh, heading rotation, defender markers and territory edge badges passed');

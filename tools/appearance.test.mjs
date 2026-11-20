@@ -2,8 +2,25 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {createAppearanceService} from '../wallet/appearance.mjs';
-import {defaultAppearance,validateAppearance,BRO_KINDS} from '../../battle-bros-backend/packages/shared/src/world-save.mjs';
+import {readPublishedAppearance} from '../wallet/publication.mjs';
+import {contentHash,defaultAppearance,validateAppearance,BRO_KINDS} from '../../battle-bros-backend/packages/shared/src/world-save.mjs';
 const {create,kinds,formForLevel}=createRequire(import.meta.url)('../assets/bro-appearance.js');
+test('loads only the matching published appearance and validates its colors and content hash',async()=>{
+  const world={v:1,skin:'ice',colors:{core:'blue',glow:'cyan',eye:'green'}};
+  const hash=contentHash(world),path='worlds/appearance/3/2-'+hash.slice(2)+'.json';
+  const descriptor={kind:'appearance',id:'3',revision:'2',contentHash:hash,path};
+  const base='https://example.test/state/manifest.json';
+  const saved={schemaVersion:1,...descriptor,world};
+  const fetcher=async (url,options)=>{
+    assert.equal(url.href,new URL(path,base).href);
+    assert.equal(options.credentials,'omit');
+    return {ok:true,json:async()=>saved};
+  };
+  assert.deepEqual(await readPublishedAppearance(descriptor,base,fetcher),world);
+  await assert.rejects(readPublishedAppearance({...descriptor,path:'https://example.test/other'},base,fetcher),/descriptor/);
+  saved.world={...world,colors:{...world.colors,eye:'red'}};
+  await assert.rejects(readPublishedAppearance(descriptor,base,fetcher),/content mismatch/);
+});
 test('selected NFT kind drives the actor; preview stays usable and cosmetics remain token scoped',()=>{
   assert.deepEqual(kinds,BRO_KINDS);
   let root={family:'juggernaut',userData:{form:4,visualVariant:'lava',colors:{}}},replaced=0;

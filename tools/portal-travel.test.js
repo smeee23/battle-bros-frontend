@@ -141,7 +141,7 @@ for(const other of [false,true]) {
 }
 
 // A defending NFT enters at its contract location; H still returns to Home.
-ctx.api.explorationTerrain.setTerritories(Array.from({length:5},(_,i)=>({locationId:String(i+1)})));
+ctx.endlessTerritories={publication:{snapshot:{timestamp:'1'},battleBros:[],locations:Array.from({length:5},(_,i)=>({locationId:String(i+1),enabled:false,pendingChallengeId:'0'}))}};
 ctx.window.__battleBrosReadModel={territory:'5'};fp.active=true;fp.pos.set(1,1,2);fp.yaw=.3;fp.pitch=.1;
 ctx.switchFPWorld(true);assert(ctx.explorationActive);
 const defended=[...ctx.api.explorationTerrain.territoryBodies()].find(b=>b.site.territoryId==='5');assert(defended);
@@ -150,5 +150,39 @@ assert(Math.abs(fp.pos.y-ctx.api.explorationTerrain.groundYAt(fp.pos.x,fp.pos.z,
 ctx.switchFPWorld(false);assert.equal(fp.pos.x,1);assert.equal(fp.pos.z,2);assert.equal(fp.yaw,.3);assert.equal(fp.pitch,.1);
 ctx.window.__battleBrosReadModel={territory:'999'};assert.equal(ctx.switchFPWorld(true),false);assert(!ctx.explorationActive,'Missing location data never sends a defender to the default origin');
 assert(ctx.api.fpJourney.error.includes('territory'));
-ctx.window.__battleBrosReadModel={territory:null};ctx.switchFPWorld(true);assert.equal(fp.pos.x,0);assert.equal(fp.pos.z,0,'Unassigned BROs retain normal entry');ctx.switchFPWorld(false);
+ctx.window.__battleBrosReadModel={territory:null};ctx.switchFPWorld(true);
+assert(ctx.explorationActive&&Number.isFinite(fp.pos.y),'Unassigned BROs get a safe arrival');ctx.switchFPWorld(false);
 console.log('Territory portal: contract-ID arrival, correct ground, Home return, missing-data guard and normal unassigned entry passed.');
+
+// Exercise the paused lookup form with a territory ID beyond Number precision.
+(async()=>{
+ const entry=html.slice(html.indexOf("  const territorySearch=document.getElementById"),html.indexOf('  function syncFPTools(){'));
+ const elements=new Map();
+ for(const id of ['search','id','find','visit','result']){
+  elements.set('fp-territory-'+id,{hidden:true,addEventListener(event,fn){this[event]=fn;}});
+ }
+ const input=elements.get('fp-territory-id'),form=elements.get('fp-territory-search');
+ const visit=elements.get('fp-territory-visit'),result=elements.get('fp-territory-result');
+ const location={locationId:'9007199254740993'};
+ let doc=null,placed=[],resumed=false;
+ const paused={hidden:false};
+ const player={active:true,pos:new THREE.Vector3(),vy:-2};
+ vm.runInNewContext(entry,{
+  document:{getElementById:id=>elements.get(id)},fp:player,fpToolMenu:paused,explorationActive:true,
+  endlessTerritories:{refresh:async()=>doc,location:id=>doc?.locations.find(l=>l.locationId===id),opportunity:()=>({reason:'Cooldown'})},
+  explorationTerrain:{placeTerritoryForVisit(id){placed.push(id);return {};},territoryArrival:()=>({x:24,y:1.5,z:48,yaw:1})},
+  fpEyeHeight:()=>.6,requestMinimapRepaint(){},toggleFPToolMenu(open){resumed=!open;}
+ });
+ input.value=location.locationId;
+ const submit=()=>form.submit({preventDefault(){}});
+ await submit();assert.match(result.textContent,/unavailable/);assert(visit.hidden);
+ doc={locations:[location]};
+ input.value='2';await submit();assert.match(result.textContent,/not found/);assert(visit.hidden);
+ input.value=location.locationId;await submit();assert.match(result.textContent,/Cooldown/);
+ assert(!visit.hidden&&!placed.length,'Finding a result leaves play paused and the map untouched');
+ visit.click();
+ assert.deepEqual(placed,[location.locationId]);
+ assert.deepEqual(player.pos.toArray(),[24,1.5,48]);
+ assert(player.grounded&&player.vy===0&&resumed,'Visit safely resumes from the destination');
+ console.log('Paused territory lookup handles unavailable data, missing IDs and exact-ID visits.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

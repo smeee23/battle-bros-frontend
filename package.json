@@ -21,7 +21,7 @@
     "local:dev": "node scripts/local-dev.mjs",
     "transactions:test": "node --test tools/transactions.test.mjs",
     "local:transactions:test": "node scripts/local-transactions-e2e.mjs",
-    "needs:test": "node --test tools/needs.test.mjs tools/needs-ui.test.mjs tools/appearance.test.mjs tools/weights.test.mjs",
+    "needs:test": "node --test tools/needs.test.mjs tools/needs-ui.test.mjs tools/appearance.test.mjs tools/weights.test.mjs tools/cores.test.mjs",
     "local:yield": "node scripts/local-yield.mjs",
     "local:scenario:test": "node scripts/local-scenario-e2e.mjs",
     "practice:test": "node tools/practice-setup.test.js && node tools/practice-battle.test.js && node tools/practice-pose-parity.test.js",

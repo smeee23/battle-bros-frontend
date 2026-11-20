@@ -1,5 +1,5 @@
 import {createTerritoryClaim} from './territory-claim.mjs';
-import {readTransactionPublication} from './publication.mjs';
+import {readPublishedAppearance,readTransactionPublication} from './publication.mjs';
 import {createPracticeChallenge} from './practice-challenge.mjs';
 import { walletSettings } from './config.mjs';
 import { createInjectedDriver } from './driver.mjs';
@@ -57,4 +57,5 @@ transactionsReady.then(service=>{if(!service)return;for(const record of Object.v
 
 
 window.battleBrosReadTerritories=()=>readTransactionPublication(settings,new URL(window.__battleBrosPublicData.manifestUrl,location.href).href);
+window.battleBrosReadDefenderAppearance=descriptor=>readPublishedAppearance(descriptor,new URL(window.__battleBrosPublicData.manifestUrl,location.href));
 window.battleBrosClaimTerritory=async options=>createTerritoryClaim({transactions:await transactionsReady,settings})(options);

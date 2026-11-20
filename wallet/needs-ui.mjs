@@ -3,6 +3,7 @@ import {createAppearanceService} from './appearance.mjs';
 import {readTransactionPublication} from './publication.mjs';
 import {createNeedsService} from './needs.mjs';
 import {createWorldClient,visualWorld} from './worlds.mjs';
+import {createCoreInventory} from './cores.mjs';
 import {contentHash,validateWorld} from '../../battle-bros-backend/packages/shared/src/world-save.mjs';
 export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=window.__battleBrosPublicData}){
   if(!wallet.settings.deployment||!runtime.manifestUrl)return;
@@ -15,6 +16,13 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
   const el=s=>root.querySelector(s)||needsRoot.querySelector(s)||worldRoot.querySelector(s),broSelect=el('[data-bro]');
   let publication=null,selected='',identityGeneration=0,revision='0',activeTarget=null,switching=false,worldBusy=false,autoOpenPending=false,request=0,timer,lastFocusRefresh=0,pendingWorldPublication=null;
   const worlds=runtime.worldApiUrl?createWorldClient({wallet,apiUrl:runtime.worldApiUrl,storage}):null;
+  const coreScope=wallet.settings.chainId+':'+wallet.settings.deployment.deploymentId.toLowerCase()+':'+(wallet.settings.instanceId??'chain');
+  const cores=worlds?createCoreInventory({worlds,storage,scope:coreScope,update:view=>window.battleBrosCoreView?.(view)}):null;
+  if(cores){
+    window.battleBrosCoreInventory=cores;
+    window.addEventListener('online',()=>{cores.flush();cores.refresh();});
+    window.addEventListener('pagehide',()=>cores.flush());
+  }
   const appearance=createAppearanceService({worlds,bridge:()=>window.battleBrosAppearanceBridge});
   const service=createNeedsService({wallet,transactions,refresh});window.battleBrosNeeds=service;
   const weights=createWeightsService({wallet,transactions,selected:()=>selected,publication:()=>publication});
@@ -45,6 +53,7 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
     broSelect.disabled=worldBusy;
     for(const button of [el('[data-save]'),el('[data-cloud]')])button.disabled=!worlds||!own().length||worldBusy;
     const selectedBro=own().find(b=>b.tokenId===selected),selectedTarget=selectedBro?{kind:'home',id:selectedBro.tokenId}:null;
+    cores?.select(wallet.getState().status==='connected'&&selectedBro?.hatchedAt&&selectedBro.hatchedAt!=='0'?selectedBro.tokenId:null);
     const presence=el('[data-bro-presence]'),defending=selectedBro?.locationId!=null&&String(selectedBro.locationId)!=='0';
     presence.textContent=defending?'BRO #'+selectedBro.tokenId+' Defending Territory '+selectedBro.locationId:'';
     presence.hidden=!defending;
@@ -77,7 +86,7 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
   }
   async function refresh(){
     const current=++request;try{const doc=await readTransactionPublication(wallet.settings,new URL(runtime.manifestUrl,location.href).href);if(current!==request)return;
-      publication=doc;window.battleBrosSetTerritories?.(doc.locations);service.update(doc);render();selectBro();
+      publication=doc;window.battleBrosSetTerritoryPublication?.(doc);service.update(doc);render();selectBro();
       await autoOpenWorld();
       if(pendingWorldPublication&&same(activeTarget,pendingWorldPublication.target)){const published=doc.worlds?.find(w=>same(w,activeTarget));if(published?.revision===pendingWorldPublication.revision){report('World revision '+published.revision+' published.');pendingWorldPublication=null;}}
     }catch(e){if(current===request)throw Error('Confirmed state unavailable. Displayed information may be stale. '+e.message);}
@@ -146,7 +155,7 @@ export function mountNeedsInfrastructure({wallet,transactions,storage,runtime=wi
   });
   service.subscribe(render);let identity='';wallet.subscribe(state=>{window.syncDefenseWeightVisibility?.();const next=state.address+':'+state.chainId;if(next===identity)return;identity=next;identityGeneration++;clearTimeout(timer);pendingWorldPublication=null;activeTarget=null;selected='';appearance.reset();window.battleBrosTrainingWeights?.refreshEligibility();render();action(refreshWithLoading);});
   document.addEventListener('battlebros:transaction-reflected',()=>action(refresh));
-  window.addEventListener('focus',()=>{if(Date.now()-lastFocusRefresh>30000){lastFocusRefresh=Date.now();action(refresh);}});
+  window.addEventListener('focus',()=>{cores?.refresh();if(Date.now()-lastFocusRefresh>30000){lastFocusRefresh=Date.now();action(refresh);}});
   for(const panel of [root,needsRoot,worldRoot]){
     panel.addEventListener('focusin',()=>{if(document.pointerLockElement)document.exitPointerLock?.();document.dispatchEvent(new CustomEvent('battlebros:wallet-open'));});
     for(const event of ['pointerdown','pointerup','mousedown','mouseup','click','dblclick','keydown','keyup','wheel'])panel.addEventListener(event,e=>e.stopPropagation());

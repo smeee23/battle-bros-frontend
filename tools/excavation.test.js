@@ -31,6 +31,7 @@ const dom={pointerLockElement:null,exitPointerLock(){this.pointerLockElement=nul
 const renderer={domElement:{addEventListener(name,fn){handlers['canvas'+name]=fn;},requestPointerLock(){dom.pointerLockElement=this;}}};
 const thumbnails=[];
 const context=vm.createContext({THREE,Math:math,setTimeout:fn=>fn(),buildToolThumb:(tool,canvas)=>thumbnails.push({tool,canvas}),world,GRID:20,TILE:1,TOP_H:.18,DIRT_H:.5,BUILDABLE_LAND_Y_OFFSET:-.18,
+  baseBattleBroPrototype:new THREE.Group(),BATTLEBRO_COLORS:{violet:0x8b5cf6,black:0x000000},ROCK_BATTLEBRO_M:{ice:{core:{color:new THREE.Color(0x4c9fba)}}},
   MAX_TERRAIN_FLOORS:64,terrainRiseForLevel:n=>(Math.min(64,n)-1)*.2,explorationActive:true,trainingAppearance:{active:false},throwTransportCube:()=>cubeThrows++,fp,FP_EYE_H:.3,fpEyeHeight:()=>context.FP_EYE_H,persCam:camera,scene:new THREE.Scene(),battleBroGroundHeight:height,
   terrainLevelForCell:c=>c?.terrainFloors||1,terrainConsumeLocks:locks,lavaMonsterMovers:[],activeFPTerrain:()=>terrain,
   canMutateActiveColony:()=>true,battleArenaView:{active:false},trainingFacilityOccupiesCell:(x,z)=>x===2&&z===2,
@@ -38,7 +39,7 @@ const context=vm.createContext({THREE,Math:math,setTimeout:fn=>fn(),buildToolThu
   escapeFP(){context.api.toggleFPToolMenu(false);fp.active=false;dom.exitPointerLock();},
   fpKeys,renderer,document:dom,window:{battleBrosMessages:require('../assets/game-messages')(),addEventListener(name,fn){handlers[name]=fn;}}});
 vm.runInContext(html.slice(html.indexOf('  // ---------- frontend excavation ----------'),html.indexOf('  // ---------- first-person walk ----------'))+
-  '\nthis.api={excavation,validExcavationCell,createExcavationVisuals,equipExcavationTool,pickExcavationTarget,startExcavationSwing,tickExcavationSwing,leaveExcavation,updateExcavationAxePose,rollExcavationGem,toggleFPToolMenu,syncFPTools};',context);
+  '\nthis.api={excavation,validExcavationCell,createExcavationVisuals,equipExcavationTool,pickExcavationTarget,startExcavationSwing,tickExcavationSwing,leaveExcavation,updateExcavationAxePose,rollExcavationCore,toggleFPToolMenu,syncFPTools};',context);
 context.battleBrosMessages=context.window.battleBrosMessages;
 const {excavation:e,validExcavationCell:valid,createExcavationVisuals:create,equipExcavationTool:equip,
   pickExcavationTarget:pick,startExcavationSwing:start,tickExcavationSwing:tick,
@@ -78,17 +79,19 @@ world[10][10].kind='house';assert(!valid(10,10));delete world[10][10].kind;
 locks.set('10,10',{});assert(!valid(10,10));locks.clear();
 aim(10,10);assert(!start(),'Hands cannot dig');equip('axe');assert.equal(e.active,true);assert.equal(pick().x,10);
 assert(start());assert(!start(),'One swing at a time');tick(.29);assert.equal(world[10][10].terrainFloors,3);
-tick(.02);assert.equal(world[10][10].terrainFloors,2);assert.equal(e.gems.blue,0,'A losing roll awards nothing');
+tick(.02);assert.equal(world[10][10].terrainFloors,2);assert.equal(e.coreCount,0,'A losing roll awards nothing');
+assert.equal(context.window.battleBrosMessages.current.text,'Layer broken · Keep digging for Cores');
 tick(.5);assert.equal(mutations.length,1);
+context.baseBattleBroPrototype.userData={visualVariant:'ice',colors:{core:'violet'}};
 random=.099;aim(10,10);assert(start());tick(.31);
-assert.equal(world[10][10].terrainFloors,1);assert.equal(e.gems.blue,1,'A successful 10% roll awards a gem immediately');
-assert.deepEqual(Object.keys(e.gems),['blue'],'Only one gem type is collected');
-assert.equal(e.gem.material.color.getHexString(),'62b5ff','Discovered gems are blue');
-assert.match(element('excavation-inventory').innerHTML,/Gems: <b>1<\/b>/,'Inventory shows one gem total');
-assert.equal(context.window.battleBrosMessages.current.text,'Blue gem collected!');
-assert.equal(e.gemAge,0);tick(.5);
+assert.equal(world[10][10].terrainFloors,1);assert.equal(e.coreCount,1,'A successful 10% roll awards a Core immediately');
+assert.equal(e.core.material.color.getHex(),0x8b5cf6,'The reward matches the selected BRO’s core color');
+assert.equal(e.core.material.emissive.getHex(),0x8b5cf6);
+assert.equal(element('excavation-core-count').textContent,'1','Inventory shows one Core total');
+assert.equal(context.window.battleBrosMessages.current.text,'Core collected!');
+assert.equal(e.coreAge,0);tick(.5);
 random=.1;world[10][10].terrainFloors=2;aim(10,10);assert(start());tick(.31);
-assert.equal(e.gems.blue,1,'The probability boundary does not award a gem');tick(.5);
+assert.equal(e.coreCount,1,'The probability boundary does not award a Core');tick(.5);
 aim(10,10);assert(start(),'Base layer can be struck');tick(.7);
 assert.equal(world[10][10].terrainFloors,1);assert.equal(sounds.at(-1),'ripple');
 world[10][10].terrainFloors=3;aim(10,10);assert(start());world[10][10]={...world[10][10]};tick(.7);
@@ -98,7 +101,18 @@ assert(start());equip('hands');tick(.7);assert.equal(world[10][10].terrainFloors
 equip('axe');assert(start());leave();tick(.7);assert.equal(world[10][10].terrainFloors,3,'Leaving walk mode cancels a swing');
 assert.equal(mutations.length,3,'Only three valid impacts changed terrain');
 assert(!e.axe.visible);
-console.log('excavation: tool menu, random gem rolls, protected layers and stale-hit cancellation passed');
+random=.099;
+const rewardPosition={wx:.5,y:0,wz:.5};
+context.baseBattleBroPrototype=new THREE.Group();
+context.baseBattleBroPrototype.userData={visualVariant:'ice',colors:{core:'black'}};
+assert(context.api.rollExcavationCore(rewardPosition));
+assert.equal(e.core.material.color.getHex(),0x000000,'The next reward uses the newly selected BRO’s color, including black');
+context.baseBattleBroPrototype.userData.colors.core='default';
+assert(context.api.rollExcavationCore(rewardPosition));
+assert.equal(e.core.material.color.getHex(),0x4c9fba,'Skin defaults use the BRO’s own core color');
+assert.equal(element('excavation-core-count').textContent,'3');
+random=.1;
+console.log('excavation: tool menu, Core rewards and colors, protected layers and stale-hit cancellation passed');
 
 // A pending action cannot survive travel home, and every tool entry point is gated.
 fp.active=true;equip('axe');assert(start());context.explorationActive=false;context.api.syncFPTools();
@@ -123,7 +137,7 @@ fp.pos.set(.5,1,6.5);camera.position.copy(fp.pos);aim(10,10);
 press('3','Digit3');assert.equal(e.equipped,'raiser');assert(e.active);
 assert(e.raiser.visible&&!e.miningAxe.visible);
 assert(e.raiser.getObjectByName('terrain-raiser-head'));
-const gems=e.gems.blue;
+const cores=e.coreCount;
 assert.equal(pick().x,10,'Can select land six squares away');
 assert(start());tick(.3);
 assert.equal(world[10][10].terrainFloors,1,'Swing launches a bolt without immediately editing land');
@@ -132,7 +146,7 @@ assert(e.raiser.position.distanceTo(camera.position)<1,'Swing stays near the pla
 camera.lookAt(0,10,0);camera.updateMatrixWorld();
 tick(.1);assert.equal(world[10][10].terrainFloors,1,'Terrain waits for projectile travel');
 tick(.4);assert.equal(world[10][10].terrainFloors,2,'Shot lands even after looking away');
-assert.equal(e.gems.blue,gems,'Construction never awards gems');
+assert.equal(e.coreCount,cores,'Construction never awards Cores');
 assert.equal(world[10][10].terrain,'stone');
 assert(!e.shots.some(s=>s.active),'Shot is consumed on impact');
 // Upward and airborne aiming works, while mining retains its short grounded reach.
